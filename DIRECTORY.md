@@ -11,4 +11,6 @@ Structure:
 - `tests/` - component-level tests for shared clients and utilities.
 - `.venv/` - local virtual environment for this package; ADK 2.3.0 is installed here.
 
-Current status: this repo has uncommitted Authsome/Frappe client work and tests. Treat this as the integration foundation before wiring any specific agent graph.
+Current status: this repo has the shared integration foundation and an open Stability Governor tools PR. Treat this as a standalone package repo, not a workspace scratch area.
+
+Git ownership: this directory is the `forschzachary/forsch-adk-components` repo. Shared reusable code, component tests, and scripts belong here. Agent-specific behavior belongs in the owning `agents/<name>` repo. Commit package changes on feature branches and open PRs unless Zach asks for a direct main push. Do not track `.venv/`, `.pytest_cache/`, `__pycache__/`, `.env`, or generated state.
