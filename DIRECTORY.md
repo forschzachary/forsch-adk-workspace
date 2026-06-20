@@ -11,4 +11,6 @@ Structure:
 
 Current organization rule: keep this bridge ADK-native and Hermes-independent. It should handle Discord I/O plus ADK Runner/session services only; shared inspection or business tools belong in `components`, and agent behavior belongs in the owning `agents/<name>` package.
 
+Git ownership: this directory is the `forschzachary/forsch-adk-bridge` repo. Commit and push bridge source/config/test changes here. Do not track `.venv/`, `data/adk_sessions.db`, `.pytest_cache/`, `__pycache__/`, `.env`, or other runtime state.
+
 Safety note: route edits are config changes. Validate them with the targeted bridge tests before running the live bridge, and do not restart the live service unless the active task explicitly authorizes it.
