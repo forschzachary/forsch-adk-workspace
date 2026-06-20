@@ -1,0 +1,19 @@
+[project]
+name = "forsch-adk-builder"
+version = "0.1.0"
+description = "Read-only and guarded builder cockpit for the Forsch ADK workspace"
+requires-python = ">=3.11"
+dependencies = [
+    "jinja2>=3.1",
+    "pydantic>=2",
+    "pyyaml>=6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
