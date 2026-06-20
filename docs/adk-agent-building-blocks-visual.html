@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ADK Agent Building Blocks</title>
+  <style>
+    :root {
+      --bg: #07110f;
+      --panel: #101c18;
+      --panel-2: #14251f;
+      --ink: #eef7e9;
+      --muted: #9fb5aa;
+      --line: #6ee7b7;
+      --gold: #f4d06f;
+      --cyan: #67e8f9;
+      --rose: #fb7185;
+      --violet: #c4b5fd;
+      --orange: #fdba74;
+      --shadow: rgba(0, 0, 0, .35);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(103, 232, 249, .13), transparent 28rem),
+        radial-gradient(circle at 82% 20%, rgba(244, 208, 111, .11), transparent 22rem),
+        linear-gradient(135deg, #07110f 0%, #0b1412 42%, #130f0b 100%);
+    }
+
+    main { width: min(1240px, calc(100vw - 32px)); margin: 0 auto; padding: 34px 0 46px; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 20px; }
+    h1 { margin: 0; font-size: clamp(30px, 5vw, 60px); letter-spacing: -0.07em; line-height: .92; }
+    .subtitle { color: var(--muted); max-width: 520px; line-height: 1.5; font-size: 14px; }
+    .pill { border: 1px solid rgba(244, 208, 111, .45); color: var(--gold); padding: 9px 12px; border-radius: 999px; white-space: nowrap; background: rgba(244, 208, 111, .07); }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(238, 247, 233, .12);
+      border-radius: 28px;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,.035) 1px, transparent 1px),
+        rgba(16, 28, 24, .82);
+      background-size: 34px 34px;
+      box-shadow: 0 24px 80px var(--shadow);
+      padding: 20px;
+    }
+
+    svg { width: 100%; height: auto; display: block; }
+    .label { fill: var(--ink); font-size: 15px; font-weight: 800; letter-spacing: -.03em; }
+    .small { fill: var(--muted); font-size: 10px; }
+    .tiny { fill: #d2e5da; font-size: 9px; }
+    .box { rx: 14; filter: drop-shadow(0 10px 18px rgba(0,0,0,.26)); }
+    .runtime { fill: rgba(6, 78, 59, .48); stroke: #34d399; stroke-width: 2; }
+    .model { fill: rgba(8, 51, 68, .52); stroke: #67e8f9; stroke-width: 2; }
+    .tool { fill: rgba(120, 53, 15, .35); stroke: #f4d06f; stroke-width: 2; }
+    .state { fill: rgba(76, 29, 149, .38); stroke: #c4b5fd; stroke-width: 2; }
+    .surface { fill: rgba(136, 19, 55, .32); stroke: #fb7185; stroke-width: 2; }
+    .factory { fill: rgba(251, 146, 60, .25); stroke: #fdba74; stroke-width: 2; }
+    .arrow { stroke: rgba(238, 247, 233, .58); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .gold-arrow { stroke: rgba(244, 208, 111, .74); stroke-width: 2.5; fill: none; marker-end: url(#arrowGold); }
+    .dash { stroke-dasharray: 7 6; }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+    .card { border: 1px solid rgba(238,247,233,.12); border-radius: 20px; background: rgba(16,28,24,.74); padding: 18px; min-height: 176px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--gold); }
+    .card p, .card li { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .card ul { margin: 0; padding-left: 18px; }
+    .callout { margin-top: 16px; padding: 18px; border: 1px solid rgba(103,232,249,.28); border-radius: 20px; background: rgba(8,51,68,.25); color: #dffbff; line-height: 1.55; }
+    code { color: var(--gold); }
+
+    @media (max-width: 820px) {
+      header { display: block; }
+      .pill { display: inline-block; margin-top: 14px; }
+      .cards { grid-template-columns: 1fr; }
+      main { width: min(100vw - 18px, 1240px); padding-top: 18px; }
+      .hero { padding: 8px; border-radius: 18px; overflow-x: auto; }
+      svg { min-width: 980px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>ADK agents<br />as building blocks</h1>
+      <p class="subtitle">A visual map of what we actually built: tools expose capabilities, ADK runs the loop, the model chooses tool calls, and surfaces decide where Zach interacts with the agent.</p>
+    </div>
+    <div class="pill">Stability Governor: first slice</div>
+  </header>
+
+  <section class="hero" aria-label="ADK architecture diagram">
+    <svg viewBox="0 0 1180 720" role="img" aria-label="Diagram showing user surfaces, ADK runtime, LLM, shared tools, state stores, and generated agents">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="rgba(238,247,233,.7)" /></marker>
+        <marker id="arrowGold" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#f4d06f" /></marker>
+      </defs>
+
+      <text x="42" y="42" class="small">SURFACES</text>
+      <rect x="40" y="60" width="170" height="76" class="box surface" />
+      <text x="62" y="92" class="label">ADK Web</text>
+      <text x="62" y="114" class="small">design + teaching UI</text>
+      <rect x="40" y="158" width="170" height="76" class="box surface" />
+      <text x="62" y="190" class="label">Discord Bridge</text>
+      <text x="62" y="212" class="small">team channel runtime</text>
+      <rect x="40" y="256" width="170" height="76" class="box surface" />
+      <text x="62" y="288" class="label">ADK CLI</text>
+      <text x="62" y="310" class="small">smoke tests + evals</text>
+
+      <text x="374" y="42" class="small">RUNTIME LOOP</text>
+      <rect x="330" y="74" width="245" height="128" class="box runtime" />
+      <text x="362" y="112" class="label">Google ADK Runner</text>
+      <text x="362" y="138" class="small">receives user message</text>
+      <text x="362" y="158" class="small">executes approved tool calls</text>
+      <text x="362" y="178" class="small">feeds results back to model</text>
+
+      <rect x="706" y="74" width="225" height="128" class="box model" />
+      <text x="740" y="112" class="label">LLM Brain</text>
+      <text x="740" y="138" class="small">LiteLLM routes model</text>
+      <text x="740" y="158" class="small">currently gpt-5.5</text>
+      <text x="740" y="178" class="small">could be Gemini</text>
+
+      <path d="M210 98 C255 98 280 126 330 126" class="arrow" />
+      <path d="M210 196 C260 196 282 154 330 154" class="arrow" />
+      <path d="M210 294 C262 294 284 180 330 180" class="arrow" />
+      <path d="M575 118 C626 96 655 96 706 118" class="gold-arrow" />
+      <path d="M706 164 C650 202 626 202 575 164" class="gold-arrow dash" />
+      <text x="595" y="86" class="tiny">tool-call request</text>
+      <text x="610" y="218" class="tiny">tool result + answer</text>
+
+      <text x="80" y="400" class="small">SHARED COMPONENT TOOLS</text>
+      <rect x="40" y="422" width="230" height="78" class="box tool" />
+      <text x="66" y="454" class="label">workspace_inventory</text>
+      <text x="66" y="476" class="small">reads folder structure</text>
+      <rect x="300" y="422" width="230" height="78" class="box tool" />
+      <text x="326" y="454" class="label">git_state</text>
+      <text x="326" y="476" class="small">dirty files, branches</text>
+      <rect x="560" y="422" width="230" height="78" class="box tool" />
+      <text x="586" y="454" class="label">agent_imports</text>
+      <text x="586" y="476" class="small">validates packages</text>
+      <rect x="820" y="422" width="230" height="78" class="box tool" />
+      <text x="846" y="454" class="label">service_health</text>
+      <text x="846" y="476" class="small">Authsome + LiteLLM</text>
+
+      <path d="M452 202 C452 282 160 326 154 422" class="arrow" />
+      <path d="M452 202 C452 302 410 326 414 422" class="arrow" />
+      <path d="M452 202 C452 302 672 326 674 422" class="arrow" />
+      <path d="M452 202 C452 282 928 326 934 422" class="arrow" />
+
+      <text x="70" y="560" class="small">INSPECTABLE STATE</text>
+      <rect x="40" y="582" width="245" height="80" class="box state" />
+      <text x="64" y="614" class="label">worklog + alerts</text>
+      <text x="64" y="636" class="small">evidence trail, verdicts</text>
+      <rect x="320" y="582" width="245" height="80" class="box state" />
+      <text x="344" y="614" class="label">runbooks + manifest</text>
+      <text x="344" y="636" class="small">canonical instructions</text>
+      <rect x="600" y="582" width="245" height="80" class="box state" />
+      <text x="624" y="614" class="label">tests + audit script</text>
+      <text x="624" y="636" class="small">non-LLM measuring stick</text>
+
+      <path d="M156 500 C156 540 160 552 162 582" class="arrow dash" />
+      <path d="M415 500 C415 540 430 552 442 582" class="arrow dash" />
+      <path d="M675 500 C675 540 706 552 722 582" class="arrow dash" />
+
+      <rect x="930" y="570" width="210" height="100" class="box factory" />
+      <text x="958" y="606" class="label">Agent Factory</text>
+      <text x="958" y="630" class="small">role + tools + policy</text>
+      <text x="958" y="650" class="small">generates wrappers/tests/routes</text>
+      <path d="M1035 570 C1035 372 884 250 818 202" class="gold-arrow dash" />
+
+      <text x="932" y="42" class="small">MENTAL MODEL</text>
+      <text x="930" y="74" class="tiny">Agent = model + instructions + tools + runtime + state</text>
+      <text x="930" y="94" class="tiny">Tools are reusable capabilities.</text>
+      <text x="930" y="114" class="tiny">Agents are opinionated bundles.</text>
+      <text x="930" y="134" class="tiny">Surfaces are where you meet them.</text>
+    </svg>
+  </section>
+
+  <section class="cards">
+    <div class="card">
+      <h2>What Zach types</h2>
+      <p>“Is the ADK workspace healthy?” enters through ADK Web, Discord, or CLI. The surface is just the doorway.</p>
+    </div>
+    <div class="card">
+      <h2>What the model does</h2>
+      <ul>
+        <li>Reads its role/instructions</li>
+        <li>Chooses tool calls</li>
+        <li>Reasons over returned JSON</li>
+        <li>Answers with evidence</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>What we should build next</h2>
+      <p>A real <code>stability_status_report()</code> capability: one visible artifact showing checks, risks, allowed actions, blocked actions, and next safe move.</p>
+    </div>
+  </section>
+
+  <div class="callout">
+    The useful trick: components stay boring and tested. Agents stay thin and opinionated. Once the components are solid, new agents become assemblies rather than reinventions. Less spaghetti, fewer tiny haunted puppets.
+  </div>
+</main>
+</body>
+</html>

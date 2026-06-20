@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ADK Vocabulary Map</title>
+  <style>
+    :root {
+      --bg: #0b100d;
+      --panel: #121a15;
+      --panel-2: #18241d;
+      --ink: #f3f0e8;
+      --muted: #aeb9ad;
+      --dim: #778378;
+      --line: rgba(243, 240, 232, .16);
+      --amber: #e9b44c;
+      --green: #7dd89f;
+      --blue: #77c7e8;
+      --brick: #d97855;
+      --sage: #a7c080;
+      --rose: #e38a9f;
+      --paper: #eee4cf;
+      --shadow: rgba(0, 0, 0, .38);
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: Avenir Next, "Trebuchet MS", Verdana, sans-serif;
+      --serif: Georgia, Cambria, "Times New Roman", serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at 12% 14%, rgba(233, 180, 76, .18), transparent 24rem),
+        radial-gradient(circle at 88% 8%, rgba(119, 199, 232, .12), transparent 22rem),
+        radial-gradient(circle at 55% 90%, rgba(125, 216, 159, .10), transparent 28rem),
+        linear-gradient(135deg, #090d0b 0%, #101811 50%, #18110c 100%);
+    }
+
+    main { width: min(1320px, calc(100vw - 28px)); margin: 0 auto; padding: 34px 0 54px; }
+    header { display: grid; grid-template-columns: 1.1fr .9fr; gap: 28px; align-items: end; margin-bottom: 22px; }
+    h1 { margin: 0; max-width: 760px; font-family: var(--serif); font-size: clamp(38px, 7vw, 86px); line-height: .86; letter-spacing: -.07em; font-weight: 800; }
+    .subtitle { color: var(--muted); font-size: 15px; line-height: 1.55; max-width: 560px; }
+    .subtitle strong { color: var(--paper); font-weight: 700; }
+    code { font-family: var(--mono); color: var(--amber); font-size: .92em; }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(18, 26, 21, .72);
+      box-shadow: 0 18px 70px var(--shadow);
+    }
+    .legend div { display: flex; gap: 9px; align-items: center; color: var(--muted); font-size: 12px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+    .amber { background: var(--amber); } .green { background: var(--green); } .blue { background: var(--blue); }
+    .brick { background: var(--brick); } .sage { background: var(--sage); } .rose { background: var(--rose); }
+
+    .board {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(243,240,232,.12);
+      border-radius: 34px;
+      background:
+        linear-gradient(90deg, rgba(243,240,232,.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(243,240,232,.035) 1px, transparent 1px),
+        rgba(18, 26, 21, .82);
+      background-size: 38px 38px;
+      box-shadow: 0 26px 100px var(--shadow);
+      padding: 22px;
+    }
+
+    .map { width: 100%; height: auto; display: block; min-height: 520px; }
+    .label { fill: var(--ink); font-weight: 800; letter-spacing: -.035em; font-size: 16px; }
+    .small { fill: var(--muted); font-size: 10.5px; font-family: var(--mono); }
+    .tiny { fill: #d7dece; font-size: 9.5px; font-family: var(--mono); }
+    .box { rx: 16; filter: drop-shadow(0 12px 18px rgba(0,0,0,.28)); }
+    .term { rx: 13; stroke-width: 2; }
+    .file { rx: 10; stroke-width: 1.5; }
+    .surface { fill: rgba(217,120,85,.24); stroke: var(--brick); }
+    .runtime { fill: rgba(125,216,159,.18); stroke: var(--green); }
+    .manifest { fill: rgba(233,180,76,.20); stroke: var(--amber); }
+    .package { fill: rgba(119,199,232,.18); stroke: var(--blue); }
+    .factory { fill: rgba(167,192,128,.18); stroke: var(--sage); }
+    .governor { fill: rgba(227,138,159,.18); stroke: var(--rose); }
+    .arrow { stroke: rgba(243,240,232,.55); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .arrow-strong { stroke: var(--amber); stroke-width: 2.8; fill: none; marker-end: url(#arrowAmber); }
+    .dash { stroke-dasharray: 7 7; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    .panel { border: 1px solid var(--line); border-radius: 24px; background: rgba(18, 26, 21, .78); padding: 18px; }
+    .panel h2 { margin: 0 0 12px; color: var(--paper); font-size: 18px; letter-spacing: -.03em; }
+    .term-list { display: grid; gap: 10px; }
+    .row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06); }
+    .row b { color: var(--amber); font-family: var(--mono); font-size: 13px; }
+    .row span { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .timeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 16px; }
+    .step { min-height: 126px; border: 1px solid var(--line); border-radius: 20px; padding: 14px; background: rgba(238,228,207,.045); }
+    .step em { display: block; color: var(--dim); font-style: normal; font-family: var(--mono); font-size: 11px; margin-bottom: 8px; }
+    .step b { display: block; color: var(--paper); margin-bottom: 8px; letter-spacing: -.02em; }
+    .step p { margin: 0; color: var(--muted); line-height: 1.4; font-size: 12px; }
+
+    .callout { margin-top: 16px; border: 1px solid rgba(233,180,76,.38); border-radius: 24px; padding: 18px; background: rgba(233,180,76,.09); color: #f5e7c7; line-height: 1.55; }
+    .callout b { color: var(--amber); }
+
+    @media (max-width: 900px) {
+      header, .grid { grid-template-columns: 1fr; }
+      .legend { grid-template-columns: 1fr; }
+      .timeline { grid-template-columns: 1fr 1fr; }
+      .row { grid-template-columns: 1fr; }
+      .board { padding: 10px; border-radius: 24px; overflow-x: auto; }
+      .map { width: 1100px; max-width: none; }
+    }
+    @media (max-width: 560px) { .timeline { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>ADK vocabulary map</h1>
+        <p class="subtitle"><strong>the point:</strong> tighten the nouns. A phrase should tell you where code lives, who owns it, how it runs, and what can safely change. Fuzzy words make fuzzy agents. tragic little soup.</p>
+      </div>
+      <div class="legend" aria-label="legend">
+        <div><span class="dot amber"></span> source of truth / manifest</div>
+        <div><span class="dot green"></span> runtime loop / ADK machinery</div>
+        <div><span class="dot blue"></span> reusable package code</div>
+        <div><span class="dot brick"></span> user-facing entrypoint</div>
+        <div><span class="dot sage"></span> generation / factory layer</div>
+        <div><span class="dot rose"></span> safety / evaluation layer</div>
+      </div>
+    </header>
+
+    <section class="board" aria-label="vocabulary map diagram">
+      <svg class="map" viewBox="0 0 1240 640" role="img" aria-labelledby="svgtitle svgdesc">
+        <title id="svgtitle">ADK vocabulary to file and folder map</title>
+        <desc id="svgdesc">Diagram mapping terms like agent contract, runtime package, web wrapper, bridge route, shared component, factory, and stability governor to concrete ADK workspace paths.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="rgba(243,240,232,.68)" /></marker>
+          <marker id="arrowAmber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#e9b44c" /></marker>
+        </defs>
+
+        <rect x="34" y="42" width="248" height="88" class="term manifest" />
+        <text x="58" y="76" class="label">Agent Contract</text>
+        <text x="58" y="98" class="small">what the agent is allowed to be</text>
+        <text x="58" y="116" class="tiny">agent_specs/agents.yaml</text>
+
+        <rect x="494" y="40" width="252" height="92" class="term factory" />
+        <text x="520" y="73" class="label">Agent Factory</text>
+        <text x="520" y="96" class="small">turns contract into files</text>
+        <text x="520" y="115" class="tiny">factory/ + docs/AGENT_FACTORY_SPEC.md</text>
+
+        <rect x="930" y="42" width="250" height="88" class="term brick" />
+        <text x="956" y="76" class="label">Conversation Surface</text>
+        <text x="956" y="98" class="small">where Zach meets the agent</text>
+        <text x="956" y="116" class="tiny">Discord / ADK Web / CLI</text>
+
+        <rect x="54" y="230" width="266" height="118" class="term package" />
+        <text x="80" y="265" class="label">Runtime Package</text>
+        <text x="80" y="289" class="small">real agent code, tests, evals</text>
+        <text x="80" y="312" class="tiny">agents/&lt;name&gt;/src/forsch/agent_&lt;name&gt;/</text>
+        <text x="80" y="331" class="tiny">agent.py + tools.py + prompts.py</text>
+
+        <rect x="392" y="202" width="222" height="88" class="term runtime" />
+        <text x="418" y="236" class="label">Root Agent</text>
+        <text x="418" y="259" class="small">the ADK object Runner loads</text>
+        <text x="418" y="276" class="tiny">root_agent export</text>
+
+        <rect x="392" y="326" width="222" height="96" class="term package" />
+        <text x="418" y="360" class="label">Shared Component</text>
+        <text x="418" y="383" class="small">tool/client/schema usable by many</text>
+        <text x="418" y="402" class="tiny">components/src/forsch/adk_components/</text>
+
+        <rect x="694" y="196" width="232" height="102" class="term brick" />
+        <text x="720" y="230" class="label">Web Wrapper</text>
+        <text x="720" y="253" class="small">thin ADK Web entrypoint</text>
+        <text x="720" y="272" class="tiny">web_agents/&lt;name&gt;/agent.py</text>
+        <text x="720" y="289" class="tiny">root_agent.yaml when editable</text>
+
+        <rect x="694" y="334" width="232" height="102" class="term brick" />
+        <text x="720" y="368" class="label">Bridge Route</text>
+        <text x="720" y="391" class="small">Discord channel -> ADK Runner</text>
+        <text x="720" y="410" class="tiny">bridge/bridge_config.yaml</text>
+        <text x="720" y="427" class="tiny">bridge/src/.../bridge.py</text>
+
+        <rect x="1004" y="226" width="178" height="106" class="term runtime" />
+        <text x="1030" y="260" class="label">ADK Runner</text>
+        <text x="1030" y="283" class="small">runtime loop</text>
+        <text x="1030" y="303" class="tiny">model + tools + state</text>
+
+        <rect x="1004" y="366" width="178" height="106" class="term runtime" />
+        <text x="1030" y="400" class="label">Model Gateway</text>
+        <text x="1030" y="423" class="small">one model surface</text>
+        <text x="1030" y="443" class="tiny">LiteLLM :4000</text>
+
+        <rect x="54" y="486" width="300" height="96" class="term rose" />
+        <text x="80" y="520" class="label">Stability Governor</text>
+        <text x="80" y="543" class="small">audits, receipts, promotion verdicts</text>
+        <text x="80" y="562" class="tiny">agents/stability + docs/STABILITY_*</text>
+
+        <rect x="446" y="496" width="250" height="78" class="term rose" />
+        <text x="472" y="528" class="label">Quality Gate</text>
+        <text x="472" y="550" class="small">test before promotion</text>
+        <text x="472" y="567" class="tiny">tests/ + evals/ + worklog</text>
+
+        <rect x="790" y="496" width="246" height="78" class="term manifest" />
+        <text x="816" y="528" class="label">Directory Note</text>
+        <text x="816" y="550" class="small">local map for future-Hubert</text>
+        <text x="816" y="567" class="tiny">DIRECTORY.md in structural folders</text>
+
+        <path d="M282 86 C350 86, 420 84, 494 84" class="arrow-strong" />
+        <path d="M746 84 C820 84, 862 84, 930 84" class="arrow" />
+        <path d="M620 132 C590 174, 552 194, 510 202" class="arrow-strong" />
+        <path d="M620 132 C660 172, 704 184, 782 196" class="arrow-strong" />
+        <path d="M620 132 C670 238, 706 308, 782 334" class="arrow-strong" />
+        <path d="M320 288 C352 276, 368 260, 392 248" class="arrow" />
+        <path d="M614 247 C644 247, 664 247, 694 247" class="arrow" />
+        <path d="M926 247 C960 250, 982 260, 1004 278" class="arrow" />
+        <path d="M926 386 C972 370, 1000 336, 1042 312" class="arrow" />
+        <path d="M1088 366 C1088 346, 1088 338, 1088 332" class="arrow dash" />
+        <path d="M392 374 C366 348, 344 326, 320 306" class="arrow dash" />
+        <path d="M504 422 C484 470, 468 492, 446 526" class="arrow" />
+        <path d="M354 534 C388 534, 414 534, 446 534" class="arrow" />
+        <path d="M696 535 C724 535, 756 535, 790 535" class="arrow dash" />
+      </svg>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Use these nouns</h2>
+        <div class="term-list">
+          <div class="row"><b>agent contract</b><span>The canonical promise: identity, package, tools, routes, safety level, smoke prompts. Lives in <code>agent_specs/agents.yaml</code>.</span></div>
+          <div class="row"><b>runtime package</b><span>The real Python agent repo. If it changes behavior, tests, or tools for one agent, it belongs under <code>agents/&lt;name&gt;/</code>.</span></div>
+          <div class="row"><b>root agent</b><span>The exported ADK object. This is what ADK Runner loads: usually <code>root_agent</code> from <code>agent.py</code>.</span></div>
+          <div class="row"><b>shared component</b><span>Reusable tool/client/schema/test helper. If two agents need it, it graduates to <code>components/</code>.</span></div>
+          <div class="row"><b>web wrapper</b><span>A thin adapter so ADK Web can see the real runtime package. It should not become the real agent.</span></div>
+          <div class="row"><b>bridge route</b><span>The Discord routing rule: channel/input -> selected ADK agent -> ADK Runner -> response stream.</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Avoid these mushy phrases</h2>
+        <div class="term-list">
+          <div class="row"><b>agent file</b><span>Too vague. Say <code>runtime package</code>, <code>root agent</code>, <code>web wrapper</code>, or <code>manifest entry</code>.</span></div>
+          <div class="row"><b>the UI</b><span>Say <code>ADK Web surface</code> if it is for testing/editing, or <code>Discord surface</code> if Zach uses it live.</span></div>
+          <div class="row"><b>tools</b><span>Split into <code>tool wrapper</code> (ADK callable), <code>client</code> (API code), and <code>credential gateway</code> (Authsome).</span></div>
+          <div class="row"><b>config</b><span>Say <code>agent contract</code>, <code>bridge route</code>, <code>model route</code>, or <code>secret surface</code>. Different risks.</span></div>
+          <div class="row"><b>agent factory</b><span>Good phrase, but reserve it for generation from a spec. Not hand-editing five places while squinting.</span></div>
+          <div class="row"><b>done</b><span>Only means done after contract, package, wrapper, route, docs, tests, and smoke prompt all agree. inconvenient, yes.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="timeline" aria-label="build sequence vocabulary">
+      <div class="step"><em>01</em><b>Define contract</b><p>Edit or generate <code>agent_specs/agents.yaml</code>. This is the source noun.</p></div>
+      <div class="step"><em>02</em><b>Render package</b><p>Create/update <code>agents/&lt;name&gt;/</code>: instructions, root agent, tools, tests, evals.</p></div>
+      <div class="step"><em>03</em><b>Expose surface</b><p>Add <code>web_agents/&lt;name&gt;/</code> for ADK Web and route Discord through <code>bridge/</code>.</p></div>
+      <div class="step"><em>04</em><b>Wire components</b><p>Move shared clients and tool wrappers into <code>components/</code>; keep domain behavior in the agent.</p></div>
+      <div class="step"><em>05</em><b>Run gates</b><p>Import smoke, unit tests, route tests, eval prompts, service health if relevant.</p></div>
+      <div class="step"><em>06</em><b>Promote</b><p>Only after evidence: green checks, clean route, updated docs, and a stability verdict.</p></div>
+    </section>
+
+    <section class="callout">
+      <b>short version:</b> The contract names the agent. The runtime package is the agent. The wrappers expose it. The bridge routes to it. Components give it hands. LiteLLM gives it a brain. The Stability Governor decides whether it has earned more autonomy.
+    </section>
+  </main>
+</body>
+</html>

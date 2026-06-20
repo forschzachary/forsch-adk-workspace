@@ -1,0 +1,21 @@
+# Generated state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.env
+.DS_Store
+*.db
+*.sqlite
+*.sqlite3
+
+# Nested package repos tracked separately
+components/
+bridge/
+agents/*
+!agents/DIRECTORY.md
+
+# ADK web/session scratch
+web_agents/**/.adk/
+web_agents/**/__pycache__/

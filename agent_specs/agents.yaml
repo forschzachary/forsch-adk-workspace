@@ -1,0 +1,22 @@
+# Canonical ADK agent manifest.
+# Generated packages, web wrappers, tests, docs, and bridge routes should derive from this file.
+
+agents:
+  stability:
+    package: forsch.agent_stability.agent
+    attr: root_agent
+    web_entrypoint: web_agents/stability
+    discord_channels:
+      - "#team-stability"
+    safety_level: read_only
+    purpose: >
+      Audit the Forsch ADK workspace and adjacent local services without changing source,
+      restarting processes, installing dependencies, or performing destructive actions.
+    tools:
+      - forsch.adk_components.tools.get_workspace_inventory
+      - forsch.adk_components.tools.get_git_state
+      - forsch.adk_components.tools.validate_agent_imports
+      - forsch.adk_components.tools.check_service_health
+    smoke_prompts:
+      - "Inventory the ADK workspace and summarize missing structural pieces."
+      - "Check configured service health and report only evidence-backed findings."
