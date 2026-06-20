@@ -18,3 +18,13 @@ Use this file for project-level decisions that block durable cleanup or safe con
 
 - What is the threshold for auto-committing docs versus opening a PR for Zach review?
 - Should the Stability Governor remain read-only forever, or should a separate repair agent own guarded mutation workflows?
+
+## 2026-06-20 — builder/ commit is local-only (push blocked, needs resolution)
+
+`forsch-adk-workspace` commit **fd39a85** (`feat(builder): metadata parser + package scaffold`) is committed LOCALLY on the box but **NOT pushed** — there is no GitHub credential path on this rebuilt host:
+- `GITHUB_TOKEN` unset; no `~/.git-credentials`; `gh` not installed.
+- **Authsome CLI not installed on the host** (daemon IS up at `127.0.0.1:7998`, returns 200) — GIT-DISCIPLINE says use `authsome run -- git push`, but the `authsome` binary is absent.
+
+**To unblock push (Zach):** install the Authsome CLI on the host, OR set `GITHUB_TOKEN` for `forschzachary/forsch-adk-workspace`, OR install `gh` with a token. Then: `cd /root/.hermes/workspace/adk && git push origin main`.
+
+Per the handoff rule this note marks the work as intentionally-local-only **only until** a push path exists. Default assumption remains: local-only is unsafe (the box was just reimaged once).
