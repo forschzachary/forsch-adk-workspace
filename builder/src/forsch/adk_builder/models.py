@@ -1,7 +1,8 @@
-"""Pydantic models for builder metadata (Phase 1).
+"""Pydantic models for the builder (Phase 1, read-only).
 
-Kept deliberately small: just what the metadata parser and (later) the
-collector/renderer need. Read-only — these models never write to the workspace.
+Small and read-only: these never write to the workspace. ``Metadata`` /
+``ParsedMetadata`` back the metadata parser; the ``*Entry`` / ``Workspace``
+models back the collector and renderer.
 """
 
 from __future__ import annotations
@@ -23,14 +24,57 @@ class Metadata(BaseModel):
 
 
 class ParsedMetadata(BaseModel):
-    """Result of parsing one metadata source.
-
-    ``present`` distinguishes "no metadata found" (tolerated, no warning) from
-    "metadata found". ``warnings`` carries non-fatal problems (malformed
-    frontmatter, missing display fields) instead of raising.
-    """
+    """Result of parsing one metadata source (warn-not-crash)."""
 
     metadata: Metadata = Field(default_factory=Metadata)
     warnings: list[str] = Field(default_factory=list)
     path: Optional[str] = None
     present: bool = False
+
+
+class AgentEntry(BaseModel):
+    """An agent joined from the contract + runtime package + web wrapper + bridge route."""
+
+    id: str
+    contract_path: Optional[str] = None
+    runtime_package: Optional[str] = None
+    web_wrapper_path: Optional[str] = None
+    bridge_channels: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
+    metadata: Metadata = Field(default_factory=Metadata)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ToolEntry(BaseModel):
+    """A shared component tool file discovered by static scan."""
+
+    name: str
+    path: str
+    metadata: Metadata = Field(default_factory=Metadata)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DocEntry(BaseModel):
+    """A markdown doc discovered under the workspace."""
+
+    path: str
+    title: Optional[str] = None
+
+
+class BridgeRoute(BaseModel):
+    """A Discord→agent route from bridge_config.yaml, with contract-presence flag."""
+
+    agent_id: str
+    channels: list[str] = Field(default_factory=list)
+    has_contract: bool = False
+
+
+class Workspace(BaseModel):
+    """The whole read-only workspace model the renderer consumes."""
+
+    root: str
+    agents: list[AgentEntry] = Field(default_factory=list)
+    tools: list[ToolEntry] = Field(default_factory=list)
+    docs: list[DocEntry] = Field(default_factory=list)
+    bridge_routes: list[BridgeRoute] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
