@@ -1,0 +1,57 @@
+# ADK Discord Bridge — channel → agent routing
+# One bot token, one process, five agents.
+
+discord:
+  # Bot token from env var DISCORD_BOT_TOKEN
+  # (same bot as Hermes — bridge replaces team memory role)
+  token_env: DISCORD_BOT_TOKEN
+
+agents:
+  stability:
+    agent_package: forsch.agent_stability.agent
+    agent_attr: root_agent
+    channels:
+      - "#team-stability"
+  ops:
+    agent_package: forsch.agent_ops.agent
+    agent_attr: root_agent
+    channels:
+      - "#team-ops"
+  social:
+    agent_package: forsch.agent_social.agent
+    agent_attr: agent
+    channels:
+      - "#team-social"
+  brand:
+    agent_package: forsch.agent_brand.agent
+    agent_attr: agent
+    channels:
+      - "#team-brand"
+  assistant:
+    agent_package: forsch.agent_assistant.agent
+    agent_attr: agent
+    channels:
+      - "#team-assistant"
+      - "#team-memory"
+  build:
+    agent_package: forsch.agent_build.agent
+    agent_attr: agent
+    channels:
+      - "#team-build"
+
+  # Any DM (no guild/channel) routes here
+  dm_fallback: assistant
+
+session:
+  # SQLite session store — survives restarts
+  db_path: data/adk_sessions.db
+
+streaming:
+  # Flush buffer to Discord every N seconds or on sentence break
+  flush_interval_sec: 0.5
+  # Max chars per Discord message (Discord limit is 2000)
+  max_message_chars: 1900
+
+logging:
+  level: INFO
+  file: /opt/data/logs/adk-bridge.log
