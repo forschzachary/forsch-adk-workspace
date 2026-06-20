@@ -11,3 +11,10 @@ Structure:
 - `STABILITY_ARCHITECT_OVERNIGHT_WORKLOG.md` - active supervised evaluation log for the Stability Architect.
 
 Current organization rule: repo-specific details belong in each repo's README or `DIRECTORY.md`; architectural conventions and shared operating procedures belong here.
+
+Read these before continuing project work:
+
+- `LEARNINGS.md` - durable cleanup and runtime lessons.
+- `OPEN-QUESTIONS.md` - unresolved project decisions.
+- `STABILITY_GOVERNOR_RUNBOOK.md` - Stability Governor usage and safety boundary.
+- root `../GIT-DISCIPLINE.md` - repo ownership and commit/push rules.

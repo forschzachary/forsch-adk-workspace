@@ -79,3 +79,18 @@ python -m forsch.agent_build.agent
 ## ADK version
 
 Pinned to `google-adk>=2.0`. Currently installed: 2.3.0.
+
+## Canonical source and git discipline
+
+Start with `GIT-DISCIPLINE.md` and `CURRENT-STATE.md` before editing. This workspace is split into multiple GitHub repos; important work should not stay local-only.
+
+Current source ownership:
+
+| Local path | Repo | Purpose |
+| --- | --- | --- |
+| `.` | `forschzachary/forsch-adk-workspace` | workspace docs, manifests, ADK Web wrappers |
+| `components/` | `forschzachary/forsch-adk-components` | shared ADK component package |
+| `agents/stability/` | `forschzachary/forsch-agent-stability` | read-only Stability Governor package |
+| `bridge/` | `forschzachary/forsch-adk-bridge` | Discord bridge runtime |
+
+Check `git status -sb` in the owning repo before edits. The workspace repo intentionally ignores nested package repos.
