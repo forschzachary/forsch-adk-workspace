@@ -24,6 +24,13 @@ from forsch.adk_builder.models import (
 )
 
 
+# Directories that hold installed deps / generated junk, never workspace source.
+_SKIP_DIRS = {
+    ".venv", "venv", "site-packages", "__pycache__", "node_modules",
+    ".git", ".pytest_cache", ".ruff_cache", "build", "dist", ".adk", ".egg-info",
+}
+
+
 def _safe_yaml(path: Path, warnings: list[str]) -> dict:
     try:
         data = yaml.safe_load(path.read_text())
@@ -48,7 +55,10 @@ def collect_workspace(root) -> Workspace:
     # Bridge routes + drift (a route with no agent contract).
     channels_by_agent: dict[str, list[str]] = {}
     for bid, bspec in bridge_agents.items():
-        channels = list((bspec or {}).get("channels") or [])
+        if not isinstance(bspec, dict):
+            # scalar config under `agents:` (e.g. `dm_fallback: assistant`) — not a route.
+            continue
+        channels = list(bspec.get("channels") or [])
         channels_by_agent[bid] = channels
         has_contract = bid in contract_agents
         ws.bridge_routes.append(
@@ -94,6 +104,9 @@ def collect_workspace(root) -> Workspace:
     components = root / "components"
     if components.exists():
         for py in sorted(components.rglob("*.py")):
+            parts = py.relative_to(root).parts
+            if any(part in _SKIP_DIRS for part in parts):
+                continue  # installed dep / cache, not workspace source
             rel = str(py.relative_to(root))
             if py.name == "__init__.py" or py.name.startswith("test_") or "/tests/" in rel:
                 continue

@@ -129,3 +129,45 @@ def test_collector_is_read_only(tmp_path):
     collect_workspace(root)
     after = sorted(str(p.relative_to(root)) for p in root.rglob("*"))
     assert before == after  # collector created/removed nothing
+
+
+def test_collector_tolerates_non_dict_bridge_entry(tmp_path):
+    # Real bridge_config.yaml has `dm_fallback: assistant` under `agents:` — a
+    # scalar, not a route spec. The collector must not crash on it.
+    root = _make_workspace(tmp_path)
+    (root / "bridge" / "bridge_config.yaml").write_text(
+        textwrap.dedent(
+            """\
+            agents:
+              stability:
+                agent_package: forsch.agent_stability.agent
+                channels:
+                  - "#team-stability"
+              dm_fallback: assistant
+            """
+        )
+    )
+    ws = collect_workspace(root)  # must not raise
+
+    route_ids = [r.agent_id for r in ws.bridge_routes]
+    assert "stability" in route_ids
+    assert "dm_fallback" not in route_ids  # a scalar config value is not a route
+
+
+def test_collector_ignores_venv_and_caches_when_scanning_tools(tmp_path):
+    # Nested package repos carry their own .venv/site-packages and caches — the
+    # tool scan must not treat installed third-party .py as workspace components.
+    root = _make_workspace(tmp_path)
+    venv_pkg = root / "components" / ".venv" / "lib" / "python3.12" / "site-packages" / "thirdparty"
+    venv_pkg.mkdir(parents=True)
+    (venv_pkg / "junk.py").write_text("x = 1\n")
+    cache = root / "components" / "__pycache__"
+    cache.mkdir(exist_ok=True)
+    (cache / "cached.py").write_text("y = 1\n")
+
+    ws = collect_workspace(root)
+    names = [t.name for t in ws.tools]
+
+    assert "junk" not in names  # .venv / site-packages excluded
+    assert "cached" not in names  # __pycache__ excluded
+    assert any("inventory" in n for n in names)  # the real component is still found
