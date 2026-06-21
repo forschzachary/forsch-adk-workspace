@@ -40,12 +40,21 @@ ws.onopen = () => { sendResize(); term.focus(); };
 ws.onmessage = (e) => { term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data)); };
 ws.onclose = () => term.write('\r\n\x1b[38;5;131m[session closed]\x1b[0m\r\n');
 term.onData(d => { if (ws.readyState === 1) ws.send(d); });
-// edit button in the canvas posts {type:'edit', file} — open it in nano
+// The canvas drives the PTY via postMessage:
+//   {type:'edit', file}  -> open the file in nano
+//   {type:'run',  cmd}   -> run a command (e.g. spin up an agent + watch it behave)
+//   {type:'interrupt'}   -> Ctrl-C the current foreground process
 window.addEventListener('message', (e) => {
   const d = e.data;
-  if (d && d.type === 'edit' && typeof d.file === 'string' && ws.readyState === 1) {
+  if (!d || ws.readyState !== 1) return;
+  if (d.type === 'edit' && typeof d.file === 'string') {
     ws.send("nano '" + d.file.replace(/'/g, '') + "'\n");
     term.focus();
+  } else if (d.type === 'run' && typeof d.cmd === 'string') {
+    ws.send(d.cmd + "\n");
+    term.focus();
+  } else if (d.type === 'interrupt') {
+    ws.send("\x03");
   }
 });
 addEventListener('resize', () => { fit.fit(); sendResize(); });

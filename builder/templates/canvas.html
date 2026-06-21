@@ -7,84 +7,249 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  /* Re-apply theme before first paint so dark never flashes light on load. */
+  (function(){
+    try{
+      var saved = localStorage.getItem('ab-theme');
+      var theme = saved || (window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    }catch(e){ document.documentElement.setAttribute('data-theme','light'); }
+  })();
+</script>
 <style>
   :root{
+    /* core palette (light — warm field-notes drafting table) */
     --paper:#efe7d6; --card:#fbf6ea; --ink1:#382f20; --ink2:#6f6450; --mut:#9a8e76;
     --line:#ddd0b6; --sage:#5f7d5b; --sage-soft:#dfe6d4; --brass:#a9823f; --thread:#bcae8e;
+    /* surfaces & chrome (lifted from inline hex so dark is a clean swap) */
+    --bg-grad:radial-gradient(120% 90% at 75% -10%,#f7f1e3 0%,#efe7d6 55%,#e7ddc8 100%);
+    --bar-bg:#f2ebdb; --rail-bg:#f2ebdb;
+    --grid-dot:#cdbf9f55;
+    --gen-ink:#f7f1e3; --gen-border:#4d6849; --gen-hover:#56714f;
+    --deploy-ink:var(--brass); --deploy-bg:#f6eede; --deploy-border:#e0cfa9; --deploy-hover:#f0e3c8;
+    --busy:#d8a23a; --err-ink:#b05a45;
+    --agent-border:#e4d7ba; --agent-glow:#fffaf0; --agent-shadow:#5a4a2a66;
+    --pill-bg:#f3ecdc;
+    --field-bg:#fffdf6; --field-border:#ece1c8; --field-ink:#463c2b;
+    --chip-bg:#faf4e6; --chip-border:#e3d6b8; --chip-shadow:#5a4a2a66;
+    --chip-route-bg:#f1f5ea; --chip-route-border:#cdd9c2;
+    --chip-evals-bg:#f8efe2; --chip-evals-border:#e8d6c4;
+    --rm-ink:#c2b48f;
+    --drawer-border:#e3d7bd; --drawer-hover:#f6efdf; --drawer-line:#ece1c8;
+    --spec-line:#f0e7d3; --plus-dot:#d8cca8;
+    --edit-bg:#f6efdf;
+    --result-bg:#fffdf6; --result-border:#e6dabf;
+    --term-bg:#1b1812;
+    --note-bg:#fbf3d8; --note-border:#ead9a8; --note-ink:#473d28; --note-tape:#dfd0a0cc;
+    /* SVG connector colors (read by JS drawThreads) */
+    --thread-tool:#bcae8e; --thread-route:#a9b79e; --thread-evals:#cdb79a;
+  }
+  [data-theme="dark"]{
+    /* Pedro's office at night — warm lamp pooled on a dark desk, not cold black.
+       Hue held in the warm-brown family; sage + brass lifted for legibility. */
+    --paper:#211c14; --card:#2b2519; --ink1:#ece2cd; --ink2:#b6a988; --mut:#8c7f63;
+    --line:#3d3525; --sage:#8fae84; --sage-soft:#33402f; --brass:#cf9f54; --thread:#5a4f38;
+    --bg-grad:radial-gradient(125% 95% at 78% -12%,#2a2316 0%,#211c14 55%,#191409 100%);
+    --bar-bg:#241e15; --rail-bg:#211c14;
+    --grid-dot:#5a4f3833;
+    --gen-ink:#1a160d; --gen-border:#6e8a63; --gen-hover:#9bbb8f;
+    --deploy-ink:var(--brass); --deploy-bg:#2f2716; --deploy-border:#574627; --deploy-hover:#3a3019;
+    --busy:#e0ad48; --err-ink:#d98162;
+    --agent-border:#403520; --agent-glow:#00000000; --agent-shadow:#00000088;
+    --pill-bg:#332c1d;
+    --field-bg:#1d1810; --field-border:#3a3122; --field-ink:#e4dac3;
+    --chip-bg:#2c2517; --chip-border:#403620; --chip-shadow:#00000088;
+    --chip-route-bg:#28301f; --chip-route-border:#3c4a31;
+    --chip-evals-bg:#322617; --chip-evals-border:#4a3a23;
+    --rm-ink:#6e6243;
+    --drawer-border:#3a3223; --drawer-hover:#2f2818; --drawer-line:#332c1d;
+    --spec-line:#2c2518; --plus-dot:#5a4f38;
+    --edit-bg:#2f2818;
+    --result-bg:#1d1810; --result-border:#3a3122;
+    --term-bg:#1b1812;
+    --note-bg:#312814; --note-border:#54441f; --note-ink:#ecdcb0; --note-tape:#4a3c1ecc;
+    --thread-tool:#5f5640; --thread-route:#5b6b4d; --thread-evals:#6a5a3f;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;height:100%;overflow:hidden;}
   body{font-family:"Newsreader",Georgia,serif;color:var(--ink1);
-    background:radial-gradient(120% 90% at 75% -10%,#f7f1e3 0%,#efe7d6 55%,#e7ddc8 100%);}
+    background:var(--bg-grad);transition:background .35s ease;}
   .mono{font-family:"Spline Sans Mono",ui-monospace,monospace;}
-  .bar{display:flex;align-items:center;gap:13px;padding:12px 20px;border-bottom:1px solid var(--line);background:#f2ebdb;height:56px;}
+  .bar{display:flex;align-items:center;gap:13px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--bar-bg);height:56px;}
   .mark{display:flex;align-items:center;gap:9px;font-weight:600;font-size:17px;}
   .mark .dot{width:10px;height:10px;border-radius:50%;background:var(--sage);box-shadow:0 0 0 4px var(--sage-soft);}
   .crumb{color:var(--ink2);font-size:14px;}
   select.agentsel{font-family:"Spline Sans Mono",monospace;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink1);border-radius:8px;padding:5px 8px;}
   .status{margin-left:auto;font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:7px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .status .tick{width:7px;height:7px;border-radius:50%;background:var(--brass);flex:0 0 auto;}
-  .status.busy .tick{background:#d8a23a;}.status.ok .tick{background:var(--sage);}.status.err .tick{background:#b05a45;}
+  .status.busy .tick{background:var(--busy);}.status.ok .tick{background:var(--sage);}.status.err .tick{background:var(--err-ink);}
+  .themebtn{width:34px;height:34px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);background:var(--card);color:var(--ink2);border-radius:9px;cursor:pointer;
+    transition:color .2s,border-color .2s,background .2s;}
+  .themebtn:hover{color:var(--brass);border-color:var(--brass);}
+  .themebtn svg{width:17px;height:17px;display:block;}
+  .themebtn .moon{display:none;}
+  [data-theme="dark"] .themebtn .sun{display:none;}
+  [data-theme="dark"] .themebtn .moon{display:block;}
   button.act{font-family:"Newsreader",serif;font-weight:600;font-size:15px;border-radius:10px;padding:9px 16px;cursor:pointer;}
-  .gen{color:#f7f1e3;background:var(--sage);border:1px solid #4d6849;}
-  .gen:hover{background:#56714f;}
-  .deploy{color:var(--brass);background:#f6eede;border:1px solid #e0cfa9;}
-  .deploy:hover{background:#f0e3c8;}
+  .gen{color:var(--gen-ink);background:var(--sage);border:1px solid var(--gen-border);}
+  .gen:hover{background:var(--gen-hover);}
+  .deploy{color:var(--brass);background:var(--deploy-bg);border:1px solid var(--deploy-border);}
+  .deploy:hover{background:var(--deploy-hover);}
+  .run{color:var(--sage);background:transparent;border:1px solid var(--gen-border);display:inline-flex;align-items:center;gap:6px;}
+  .run:hover{background:var(--sage-soft);}
+  .run .rtri{font-size:11px;}
   button.act:disabled{opacity:.55;cursor:default;}
   .stage{display:grid;grid-template-columns:1fr 400px;height:calc(100vh - 57px);}
-  .canvas{position:relative;overflow:hidden;cursor:grab;background-image:radial-gradient(#cdbf9f55 1px,transparent 1.4px);background-size:26px 26px;}
+  .canvas{position:relative;overflow:hidden;cursor:grab;background-image:radial-gradient(var(--grid-dot) 1px,transparent 1.4px);background-size:26px 26px;}
   .canvas.panning{cursor:grabbing;}
   .world{position:absolute;left:0;top:0;transform-origin:0 0;}
   svg.threads{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}
   .node{position:absolute;user-select:none;}
-  .agent{width:340px;background:var(--card);border:1px solid #e4d7ba;border-radius:16px;box-shadow:0 1px 0 #fffaf0,0 16px 34px -20px #5a4a2a66;padding:16px 18px 15px;}
+  .agent{width:340px;background:var(--card);border:1px solid var(--agent-border);border-radius:16px;box-shadow:0 1px 0 var(--agent-glow),0 16px 34px -20px var(--agent-shadow);padding:16px 18px 15px;}
   .agent.sel{outline:2px solid var(--sage);outline-offset:3px;}
   .grab{cursor:grab;}.grab:active{cursor:grabbing;}
   .kind{font-family:"Spline Sans Mono",monospace;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--brass);}
   .agent h2{margin:3px 0 2px;font-size:24px;font-weight:600;}
   .agent .sub{font-size:14px;color:var(--ink2);margin-bottom:11px;}
   .meta{display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap;}
-  .pill{font-family:"Spline Sans Mono",monospace;font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);background:#f3ecdc;}
-  .pill.safe{color:#4d6849;background:var(--sage-soft);border-color:#cdd9c2;}
+  .pill{font-family:"Spline Sans Mono",monospace;font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);background:var(--pill-bg);}
+  .pill.safe{color:var(--sage);background:var(--sage-soft);border-color:var(--chip-route-border);}
   .lead{color:var(--mut);font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;display:block;margin:0 0 5px;}
-  textarea.instr{width:100%;border:1px solid #ece1c8;border-radius:9px;background:#fffdf6;color:#463c2b;font-family:"Newsreader",serif;font-size:14px;line-height:1.5;padding:9px 10px;resize:vertical;min-height:96px;}
+  textarea.instr{width:100%;border:1px solid var(--field-border);border-radius:9px;background:var(--field-bg);color:var(--field-ink);font-family:"Newsreader",serif;font-size:14px;line-height:1.5;padding:9px 10px;resize:vertical;min-height:96px;}
   textarea.instr:focus{outline:none;border-color:var(--sage);}
-  .chip{background:#faf4e6;border:1px solid #e3d6b8;border-radius:11px;padding:8px 11px;min-width:150px;box-shadow:0 8px 20px -16px #5a4a2a66;}
-  .chip.route{border-color:#cdd9c2;background:#f1f5ea;}.chip.evals{border-color:#e8d6c4;background:#f8efe2;}
+  .chip{background:var(--chip-bg);border:1px solid var(--chip-border);border-radius:11px;padding:8px 11px;min-width:150px;box-shadow:0 8px 20px -16px var(--chip-shadow);}
+  .chip.route{border-color:var(--chip-route-border);background:var(--chip-route-bg);}.chip.evals{border-color:var(--chip-evals-border);background:var(--chip-evals-bg);}
   .chip .tag{font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:3px;display:flex;justify-content:space-between;align-items:center;}
   .chip .t{font-family:"Spline Sans Mono",monospace;font-size:12.5px;color:var(--ink1);}
   .chip .s{font-size:12px;color:var(--mut);}
-  .rm{cursor:pointer;color:#c2b48f;font-size:13px;line-height:1;padding:0 2px;}
-  .rm:hover{color:#b05a45;}
-  .rail{border-left:1px solid var(--line);background:#f2ebdb;display:flex;flex-direction:column;overflow:hidden;}
+  .rm{cursor:pointer;color:var(--rm-ink);font-size:13px;line-height:1;padding:0 2px;}
+  .rm:hover{color:var(--err-ink);}
+  .rail{border-left:1px solid var(--line);background:var(--rail-bg);display:flex;flex-direction:column;overflow:hidden;}
   .rail-top{flex:0 0 44%;overflow:auto;padding:13px 13px;}
   .rail-top h3{margin:0 0 9px;font-size:15px;font-weight:600;}
-  .drawer{border:1px solid #e3d7bd;border-radius:10px;margin-bottom:8px;background:var(--card);overflow:hidden;}
+  .drawer{border:1px solid var(--drawer-border);border-radius:10px;margin-bottom:8px;background:var(--card);overflow:hidden;}
   .drawerhead{display:flex;align-items:center;gap:7px;padding:8px 10px;cursor:pointer;font-size:13.5px;font-weight:500;user-select:none;}
-  .drawerhead:hover{background:#f6efdf;}
+  .drawerhead:hover{background:var(--drawer-hover);}
   .drawerhead .caret{color:var(--mut);font-size:11px;width:10px;}
   .drawerhead .count{margin-left:auto;font-family:"Spline Sans Mono",monospace;font-size:11px;color:var(--mut);}
-  .drawerbody{border-top:1px solid #ece1c8;}
-  .spec{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f0e7d3;}
+  .drawerbody{border-top:1px solid var(--drawer-line);}
+  .spec{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--spec-line);}
   .spec:last-child{border-bottom:none;}
   .specmain{display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0;}
   .spec.wireable .specmain{cursor:pointer;}
   .spec.wired{background:var(--sage-soft);}
-  .spec .plus{font-family:"Spline Sans Mono",monospace;color:#c2b48f;font-size:14px;margin-top:1px;width:12px;text-align:center;}
+  .spec .plus{font-family:"Spline Sans Mono",monospace;color:var(--rm-ink);font-size:14px;margin-top:1px;width:12px;text-align:center;}
   .spec.wireable:hover .plus{color:var(--sage);}
   .spec.wired .plus{color:var(--sage);}
-  .spec .plus.dot{color:#d8cca8;}
+  .spec .plus.dot{color:var(--plus-dot);}
   .spec .nm{font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--ink1);overflow:hidden;text-overflow:ellipsis;}
   .spec .ds{font-size:11px;color:var(--mut);margin-top:1px;overflow:hidden;text-overflow:ellipsis;}
-  .editbtn{flex:0 0 auto;border:1px solid var(--line);background:#f6efdf;color:var(--ink2);border-radius:7px;width:26px;height:26px;cursor:pointer;font-size:12px;}
+  .editbtn{flex:0 0 auto;border:1px solid var(--line);background:var(--edit-bg);color:var(--ink2);border-radius:7px;width:26px;height:26px;cursor:pointer;font-size:12px;}
   .editbtn:hover{border-color:var(--brass);color:var(--brass);}
   .raildiv{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--mut);margin:14px 0 8px;}
-  pre.result{font-family:"Spline Sans Mono",monospace;font-size:11px;line-height:1.45;color:#463c2b;background:#fffdf6;border:1px solid #e6dabf;border-radius:9px;padding:10px;white-space:pre-wrap;max-height:200px;overflow:auto;}
+  pre.result{font-family:"Spline Sans Mono",monospace;font-size:11px;line-height:1.45;color:var(--field-ink);background:var(--result-bg);border:1px solid var(--result-border);border-radius:9px;padding:10px;white-space:pre-wrap;max-height:200px;overflow:auto;}
   .empty{color:var(--mut);font-size:12.5px;font-style:italic;}
+  /* field-notes scratchpad — pinned index card in the rail */
+  .notes{margin-top:16px;}
+  .noteshead{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;
+    font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--mut);}
+  .noteshead .caret{font-size:11px;width:10px;}
+  .noteshead .saved{margin-left:auto;font-size:9.5px;letter-spacing:.5px;color:var(--sage);opacity:0;transition:opacity .25s;text-transform:none;}
+  .noteshead .saved.show{opacity:1;}
+  .notecard{position:relative;margin-top:9px;background:var(--note-bg);border:1px solid var(--note-border);
+    border-radius:4px;padding:14px 12px 11px;box-shadow:0 10px 22px -18px var(--chip-shadow);
+    transform:rotate(-.5deg);}
+  .notecard::before{content:"";position:absolute;top:-7px;left:50%;width:58px;height:16px;
+    transform:translateX(-50%) rotate(1.2deg);background:var(--note-tape);border-radius:1px;
+    box-shadow:0 1px 2px -1px #0004;}
+  textarea.notepad{width:100%;border:0;background:transparent;color:var(--note-ink);resize:vertical;
+    font-family:"Newsreader",serif;font-size:14px;line-height:1.6;min-height:96px;padding:0;
+    background-image:repeating-linear-gradient(transparent 0 calc(1.6em - 1px),var(--note-border) calc(1.6em - 1px) 1.6em);
+    background-attachment:local;}
+  textarea.notepad:focus{outline:none;}
+  textarea.notepad::placeholder{color:var(--mut);font-style:italic;opacity:.85;}
   .hdivider{flex:0 0 8px;background:var(--line);cursor:row-resize;transition:background .15s;}
   .hdivider:hover{background:var(--sage);}
-  .rail-term{flex:1 1 auto;min-height:120px;background:#1b1812;}
+  .rail-term{flex:1 1 auto;min-height:120px;background:var(--term-bg);}
   .rail-term iframe{width:100%;height:100%;border:0;display:block;}
+
+  /* ───────── motion + interaction layer (impeccable pass) ───────── */
+  @keyframes nodeIn{from{opacity:0;transform:translateY(11px) scale(.984);}to{opacity:1;transform:none;}}
+  @keyframes popIn{from{opacity:0;transform:translateY(5px) scale(.96);}to{opacity:1;transform:none;}}
+  .node.enter{animation:nodeIn .44s cubic-bezier(.22,.61,.36,1) both;}
+  .chip{transition:transform .16s cubic-bezier(.22,.61,.36,1),box-shadow .18s ease,border-color .18s ease;}
+  .chip:hover{transform:translateY(-2px);box-shadow:0 16px 30px -16px var(--chip-shadow);border-color:var(--sage);}
+  .chip.inspected,.agent.inspected{outline:2px solid var(--sage);outline-offset:3px;}
+  .agent{transition:box-shadow .22s ease,border-color .22s ease;}
+  button.act{transition:background .18s ease,transform .08s ease;}
+  button.act:not(:disabled):active{transform:translateY(1px) scale(.99);}
+  .editbtn,.themebtn,.rm{transition:color .18s ease,border-color .18s ease,background .18s ease,transform .1s ease;}
+  .editbtn:active,.themebtn:active{transform:scale(.92);}
+  .spec{transition:background .16s ease;}
+  .drawerhead .caret{display:inline-block;transition:transform .22s cubic-bezier(.22,.61,.36,1);}
+  svg.threads path{transition:stroke .35s ease;}
+
+  /* context menu — a torn field-notes slip */
+  .ctxmenu{position:fixed;z-index:60;min-width:190px;background:var(--card);border:1px solid var(--line);
+    border-radius:11px;padding:5px;box-shadow:0 22px 46px -24px #000a,0 1px 0 var(--agent-glow) inset;
+    animation:popIn .15s cubic-bezier(.22,.61,.36,1) both;}
+  .ctxmenu .hdr{font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;
+    color:var(--mut);padding:6px 10px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ctxmenu .ci{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;cursor:pointer;
+    font-size:14px;color:var(--ink1);white-space:nowrap;}
+  .ctxmenu .ci .ic{width:15px;text-align:center;opacity:.7;font-size:13px;}
+  .ctxmenu .ci .kbd{font-family:"Spline Sans Mono",monospace;font-size:10.5px;color:var(--mut);margin-left:auto;}
+  .ctxmenu .ci:hover{background:var(--sage-soft);}
+  .ctxmenu .ci.danger:hover{background:color-mix(in oklab,var(--err-ink) 18%,var(--card));color:var(--err-ink);}
+  .ctxmenu .sep{height:1px;background:var(--line);margin:4px 6px;}
+
+  /* inspector — pinned specimen card */
+  .inspector{position:fixed;z-index:55;width:306px;max-height:78vh;overflow:auto;background:var(--card);
+    border:1px solid var(--agent-border);border-radius:14px;padding:16px 17px 15px;
+    box-shadow:0 1px 0 var(--agent-glow),0 30px 56px -28px var(--agent-shadow);
+    animation:popIn .19s cubic-bezier(.22,.61,.36,1) both;}
+  .inspector .ik{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:var(--brass);}
+  .inspector h4{margin:3px 0 9px;font-size:20px;font-weight:600;line-height:1.15;word-break:break-word;padding-right:18px;}
+  .inspector .x{position:absolute;top:12px;right:13px;cursor:pointer;color:var(--mut);font-size:16px;line-height:1;}
+  .inspector .x:hover{color:var(--err-ink);}
+  .inspector .desc{font-size:14.5px;line-height:1.55;color:var(--ink1);margin-bottom:13px;}
+  .inspector .field{margin-bottom:11px;}
+  .inspector .field:last-child{margin-bottom:0;}
+  .inspector .fl{font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--mut);display:block;margin-bottom:4px;}
+  .inspector .fv{font-size:13px;color:var(--ink2);line-height:1.5;}
+  .inspector .fv.mono{font-family:"Spline Sans Mono",monospace;font-size:11.5px;word-break:break-all;color:var(--ink1);}
+  .inspector .src{cursor:pointer;color:var(--brass);}
+  .inspector .src:hover{text-decoration:underline;}
+  .inspector .chiprow{display:flex;flex-wrap:wrap;gap:5px;}
+  .inspector .ip{font-family:"Spline Sans Mono",monospace;font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--pill-bg);color:var(--ink2);}
+  .inspector .ip.safe{color:var(--sage);background:var(--sage-soft);border-color:var(--chip-route-border);}
+  .inspector .ip .ipt{color:var(--mut);}
+  .inspector .ret{font-size:12.5px;color:var(--ink2);margin-top:7px;}
+  .inspector .ret .arr{color:var(--brass);font-family:"Spline Sans Mono",monospace;}
+  .inspector ul.smoke{margin:0;padding-left:17px;}
+  .inspector ul.smoke li{font-size:12.5px;color:var(--ink2);line-height:1.45;margin-bottom:3px;}
+  .inspector .note{font-size:11.5px;color:var(--mut);font-style:italic;line-height:1.45;}
+  .inspector .quote{font-size:13px;color:var(--ink2);line-height:1.5;border:1px dashed var(--line);border-radius:8px;padding:8px 9px;background:var(--field-bg);max-height:120px;overflow:auto;}
+
+  /* drag a tool from the Toolbox onto the canvas to wire it */
+  .dragghost{position:fixed;z-index:70;pointer-events:none;background:var(--chip-bg);border:1px solid var(--sage);
+    border-radius:11px;padding:8px 11px;box-shadow:0 20px 36px -18px var(--chip-shadow);transform:rotate(-2.5deg);
+    font-family:"Spline Sans Mono",monospace;font-size:12.5px;color:var(--ink1);opacity:.97;}
+  .canvas.dropzone{box-shadow:inset 0 0 0 2px var(--sage),inset 0 0 70px -22px var(--sage-soft);}
+  .canvas.dropzone::after{content:"drop to wire";position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:5;
+    font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sage);
+    background:var(--card);border:1px solid var(--sage);border-radius:999px;padding:5px 13px;
+    box-shadow:0 10px 22px -14px var(--chip-shadow);}
+  .spec.wireable.draggable .specmain{cursor:grab;}
+  .spec.draglift{opacity:.45;}
+
+  @media (prefers-reduced-motion: reduce){
+    *,.node.enter,.ctxmenu,.inspector{animation-duration:.001s!important;transition-duration:.001s!important;}
+    .chip:hover{transform:none;}
+  }
 </style>
 </head>
 <body>
@@ -93,6 +258,13 @@
     <span class="crumb">manifest ·</span>
     <select class="agentsel" id="agentsel"></select>
     <div class="status" id="status"><span class="tick"></span><span id="statustext">ready</span></div>
+    <button class="themebtn" id="themebtn" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 14.5A8 8 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>
+    </button>
+    <button class="act run" id="run" title="Spin up just this agent in the terminal and watch it behave — isolated, no effect on the live bridge"><span class="rtri">&#9655;</span> Run</button>
     <button class="act deploy" id="deploy" title="docker restart adk-bridge — make generated changes live">Deploy</button>
     <button class="act gen" id="gen">Generate &rsaquo;</button>
   </div>
@@ -107,6 +279,15 @@
         <div id="toolbox"></div>
         <div class="raildiv">last generate</div>
         <div id="result"><div class="empty">No generate yet.</div></div>
+        <div class="notes" id="notes">
+          <div class="noteshead" id="noteshead">
+            <span class="caret" id="notescaret">▾</span> field notes
+            <span class="saved" id="notesaved">saved</span>
+          </div>
+          <div class="notecard" id="notecard">
+            <textarea class="notepad" id="notepad" placeholder="jot anything — &ldquo;make ops watch #leads&rdquo;, &ldquo;this tool should also do X&rdquo;…"></textarea>
+          </div>
+        </div>
       </div>
       <div class="hdivider" id="hdivider" title="drag to resize"></div>
       <div class="rail-term"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
@@ -121,7 +302,13 @@ const canvas = document.getElementById('canvas'), sel = document.getElementById(
 let cam = {x:60, y:40, k:1};
 let state = null;
 const POS = {};
+let seen = new Set();   // node ids that have already animated in (don't re-animate on every render)
 const drawerOpen = {Tools:true, Clients:false, Agents:false};
+
+function toolInfo(name){
+  for(const d of (VIEW.toolbox||[])) for(const it of (d.items||[])) if(it.name===name) return Object.assign({drawer:d.drawer}, it);
+  return null;
+}
 
 function apiUrl(path){
   const loc = window.location;
@@ -136,8 +323,10 @@ function applyCam(){ W.style.transform = `translate(${cam.x}px,${cam.y}px) scale
 function esc(s){ return (s||'').replace(/</g,'&lt;'); }
 
 function selectAgent(id){
+  closePopovers();
   const a = VIEW.agents.find(x=>x.id===id) || VIEW.agents[0];
   state = { agent:a, instruction:a.instruction||'', tools:[...(a.tools||[])] };
+  seen = new Set();   // fresh agent → let the whole graph ink itself in
   layout(); render(); renderToolbox();
 }
 function layout(){
@@ -151,6 +340,7 @@ function nodeEl(id, html, cls){
   d.innerHTML = html; d.style.left=POS[id].x+'px'; d.style.top=POS[id].y+'px'; W.appendChild(d); return d;
 }
 function render(){
+  closePopovers();
   W.innerHTML=''; SVG.innerHTML='';
   const a = state.agent;
   nodeEl('agent', `
@@ -162,26 +352,41 @@ function render(){
     <span class="lead">instruction</span>
     <textarea class="instr" id="instr">${esc(state.instruction)}</textarea>`, 'agent sel');
   state.tools.forEach(nm=>{
-    nodeEl('tool:'+nm, `<div class="tag grab" data-drag="tool:${nm}">tool <span class="rm" data-rm="${nm}" title="remove">&times;</span></div><div class="t">${nm}</div>`, 'chip');
+    const info = toolInfo(nm);
+    const sum = info && info.summary ? `<div class="s">${esc(info.summary)}</div>` : '';
+    nodeEl('tool:'+nm, `<div class="tag grab" data-drag="tool:${nm}">tool <span class="rm" data-rm="${nm}" title="remove">&times;</span></div><div class="t">${nm}</div>${sum}`, 'chip');
   });
   if ((a.channels||[]).length)
     nodeEl('route', `<div class="tag grab" data-drag="route">discord route</div><div class="t">${esc(a.channels.join(' '))}</div>`, 'chip route');
   if ((a.smoke_prompts||[]).length)
     nodeEl('evals', `<div class="tag grab" data-drag="evals">evals · ${a.smoke_prompts.length} smoke</div><div class="s">${esc(a.smoke_prompts[0])}</div>`, 'chip evals');
-  drawThreads(); wireNodeDrag(); wireRemovals();
+  // stagger the entrance only for nodes appearing for the first time this agent
+  let fresh = 0;
+  W.querySelectorAll('.node').forEach(n=>{
+    const id = n.dataset.id;
+    if(!seen.has(id)){ n.classList.add('enter'); n.style.animationDelay = (fresh++ * 55) + 'ms'; seen.add(id); }
+  });
+  drawThreads(true); wireNodeDrag(); wireRemovals();
   document.getElementById('instr').addEventListener('input', e=>{ state.instruction = e.target.value; markDirty(); });
 }
 function center(id){ const el=W.querySelector(`[data-id="${id}"]`); return el ? {x:POS[id].x+el.offsetWidth/2, y:POS[id].y+el.offsetHeight/2} : null; }
-function thread(a,b,color){ if(!a||!b) return;
+function thread(a,b,color,animate){ if(!a||!b) return;
   const p=document.createElementNS('http://www.w3.org/2000/svg','path'); const mx=(a.x+b.x)/2;
   p.setAttribute('d',`M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`);
-  p.setAttribute('fill','none'); p.setAttribute('stroke',color); p.setAttribute('stroke-width','1.5'); SVG.appendChild(p); }
-function drawThreads(){ SVG.innerHTML=''; const ag=center('agent');
-  state.tools.forEach(nm=>thread(center('tool:'+nm), ag, '#bcae8e'));
-  thread(ag, center('route'), '#a9b79e'); thread(ag, center('evals'), '#cdb79a'); }
+  p.setAttribute('fill','none'); p.setAttribute('stroke',color); p.setAttribute('stroke-width','1.5'); p.setAttribute('stroke-linecap','round');
+  SVG.appendChild(p);
+  if(animate){ const len=p.getTotalLength(); p.style.strokeDasharray=len; p.style.strokeDashoffset=len;
+    requestAnimationFrame(()=>{ p.style.transition='stroke-dashoffset .55s cubic-bezier(.22,.61,.36,1)'; p.style.strokeDashoffset=0; }); } }
+let THREAD=null;   // connector colors cached; only re-read on theme change, not per drag-frame
+function refreshThreadColors(){ const cs=getComputedStyle(document.documentElement), v=n=>cs.getPropertyValue(n).trim();
+  THREAD={tool:v('--thread-tool')||'#bcae8e', route:v('--thread-route')||'#a9b79e', evals:v('--thread-evals')||'#cdb79a'}; }
+function drawThreads(animate){ if(!THREAD) refreshThreadColors(); SVG.innerHTML=''; const ag=center('agent');
+  state.tools.forEach(nm=>thread(center('tool:'+nm), ag, THREAD.tool, animate));
+  thread(ag, center('route'), THREAD.route, animate); thread(ag, center('evals'), THREAD.evals, animate); }
 function wireNodeDrag(){
   W.querySelectorAll('[data-drag]').forEach(h=>{
     h.addEventListener('mousedown', e=>{
+      if(e.button!==0) return;
       e.stopPropagation(); const id=h.dataset.drag; const start={x:e.clientX,y:e.clientY,px:POS[id].x,py:POS[id].y};
       function mv(ev){ POS[id].x=start.px+(ev.clientX-start.x)/cam.k; POS[id].y=start.py+(ev.clientY-start.y)/cam.k;
         const el=W.querySelector(`[data-id="${id}"]`); el.style.left=POS[id].x+'px'; el.style.top=POS[id].y+'px'; drawThreads(); }
@@ -200,10 +405,35 @@ function addTool(nm){ if(!state.tools.includes(nm)){ state.tools.push(nm); layou
 function removeTool(nm){ state.tools=state.tools.filter(t=>t!==nm); layout(); render(); renderToolbox(); markDirty(); }
 function markDirty(){ setStatus('unsaved edits', 'busy'); }
 
-function editFile(file){
-  const f=document.getElementById('termframe');
-  if(f && f.contentWindow){ f.contentWindow.postMessage({type:'edit', file}, '*'); setStatus('opening '+file.split('/').pop(), 'busy'); }
+function editFile(file){ termPost({type:'edit', file}); setStatus('opening '+file.split('/').pop(), 'busy'); }
+function termPost(msg){ const f=document.getElementById('termframe'); if(f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); }
+
+// Spin up JUST this agent in the docked terminal and watch it behave — isolated
+// from the live adk-bridge. The PTY's cwd is WS_ROOT (terminal.py SHELL_CWD), so
+// the command is built from convention; no backend call. Self-diagnoses when an
+// agent has no venv / web wrapper yet, instead of spewing a traceback.
+const WS_ROOT = '/root/.hermes/workspace/adk';
+function shq(s){ return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+function buildRunCmd(id, query){
+  const adk = `agents/${id}/.venv/bin/adk`, web = `web_agents/${id}`;
+  const q = query ? ' ' + shq(query) : '';
+  // if/then/else (not `&& || `): the diagnostic must depend on the preconditions,
+  // not on adk's own exit code — adk run exits non-zero on a normal exit/Ctrl-C.
+  return `cd ${WS_ROOT} && if [ -x "${adk}" ] && [ -d "${web}" ]; then "${adk}" run "${web}"${q}; `
+    + `else echo "[builder] ${id} not runnable yet — needs ${adk} + ${web}/ (build venv: scripts/rebuild_venvs.sh)."; fi`;
 }
+function growTerminal(){
+  const top=document.getElementById('railtop'), rail=document.querySelector('.rail');
+  const pct = top.getBoundingClientRect().height / rail.getBoundingClientRect().height * 100;
+  if(pct > 34) top.style.flexBasis = '30%';   // give the terminal room to watch
+}
+function runAgent(query){
+  if(!state) return;
+  growTerminal();
+  termPost({type:'run', cmd:buildRunCmd(state.agent.id, query)});
+  setStatus(query ? ('running '+state.agent.id+' · smoke') : ('running '+state.agent.id+' · interactive'), 'busy');
+}
+function stopRun(){ termPost({type:'interrupt'}); setStatus('sent ⌃C to terminal', ''); }
 function renderToolbox(){
   const used = new Set(state ? state.tools : []);
   const box = document.getElementById('toolbox'); box.innerHTML='';
@@ -218,10 +448,16 @@ function renderToolbox(){
       const body=document.createElement('div'); body.className='drawerbody';
       drawer.items.forEach(it=>{
         const wired = it.wireable && used.has(it.name);
-        const row=document.createElement('div'); row.className='spec'+(it.wireable?' wireable':'')+(wired?' wired':'');
+        const row=document.createElement('div'); row.className='spec'+(it.wireable?' wireable':'')+(wired?' wired':'')+(it.wireable&&!wired?' draggable':'');
         const main=document.createElement('div'); main.className='specmain';
         main.innerHTML=`<span class="plus${it.wireable?'':' dot'}">${it.wireable?(wired?'✓':'+'):'•'}</span><div style="min-width:0"><div class="nm">${it.name}</div><div class="ds">${esc(it.summary)||it.file.split('/').pop()}</div></div>`;
-        if(it.wireable) main.addEventListener('click', ()=> used.has(it.name)?removeTool(it.name):addTool(it.name));
+        if(it.wireable){
+          main.addEventListener('click', ()=>{
+            if(main.dataset.dragged){ delete main.dataset.dragged; return; }   // a drag, not a click
+            used.has(it.name)?removeTool(it.name):addTool(it.name);
+          });
+          if(!wired) main.addEventListener('pointerdown', e=>startToolDrag(e, it, row, main));
+        }
         const eb=document.createElement('button'); eb.className='editbtn'; eb.title='edit '+it.file+' in terminal'; eb.textContent='✎';
         eb.addEventListener('click', e=>{ e.stopPropagation(); editFile(it.file); });
         row.appendChild(main); row.appendChild(eb); body.appendChild(row);
@@ -254,21 +490,214 @@ async function deploy(){
   btn.disabled=false;
 }
 
-canvas.addEventListener('mousedown', e=>{ if(e.target.closest('.node')) return;
+canvas.addEventListener('mousedown', e=>{ if(e.button!==0 || e.target.closest('.node')) return;
   canvas.classList.add('panning'); const s={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};
   function mv(ev){ cam.x=s.cx+(ev.clientX-s.x); cam.y=s.cy+(ev.clientY-s.y); applyCam(); }
   function up(){ canvas.classList.remove('panning'); document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up); });
-canvas.addEventListener('wheel', e=>{ e.preventDefault(); const f=e.deltaY<0?1.08:0.926;
+canvas.addEventListener('wheel', e=>{ e.preventDefault(); closePopovers(); const f=e.deltaY<0?1.08:0.926;
   const nk=Math.min(2,Math.max(0.4,cam.k*f)); const r=canvas.getBoundingClientRect();
   const mx=e.clientX-r.left, my=e.clientY-r.top;
   cam.x=mx-(mx-cam.x)*(nk/cam.k); cam.y=my-(my-cam.y)*(nk/cam.k); cam.k=nk; applyCam(); }, {passive:false});
+
+// ───────── view helpers ─────────
+function addToolAt(name, wx, wy){
+  if(!state.tools.includes(name)){ POS['tool:'+name]={x:wx, y:wy}; state.tools.push(name); render(); markDirty(); }
+  renderToolbox();
+}
+function resetView(){ cam={x:60, y:40, k:1}; applyCam(); }
+function fitView(){
+  const nodes=[...W.querySelectorAll('.node')].filter(n=>POS[n.dataset.id]); if(!nodes.length) return;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  nodes.forEach(n=>{ const p=POS[n.dataset.id];
+    minx=Math.min(minx,p.x); miny=Math.min(miny,p.y); maxx=Math.max(maxx,p.x+n.offsetWidth); maxy=Math.max(maxy,p.y+n.offsetHeight); });
+  const r=canvas.getBoundingClientRect(), pad=64, w=maxx-minx||1, h=maxy-miny||1;
+  const k=Math.min(1.4, Math.max(0.4, Math.min((r.width-pad*2)/w, (r.height-pad*2)/h)));
+  cam.k=k; cam.x=(r.width-w*k)/2 - minx*k; cam.y=(r.height-h*k)/2 - miny*k; applyCam();
+}
+
+// ───────── right-click context menu ─────────
+let ctx=null;
+function closeCtx(){ if(ctx){ ctx.remove(); ctx=null; } }
+function closePopovers(){ closeCtx(); closeInsp(); }
+function openCtx(x, y, items){
+  closeCtx();
+  const m=document.createElement('div'); m.className='ctxmenu';
+  items.forEach(it=>{
+    if(it.sep){ const s=document.createElement('div'); s.className='sep'; m.appendChild(s); return; }
+    if(it.hdr){ const h=document.createElement('div'); h.className='hdr'; h.textContent=it.hdr; m.appendChild(h); return; }
+    const ci=document.createElement('div'); ci.className='ci'+(it.danger?' danger':'');
+    ci.innerHTML=`<span class="ic">${it.ic||''}</span>${it.label}${it.kbd?`<span class="kbd">${it.kbd}</span>`:''}`;
+    ci.addEventListener('click', ()=>{ closeCtx(); it.fn(); });
+    m.appendChild(ci);
+  });
+  document.body.appendChild(m);
+  const r=m.getBoundingClientRect();
+  let px=x, py=y;
+  if(px+r.width > innerWidth-8)  px=Math.max(8, innerWidth-r.width-8);
+  if(py+r.height > innerHeight-8) py=Math.max(8, innerHeight-r.height-8);
+  m.style.left=px+'px'; m.style.top=py+'px';
+  ctx=m;
+}
+function nodeMenu(id, nodeEl){
+  if(id==='agent'){ const smoke=(state.agent.smoke_prompts||[])[0]; return [
+    {hdr:'agent · '+(state.agent.name||state.agent.id)},
+    {label:'Inspect', ic:'◎', kbd:'dbl-click', fn:()=>inspectNode('agent', nodeEl)},
+    {label:'Edit instruction', ic:'✎', fn:()=>{ const t=document.getElementById('instr'); t.focus(); t.setSelectionRange(t.value.length,t.value.length); }},
+    {sep:true},
+    {label:'Run &amp; watch', ic:'▷', fn:()=>runAgent()},
+    ...(smoke ? [{label:'Run first smoke prompt', ic:'▷', fn:()=>runAgent(smoke)}] : []),
+    {label:'Stop run', ic:'■', fn:stopRun},
+    {sep:true},
+    {label:'Generate', ic:'▸', fn:generate},
+    {label:'Reset position', ic:'⤢', fn:()=>{ delete POS.agent; layout(); render(); }},
+  ]; }
+  if(id.startsWith('tool:')){ const nm=id.slice(5), info=toolInfo(nm); return [
+    {hdr:'tool · '+nm},
+    {label:'Inspect', ic:'◎', kbd:'dbl-click', fn:()=>inspectNode(id, nodeEl)},
+    {label:'Open source', ic:'✎', fn:()=>{ if(info&&info.file) editFile(info.file); }},
+    {sep:true},
+    {label:'Reset position', ic:'⤢', fn:()=>{ delete POS[id]; layout(); render(); }},
+    {label:'Remove from agent', ic:'×', danger:true, fn:()=>removeTool(nm)},
+  ]; }
+  if(id==='route') return [
+    {hdr:'discord route'},
+    {label:'Inspect', ic:'◎', kbd:'dbl-click', fn:()=>inspectNode('route', nodeEl)},
+    {label:'Reset position', ic:'⤢', fn:()=>{ delete POS.route; layout(); render(); }},
+  ];
+  if(id==='evals'){ const smoke=(state.agent.smoke_prompts||[])[0]; return [
+    {hdr:'evals'},
+    {label:'Inspect', ic:'◎', kbd:'dbl-click', fn:()=>inspectNode('evals', nodeEl)},
+    ...(smoke ? [{label:'Run first smoke prompt', ic:'▷', fn:()=>runAgent(smoke)}] : []),
+    {label:'Reset position', ic:'⤢', fn:()=>{ delete POS.evals; layout(); render(); }},
+  ]; }
+  return [];
+}
+function canvasMenu(){ return [
+  {label:'Fit to view', ic:'⤢', fn:fitView},
+  {label:'Reset view', ic:'⌖', fn:resetView},
+];}
+canvas.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  const n=e.target.closest('.node');
+  if(n && state) openCtx(e.clientX, e.clientY, nodeMenu(n.dataset.id, n));
+  else openCtx(e.clientX, e.clientY, canvasMenu());
+});
+
+// ───────── node inspector (what does this actually do) ─────────
+let insp=null;
+function closeInsp(){ if(insp){ insp.remove(); insp=null; }
+  document.querySelectorAll('.inspected').forEach(n=>n.classList.remove('inspected')); }
+function inspectorHTML(id){
+  const close='<span class="x" title="close">×</span>';
+  if(id==='agent'){ const a=state.agent;
+    const chans=(a.channels||[]).map(c=>`<span class="ip">${esc(c)}</span>`).join('') || '<span class="fv">—</span>';
+    const instr=esc(state.instruction).slice(0,420)+(state.instruction.length>420?'…':'');
+    return `${close}<div class="ik">agent</div><h4>${esc(a.name||a.id)}</h4>
+      <div class="desc">${esc(a.description)||'<span class="note">No description in the manifest.</span>'}</div>
+      <div class="field"><span class="fl">model</span><div class="chiprow"><span class="ip">${esc(a.model||'openai/gpt-5.5')}</span><span class="ip safe">${esc(a.safety||'read_only')}</span></div></div>
+      <div class="field"><span class="fl">discord route</span><div class="chiprow">${chans}</div></div>
+      <div class="field"><span class="fl">wired tools · ${state.tools.length}</span><div class="chiprow">${state.tools.map(t=>`<span class="ip">${esc(t)}</span>`).join('')||'<span class="fv">none yet — drag from the Toolbox</span>'}</div></div>
+      <div class="field"><span class="fl">instruction</span><div class="quote">${instr||'<span class="note">empty</span>'}</div></div>`;
+  }
+  if(id.startsWith('tool:')){ const nm=id.slice(5), info=toolInfo(nm)||{};
+    // backend contract (canvas_api.py): optional `reads` [{name,type}] + `returns` string,
+    // derived from the tool's own signature + docstring. `gathers` honored as a legacy alias.
+    const reads = Array.isArray(info.reads) ? info.reads : [];
+    const returns = info.returns || info.gathers || '';
+    const src = info.file ? `<span class="fv mono src" data-src="${esc(info.file)}" title="open in terminal">${esc(info.file)}</span>` : '<span class="fv">unknown</span>';
+    const readsHTML = reads.length
+      ? `<div class="chiprow">${reads.map(p=>`<span class="ip">${esc(p.name)}${p.type?`<span class="ipt"> : ${esc(p.type)}</span>`:''}</span>`).join('')}</div>` : '';
+    const retHTML = returns ? `<div class="ret"><span class="arr">→</span> ${esc(returns)}</div>` : '';
+    const gathersBody = (reads.length || returns)
+      ? `${readsHTML}${retHTML}`
+      : `<div class="note">Not declared in the manifest — open the source to see exact inputs &amp; returns.</div>`;
+    return `${close}<div class="ik">tool</div><h4>${esc(nm)}</h4>
+      <div class="desc">${esc(info.summary)||'<span class="note">No human description in the manifest yet.</span>'}</div>
+      <div class="field"><span class="fl">reads / gathers</span>${gathersBody}</div>
+      <div class="field"><span class="fl">defined in${info.drawer?' · '+esc(info.drawer):''}</span>${src}</div>`;
+  }
+  if(id==='route'){ const a=state.agent;
+    return `${close}<div class="ik">discord route</div><h4>Channels</h4>
+      <div class="desc">Channels this agent listens to and posts in.</div>
+      <div class="field"><span class="fl">channels · ${(a.channels||[]).length}</span><div class="chiprow">${(a.channels||[]).map(c=>`<span class="ip">${esc(c)}</span>`).join('')||'<span class="fv">—</span>'}</div></div>`;
+  }
+  if(id==='evals'){ const a=state.agent, ps=a.smoke_prompts||[];
+    return `${close}<div class="ik">evals</div><h4>Smoke prompts</h4>
+      <div class="desc">Prompts run against the agent after each generate to catch regressions.</div>
+      <div class="field"><span class="fl">${ps.length} prompt${ps.length===1?'':'s'}</span><ul class="smoke">${ps.map(p=>`<li>${esc(p)}</li>`).join('')||'<li class="note">none</li>'}</ul></div>`;
+  }
+  return '';
+}
+function inspectNode(id, nodeEl){
+  closeInsp();
+  const html=inspectorHTML(id); if(!html) return;
+  const card=document.createElement('div'); card.className='inspector'; card.innerHTML=html;
+  document.body.appendChild(card);
+  card.querySelector('.x').addEventListener('click', closeInsp);
+  card.querySelectorAll('[data-src]').forEach(s=>s.addEventListener('click', ()=>{ editFile(s.dataset.src); closeInsp(); }));
+  const anchor = nodeEl || W.querySelector(`[data-id="${id}"]`);
+  const r = anchor ? anchor.getBoundingClientRect() : {right:innerWidth/2, left:innerWidth/2, top:120};
+  const cr=card.getBoundingClientRect();
+  let px=r.right+14; if(px+cr.width > innerWidth-8) px=r.left-cr.width-14; if(px<8) px=8;
+  let py=r.top;     if(py+cr.height > innerHeight-8) py=innerHeight-cr.height-8; if(py<8) py=8;
+  card.style.left=px+'px'; card.style.top=py+'px';
+  insp=card;
+  if(anchor) anchor.classList.add('inspected');
+}
+canvas.addEventListener('dblclick', e=>{
+  if(e.target.closest('textarea,input,button,.rm,.editbtn')) return;
+  const n=e.target.closest('.node'); if(n && state) inspectNode(n.dataset.id, n);
+});
+
+// ───────── drag a tool from the Toolbox onto the canvas to wire it ─────────
+function overCanvas(ev){ const r=canvas.getBoundingClientRect();
+  return ev.clientX>=r.left && ev.clientX<=r.right && ev.clientY>=r.top && ev.clientY<=r.bottom; }
+function startToolDrag(e, it, row, main){
+  if(e.button!==0) return;
+  const start={x:e.clientX, y:e.clientY}; let ghost=null, dragging=false;
+  function mv(ev){
+    if(!dragging && Math.hypot(ev.clientX-start.x, ev.clientY-start.y) > 6){
+      dragging=true; row.classList.add('draglift'); document.body.style.userSelect='none';
+      ghost=document.createElement('div'); ghost.className='dragghost'; ghost.textContent=it.name; document.body.appendChild(ghost);
+    }
+    if(dragging){
+      ghost.style.left=(ev.clientX+13)+'px'; ghost.style.top=(ev.clientY+13)+'px';
+      canvas.classList.toggle('dropzone', overCanvas(ev));
+    }
+  }
+  function up(ev){
+    document.removeEventListener('pointermove', mv); document.removeEventListener('pointerup', up);
+    document.body.style.userSelect='';
+    if(dragging){
+      row.classList.remove('draglift'); canvas.classList.remove('dropzone');
+      if(ghost) ghost.remove();
+      if(overCanvas(ev)){
+        const r=canvas.getBoundingClientRect();
+        const wx=(ev.clientX-r.left-cam.x)/cam.k - 84;   // drop point → top-left of new chip
+        const wy=(ev.clientY-r.top -cam.y)/cam.k - 22;
+        addToolAt(it.name, wx, wy);
+      }
+      main.dataset.dragged='1';   // swallow the click that fires after pointerup
+    }
+  }
+  document.addEventListener('pointermove', mv); document.addEventListener('pointerup', up);
+}
+
+// ───────── dismiss popovers ─────────
+document.addEventListener('mousedown', e=>{
+  if(ctx && !e.target.closest('.ctxmenu')) closeCtx();
+  if(insp && !e.target.closest('.inspector') && !e.target.closest('.node')) closeInsp();
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePopovers(); } });
+window.addEventListener('resize', ()=>{ closePopovers(); });
 
 // boot
 VIEW.agents.forEach(a=>{ const o=document.createElement('option'); o.value=a.id; o.textContent=a.id; sel.appendChild(o); });
 sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAgent(sel.value); });
 document.getElementById('gen').addEventListener('click', generate);
 document.getElementById('deploy').addEventListener('click', deploy);
+document.getElementById('run').addEventListener('click', ()=>runAgent());
 document.getElementById('termframe').setAttribute('src', TERM_URL);
 (function(){
   const div=document.getElementById('hdivider'), top=document.getElementById('railtop'),
@@ -278,6 +707,32 @@ document.getElementById('termframe').setAttribute('src', TERM_URL);
     function up(){ document.body.style.cursor=''; frame.style.pointerEvents=''; document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
     document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up); });
 })();
+// theme toggle (re-applied pre-paint by the <head> script; this only flips + persists)
+document.getElementById('themebtn').addEventListener('click', ()=>{
+  const next = document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try{ localStorage.setItem('ab-theme', next); }catch(e){}
+  refreshThreadColors(); if(state) drawThreads();   // connector colors are theme-dependent
+});
+
+// field-notes scratchpad — localStorage placeholder. // TODO: persist via /api/...
+//   e.g. fetch(apiUrl('/api/agent/'+state.agent.id+'/notes'), {method:'POST', body:notes})
+//   or a single workspace-level scratch file. Wire here once the backend endpoint exists.
+(function(){
+  const pad=document.getElementById('notepad'), saved=document.getElementById('notesaved'),
+        head=document.getElementById('noteshead'), card=document.getElementById('notecard'),
+        caret=document.getElementById('notescaret');
+  const KEY='ab-notes';
+  try{ pad.value = localStorage.getItem(KEY) || ''; }catch(e){}
+  let t=null;
+  pad.addEventListener('input', ()=>{
+    try{ localStorage.setItem(KEY, pad.value); }catch(e){}
+    saved.classList.add('show'); clearTimeout(t); t=setTimeout(()=>saved.classList.remove('show'), 1200);
+  });
+  let open=true;
+  head.addEventListener('click', ()=>{ open=!open; card.style.display=open?'':'none'; caret.textContent=open?'▾':'▸'; });
+})();
+
 applyCam();
 if(VIEW.agents.length){ selectAgent(VIEW.agents[0].id); }
 else { renderToolbox(); W.innerHTML='<div class="node" style="left:40px;top:40px"><div class="empty">No agents in the manifest yet.</div></div>'; }
