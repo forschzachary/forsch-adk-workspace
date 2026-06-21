@@ -346,11 +346,25 @@ function applyView(fresh){
   selectAgent(useId);
   cam.x = keepCam.x; cam.y = keepCam.y; cam.k = keepCam.k; applyCam();
   if (typeof loadBoxes === 'function') loadBoxes();
+  _viewSig = JSON.stringify(VIEW.agents);
 }
 async function refreshView(){
   try { applyView(await (await fetch(apiUrl('/api/view'))).json()); setStatus('refreshed', ''); }
   catch (e) { setStatus('refresh failed', 'err'); }
 }
+let _viewSig = JSON.stringify(VIEW.agents);
+setInterval(async () => {
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || ae.isContentEditable)) return;
+  try {
+    const fresh = await (await fetch(apiUrl('/api/view'))).json();
+    const sig = JSON.stringify(fresh.agents);
+    if (sig === _viewSig) return;
+    _viewSig = sig;
+    applyView(fresh);
+    setStatus('auto-updated', '');
+  } catch (e) { /* transient; next tick retries */ }
+}, 5000);
 function layout(){
   POS.agent = POS.agent || {x:360, y:200};
   state.tools.forEach((nm,i)=>{ POS['tool:'+nm] = POS['tool:'+nm] || {x:40, y:90 + i*104}; });
