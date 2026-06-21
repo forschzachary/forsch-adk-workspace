@@ -30,7 +30,7 @@
   .gen{font-family:"Newsreader",serif;font-weight:600;font-size:15px;color:#f7f1e3;background:var(--sage);
     border:1px solid #4d6849;border-radius:10px;padding:9px 18px;cursor:pointer;}
   .gen:hover{background:#56714f;}.gen:disabled{opacity:.55;cursor:default;}
-  .stage{display:grid;grid-template-columns:1fr 300px;height:100%;}
+  .stage{display:grid;grid-template-columns:1fr 400px;height:calc(100vh - 57px);}
   .canvas{position:relative;overflow:hidden;cursor:grab;
     background-image:radial-gradient(#cdbf9f55 1px,transparent 1.4px);background-size:26px 26px;}
   .canvas.panning{cursor:grabbing;}
@@ -59,7 +59,12 @@
   .chip .s{font-size:12px;color:var(--mut);}
   .rm{cursor:pointer;color:#bda;color:#c2b48f;font-size:13px;line-height:1;}
   .rm:hover{color:#b05a45;}
-  .rail{border-left:1px solid var(--line);background:#f2ebdb;padding:15px 14px;overflow:auto;}
+  .rail{border-left:1px solid var(--line);background:#f2ebdb;display:flex;flex-direction:column;overflow:hidden;}
+  .rail-top{flex:0 0 42%;overflow:auto;padding:15px 14px;}
+  .hdivider{flex:0 0 8px;background:var(--line);cursor:row-resize;transition:background .15s;}
+  .hdivider:hover{background:var(--sage);}
+  .rail-term{flex:1 1 auto;min-height:120px;background:#1b1812;}
+  .rail-term iframe{width:100%;height:100%;border:0;display:block;}
   .rail h3{margin:0 0 3px;font-size:15px;font-weight:600;}
   .rail .note{font-size:12.5px;color:var(--ink2);line-height:1.45;margin-bottom:13px;}
   .spec{display:flex;align-items:flex-start;gap:9px;background:var(--card);border:1px solid #e6dabf;border-radius:10px;
@@ -72,12 +77,6 @@
   pre.result{font-family:"Spline Sans Mono",monospace;font-size:11px;line-height:1.45;color:#463c2b;
     background:#fffdf6;border:1px solid #e6dabf;border-radius:9px;padding:10px;white-space:pre-wrap;max-height:240px;overflow:auto;}
   .empty{color:var(--mut);font-size:12.5px;font-style:italic;}
-  .split{display:flex;height:calc(100vh - 57px);}
-  .pane-builder{flex:0 0 58%;min-width:400px;overflow:hidden;}
-  .divider{flex:0 0 8px;background:var(--line);cursor:col-resize;transition:background .15s;}
-  .divider:hover{background:var(--sage);}
-  .pane-term{flex:1 1 auto;min-width:300px;background:#1b1812;}
-  .pane-term iframe{width:100%;height:100%;border:0;display:block;}
 </style>
 </head>
 <body>
@@ -88,24 +87,22 @@
     <div class="status" id="status"><span class="tick"></span><span id="statustext">ready</span></div>
     <button class="gen" id="gen">Generate &rsaquo;</button>
   </div>
-  <div class="split">
-    <div class="pane-builder">
-    <div class="stage">
+  <div class="stage">
     <div class="canvas" id="canvas">
       <svg class="threads" id="threads"></svg>
       <div class="world" id="world"></div>
     </div>
     <aside class="rail">
-      <h3>Components</h3>
-      <div class="note">Click to wire a proven tool onto the agent, then Generate to regenerate the agent on the box.</div>
-      <div id="palette"></div>
-      <div class="div">last generate</div>
-      <div id="result"><div class="empty">No generate yet.</div></div>
+      <div class="rail-top" id="railtop">
+        <h3>Components</h3>
+        <div class="note">Click to wire a proven tool onto the agent, then Generate to regenerate the agent on the box.</div>
+        <div id="palette"></div>
+        <div class="div">last generate</div>
+        <div id="result"><div class="empty">No generate yet.</div></div>
+      </div>
+      <div class="hdivider" id="hdivider" title="drag to resize"></div>
+      <div class="rail-term"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
     </aside>
-    </div>
-    </div>
-    <div class="divider" id="divider" title="drag to resize"></div>
-    <div class="pane-term"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
   </div>
 
 <script>
@@ -252,15 +249,15 @@ sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAg
 document.getElementById('gen').addEventListener('click', generate);
 // terminal is always-on, side by side with the builder
 document.getElementById('termframe').setAttribute('src', TERM_URL);
-// draggable divider (overlay the iframe while dragging so it doesn't swallow the mouse)
+// draggable horizontal divider in the rail (overlay the iframe so it doesn't swallow the mouse)
 (function(){
-  const div=document.getElementById('divider'), pane=document.querySelector('.pane-builder'),
-        split=document.querySelector('.split'), frame=document.getElementById('termframe');
+  const div=document.getElementById('hdivider'), top=document.getElementById('railtop'),
+        rail=document.querySelector('.rail'), frame=document.getElementById('termframe');
   div.addEventListener('mousedown', e=>{
-    e.preventDefault(); document.body.style.cursor='col-resize'; frame.style.pointerEvents='none';
-    function mv(ev){ const r=split.getBoundingClientRect();
-      let pct=((ev.clientX-r.left)/r.width)*100; pct=Math.min(80,Math.max(25,pct));
-      pane.style.flexBasis=pct+'%'; }
+    e.preventDefault(); document.body.style.cursor='row-resize'; frame.style.pointerEvents='none';
+    function mv(ev){ const r=rail.getBoundingClientRect();
+      let pct=((ev.clientY-r.top)/r.height)*100; pct=Math.min(80,Math.max(15,pct));
+      top.style.flexBasis=pct+'%'; }
     function up(){ document.body.style.cursor=''; frame.style.pointerEvents='';
       document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
     document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
