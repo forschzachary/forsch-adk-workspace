@@ -1,0 +1,15 @@
+[Unit]
+Description=Forsch ADK chat (Claude + Hubert flip-chat)
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/root/.hermes/workspace/adk/chat/chat.env
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/root/.hermes/workspace/adk/chat
+ExecStart=/root/.hermes/workspace/adk/chat/.venv/bin/python -m forsch.adk_chat.http
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
