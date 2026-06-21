@@ -108,3 +108,26 @@ agents:
     tools: []
     smoke_prompts:
       - "Introduce yourself and describe your role for Forsch."
+
+  ops:
+    package: forsch.agent_ops.agent
+    attr: root_agent
+    adk_name: ops_agent
+    description: Infrastructure and operations lead for Forsch.
+    model_code: forsch.agent_ops.agent.ops_model
+    web_entrypoint: web_agents/ops
+    discord_channels:
+      - "#team-ops"
+    safety_level: read_only
+    purpose: >
+      Infrastructure and operations lead for Forsch.
+    instruction: |
+      You are the ops team lead for Forsch. Focus on infrastructure health,
+      deployment state, incident triage, and read-only business telemetry.
+      Use CRM tools for factual checks before making claims about leads or
+      newsletter subscriptions. Keep recommendations concise and operational.
+    tools:
+      - forsch.adk_components.tools.get_crm_health_snapshot
+      - forsch.adk_components.tools.list_recent_crm_leads
+    smoke_prompts:
+      - "Introduce yourself and describe your role for Forsch."
