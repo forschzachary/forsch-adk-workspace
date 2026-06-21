@@ -33,6 +33,34 @@ async def start():
     cl.user_session.set("history", [])
 
 
+def _render_ask_user_markdown(questions: list[dict]) -> str:
+    """Format AskUserQuestion questions as readable markdown."""
+    lines = []
+    for q in questions:
+        header = q.get("header", "").strip()
+        question = q.get("question", "").strip()
+        options = q.get("options", [])
+        multi = q.get("multi_select", False)
+
+        if header:
+            lines.append(f"**{header}**")
+        if question:
+            lines.append(question)
+        if options:
+            if multi:
+                lines.append("*(select all that apply)*")
+            for i, opt in enumerate(options, 1):
+                label = opt.get("label", "").strip()
+                desc = opt.get("description", "").strip()
+                if desc:
+                    lines.append(f"{i}. **{label}** — {desc}")
+                else:
+                    lines.append(f"{i}. **{label}**")
+        lines.append("")
+    lines.append("*Reply with your choice and I'll continue.*")
+    return "\n".join(lines)
+
+
 @cl.on_message
 async def on_message(message: cl.Message):
     who = cl.user_session.get("who")
@@ -60,6 +88,16 @@ async def on_message(message: cl.Message):
                     continue
                 if ev[0] == "token":
                     await out.stream_token(ev[1])
+                elif ev[0] == "ask_user":
+                    # AskUserQuestion: render question + options as readable markdown.
+                    # The SDK/CLI auto-dismisses this tool in bypassPermissions mode
+                    # (returns is_error=True), so host cannot inject an answer back.
+                    # We flush any accumulated text, then show the question clearly.
+                    await out.update()
+                    out = cl.Message(content="")
+                    md = _render_ask_user_markdown(ev[1])
+                    await cl.Message(content=md).send()
+                    out = cl.Message(content="")
                 elif ev[0] == "tool":
                     async with cl.Step(name=f"tool: {ev[1]}", type="tool") as s:
                         s.input = ev[2]
