@@ -12,9 +12,12 @@ RUN pip install --no-cache-dir \
       "discord.py>=2.4" \
       "pyyaml>=6" \
       "pydantic>=2" \
-      "httpx>=0.27"
+      "httpx>=0.27" \
+      "chainlit>=1.3" \
+      "fastapi>=0.110" \
+      "uvicorn[standard]>=0.30"
 
 ENV PYTHONUNBUFFERED=1
 WORKDIR /workspace/bridge
 ENTRYPOINT ["tini","--"]
-CMD ["python","-m","forsch.adk_bridge.bridge"]
+CMD ["python","-m","forsch.adk_bridge.http"]
