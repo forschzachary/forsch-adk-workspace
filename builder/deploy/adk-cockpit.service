@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=/root/.hermes/workspace/adk/builder
 Environment=PYTHONPATH=/root/.hermes/workspace/adk/builder/src
 Environment=FORSCH_ADK_WORKSPACE=/root/.hermes/workspace/adk
-Environment=FORSCH_ADK_HOST=100.120.21.13
+Environment=FORSCH_ADK_HOST=0.0.0.0
 Environment=FORSCH_ADK_PORT=8780
 ExecStart=/root/.hermes/workspace/adk/builder/.venv/bin/python -m forsch.adk_builder.app
 Restart=always
