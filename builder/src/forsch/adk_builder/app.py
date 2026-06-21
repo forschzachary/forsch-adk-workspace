@@ -34,4 +34,10 @@ def serve(workspace_root: str, host: str = "127.0.0.1", port: int = 8765) -> Non
 
 
 if __name__ == "__main__":
-    serve(os.environ.get("FORSCH_ADK_WORKSPACE", DEFAULT_WORKSPACE))
+    # Host/port overridable via env (FORSCH_ADK_HOST/PORT) so the systemd service
+    # can bind the Tailscale IP without code changes. Defaults stay localhost.
+    serve(
+        os.environ.get("FORSCH_ADK_WORKSPACE", DEFAULT_WORKSPACE),
+        host=os.environ.get("FORSCH_ADK_HOST", "127.0.0.1"),
+        port=int(os.environ.get("FORSCH_ADK_PORT", "8765")),
+    )
