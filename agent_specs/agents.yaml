@@ -1,10 +1,19 @@
-# Canonical ADK agent manifest.
-# Generated packages, web wrappers, tests, docs, and bridge routes should derive from this file.
+# Canonical ADK agent manifest — the single writable source of truth.
+# Generated packages, web wrappers, tests, docs, and bridge routes derive from this file.
+# See docs/superpowers/specs/2026-06-20-adk-agent-factory-canvas-design.md (D1).
+
+version: 1
+
+defaults:
+  agent_class: LlmAgent
 
 agents:
   stability:
     package: forsch.agent_stability.agent
     attr: root_agent
+    adk_name: stability_agent
+    description: Read-only stability governor for the Forsch ADK workspace.
+    model_code: forsch.agent_stability.agent.stability_model
     web_entrypoint: web_agents/stability
     discord_channels:
       - "#team-stability"
@@ -12,6 +21,11 @@ agents:
     purpose: >
       Audit the Forsch ADK workspace and adjacent local services without changing source,
       restarting processes, installing dependencies, or performing destructive actions.
+    instruction: |
+      You are the stability governor for the Forsch ADK workspace. Inspect only; do not edit files,
+      restart services, install packages, or perform destructive actions. Use the provided tools to
+      inventory workspace structure, inspect git state, validate agent imports, and check service
+      health. Report findings with severity, evidence, and the smallest safe next action.
     tools:
       - forsch.adk_components.tools.get_workspace_inventory
       - forsch.adk_components.tools.get_git_state
