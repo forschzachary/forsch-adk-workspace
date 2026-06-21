@@ -1,9 +1,9 @@
 """Build the data the Agent Builder canvas renders.
 
-Reads the live manifest (``agent_specs/agents.yaml``) and the component palette
-(public tool functions under ``components/.../tools``). Returns plain dicts that
-the cockpit inlines into the canvas page as JSON — no client API calls, so it
-works unchanged behind the Frappe reverse-proxy.
+Reads the live manifest (``agent_specs/agents.yaml``) and a "toolbox" of the
+workspace's components, grouped into drawers (Tools / Clients / Agents). Each
+toolbox item carries its absolute file path so the UI's edit button can open it
+in the embedded terminal. Returns plain dicts the cockpit inlines as JSON.
 """
 
 from __future__ import annotations
@@ -24,11 +24,18 @@ def _safe_yaml(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _palette(ws: Path) -> list[dict]:
-    """Public tool functions discovered under the components package."""
-    tools_dir = ws / "components" / "src" / "forsch" / "adk_components" / "tools"
-    out: list[dict] = []
-    for py in sorted(tools_dir.glob("*.py")):
+def _summary(node) -> str:
+    doc = ast.get_docstring(node) or ""
+    return doc.strip().splitlines()[0][:90] if doc.strip() else ""
+
+
+def _toolbox(ws: Path) -> list[dict]:
+    """Drawers of editable components. Tools are wireable onto agents; the rest
+    are editable infrastructure."""
+    tools: list[dict] = []
+    clients: list[dict] = []
+    comp = ws / "components" / "src" / "forsch" / "adk_components"
+    for py in sorted(comp.rglob("*.py")):
         if py.name == "__init__.py":
             continue
         try:
@@ -37,10 +44,24 @@ def _palette(ws: Path) -> list[dict]:
             continue
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
-                doc = ast.get_docstring(node) or ""
-                summary = doc.strip().splitlines()[0] if doc.strip() else ""
-                out.append({"name": node.name, "module": py.stem, "summary": summary[:90]})
-    return out
+                tools.append({"name": node.name, "summary": _summary(node), "file": str(py), "wireable": True})
+            elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                clients.append({"name": node.name, "summary": _summary(node), "file": str(py), "wireable": False})
+
+    agents: list[dict] = []
+    adir = ws / "agents"
+    if adir.is_dir():
+        for ag in sorted(p for p in adir.iterdir() if p.is_dir()):
+            f = ag / "src" / "forsch" / f"agent_{ag.name}" / "agent.py"
+            if f.exists():
+                agents.append({"name": ag.name, "summary": "agent package", "file": str(f), "wireable": False})
+
+    drawers = [
+        {"drawer": "Tools", "items": tools},
+        {"drawer": "Clients", "items": clients},
+        {"drawer": "Agents", "items": agents},
+    ]
+    return [d for d in drawers if d["items"]]
 
 
 def build_view(workspace_root: str) -> dict:
@@ -69,7 +90,4 @@ def build_view(workspace_root: str) -> dict:
                 "rendered_yaml": rendered,
             }
         )
-
-    used = {t for a in agents for t in a["tools"]}
-    palette = [p for p in _palette(ws) if p["name"] not in used]
-    return {"agents": agents, "palette": palette}
+    return {"agents": agents, "toolbox": _toolbox(ws)}

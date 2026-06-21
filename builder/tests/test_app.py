@@ -1,8 +1,4 @@
-"""Tests for the cockpit app: interactive canvas at /, read-only dashboard at /dashboard.
-
-The canvas exposes edit actions (POST /api/agent/{id}); the read-only Phase-1
-dashboard moved to /dashboard.
-"""
+"""Tests for the cockpit app: interactive canvas at /, view JSON, edit action."""
 
 from pathlib import Path
 
@@ -28,25 +24,17 @@ def test_canvas_served_at_root(tmp_path):
     assert "stability" in resp.text
 
 
-def test_api_view_returns_agents(tmp_path):
+def test_api_view_has_agents_and_toolbox(tmp_path):
     _write_contract(tmp_path, "alpha")
     client = TestClient(create_app(workspace_root=str(tmp_path)))
     data = client.get("/api/view").json()
     assert [a["id"] for a in data["agents"]] == ["alpha"]
+    assert "toolbox" in data  # present (empty drawers in a bare workspace)
 
 
-def test_dashboard_moved_to_dashboard_route(tmp_path):
-    _write_contract(tmp_path, "stability")
-    client = TestClient(create_app(workspace_root=str(tmp_path)))
-    resp = client.get("/dashboard")
-    assert resp.status_code == 200
-    assert "READ ONLY" in resp.text
-
-
-def test_edit_action_exposed_phase2(tmp_path):
+def test_only_agent_route_accepts_post(tmp_path):
     app = create_app(workspace_root=str(tmp_path))
-    methods: set[str] = set()
-    for route in app.routes:
-        methods |= set(getattr(route, "methods", set()) or set())
-    assert "POST" in methods  # edit actions exist now
-    assert "PUT" not in methods and "DELETE" not in methods
+    post_paths = {
+        r.path for r in app.routes if "POST" in (getattr(r, "methods", set()) or set())
+    }
+    assert post_paths == {"/api/agent/{agent_id}"}

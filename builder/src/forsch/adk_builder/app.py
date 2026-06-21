@@ -1,16 +1,21 @@
-"""Agent Builder cockpit — interactive canvas + edit actions.
+"""Agent Builder cockpit — interactive canvas, edit + deploy actions, terminal.
 
-``/`` serves the canvas (live manifest inlined). ``/api/view`` returns that data
-as JSON; ``/api/agent/{id}`` (POST) applies an edit (instruction/tools) and
-regenerates via the Factory. The read-only Phase-1 dashboard stays at
-``/dashboard``. When ``COCKPIT_TOKEN`` is set every route requires it (``?token=``
-or ``X-Cockpit-Token``) — the Frappe reverse-proxy attaches it server-side.
+Routes (all token-gated when ``COCKPIT_TOKEN`` is set; the Frappe reverse-proxy
+attaches the token server-side):
+  GET  /                     the canvas (live manifest + toolbox inlined)
+  GET  /api/view             that data as JSON
+  GET  /api/agent/{id}       edit (base64 ``q`` patch) -> regenerate wrapper+package
+  POST /api/agent/{id}       same, JSON body (direct use; Frappe blocks POST)
+  GET  /api/restart          docker restart adk-bridge (make edits go live)
+  GET  /term                 xterm.js page
+  WS   /term/ws              PTY (tmux) bridge
 """
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -18,9 +23,7 @@ from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Route, WebSocketRoute
 
 from forsch.adk_builder.canvas_api import build_view
-from forsch.adk_builder.collector import collect_workspace
 from forsch.adk_builder.editor import update_agent
-from forsch.adk_builder.renderer import render_dashboard
 from forsch.adk_builder.terminal import pty_bridge
 
 DEFAULT_WORKSPACE = "/opt/data/workspace/adk"
@@ -29,27 +32,24 @@ _TERM = Path(__file__).resolve().parents[3] / "templates" / "term.html"
 # The terminal needs WebSockets, which the Frappe HTTP proxy can't forward, so
 # the canvas embeds it straight from the Funnel (same token gate).
 FUNNEL_TERM = "https://hubert-cloud-sp6.tail818cf8.ts.net:8443/term"
+BRIDGE_CONTAINER = "adk-bridge"
 
 
 def _forbidden(request, token):
     if not token:
         return None
     provided = request.query_params.get("token") or request.headers.get("x-cockpit-token")
-    if provided != token:
-        return PlainTextResponse("forbidden", status_code=403)
-    return None
+    return PlainTextResponse("forbidden", status_code=403) if provided != token else None
 
 
 def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
     async def index(request):
         if (deny := _forbidden(request, token)) is not None:
             return deny
-        view = build_view(workspace_root)
-        term_url = f"{FUNNEL_TERM}?token={token or ''}"
         html = (
             _CANVAS.read_text()
-            .replace("/*__VIEW__*/", json.dumps(view))
-            .replace("/*__TERMURL__*/", json.dumps(term_url))
+            .replace("/*__VIEW__*/", json.dumps(build_view(workspace_root)))
+            .replace("/*__TERMURL__*/", json.dumps(f"{FUNNEL_TERM}?token={token or ''}"))
         )
         return HTMLResponse(html)
 
@@ -61,27 +61,32 @@ def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
     async def api_agent(request):
         if (deny := _forbidden(request, token)) is not None:
             return deny
-        agent_id = request.path_params["agent_id"]
         try:
             if request.method == "POST":
                 patch = await request.json()
             else:
-                # GET tunnel: Frappe 15 blocks POST to whitelisted methods at the
-                # route layer, so the proxied canvas sends the patch base64'd here.
                 import base64
 
                 q = request.query_params.get("q", "")
                 pad = "=" * (-len(q) % 4)
                 patch = json.loads(base64.urlsafe_b64decode(q + pad).decode("utf-8")) if q else {}
-            result = update_agent(workspace_root, agent_id, patch)
-            return JSONResponse(result)
-        except Exception as exc:  # surface the message to the UI, don't 500 blindly
+            return JSONResponse(update_agent(workspace_root, request.path_params["agent_id"], patch))
+        except Exception as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
-    async def dashboard(request):
+    async def api_restart(request):
         if (deny := _forbidden(request, token)) is not None:
             return deny
-        return HTMLResponse(render_dashboard(collect_workspace(workspace_root)))
+        try:
+            r = subprocess.run(
+                ["docker", "restart", BRIDGE_CONTAINER],
+                capture_output=True, text=True, timeout=90,
+            )
+            ok = r.returncode == 0
+            msg = (r.stdout or r.stderr).strip()[:200]
+            return JSONResponse({"ok": ok, "message": msg}, status_code=200 if ok else 500)
+        except Exception as exc:
+            return JSONResponse({"ok": False, "message": str(exc)}, status_code=500)
 
     async def term_page(request):
         if (deny := _forbidden(request, token)) is not None:
@@ -99,19 +104,14 @@ def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
             Route("/", index, methods=["GET"]),
             Route("/api/view", api_view, methods=["GET"]),
             Route("/api/agent/{agent_id}", api_agent, methods=["GET", "POST"]),
-            Route("/dashboard", dashboard, methods=["GET"]),
+            Route("/api/restart", api_restart, methods=["GET"]),
             Route("/term", term_page, methods=["GET"]),
             WebSocketRoute("/term/ws", term_ws),
         ]
     )
 
 
-def serve(
-    workspace_root: str,
-    host: str = "127.0.0.1",
-    port: int = 8765,
-    token: str | None = None,
-) -> None:
+def serve(workspace_root: str, host: str = "127.0.0.1", port: int = 8765, token: str | None = None) -> None:
     import uvicorn
 
     uvicorn.run(create_app(workspace_root=workspace_root, token=token), host=host, port=port)

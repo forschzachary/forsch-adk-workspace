@@ -1,8 +1,13 @@
 """Guarded edits to the manifest, then deterministic regeneration.
 
-Writes ``agent_specs/agents.yaml`` round-trip-safe (comments/structure preserved
-via ruamel), then runs the Factory to regenerate the agent's artifacts. This is
-the operational write path the canvas drives.
+Writes ``agent_specs/agents.yaml`` round-trip-safe (ruamel), then regenerates
+BOTH artifacts the manifest owns:
+  - ``web_agents/<id>/root_agent.yaml`` (the ADK-Web wrapper), and
+  - ``agents/<id>/src/forsch/agent_<id>/agent.py`` (the runtime package the
+    Discord bridge actually imports).
+
+Regenerating only the wrapper is why edits never reached the running agent;
+the bridge imports the package, so the package must be regenerated too.
 """
 
 from __future__ import annotations
@@ -13,22 +18,21 @@ from pathlib import Path
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import LiteralScalarString
 
-from forsch.adk_factory.cli import apply
+from forsch.adk_factory.cli import apply, write_files
+from forsch.adk_factory.loader import load_manifest
+from forsch.adk_factory.renderer import render_agent_package
 
 _TOOL_PREFIX = "forsch.adk_components.tools."
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
-_yaml.width = 4096  # do not re-wrap long/folded scalars (e.g. purpose)
-_yaml.indent(mapping=2, sequence=4, offset=2)  # match the manifest's 6-space list style
+_yaml.width = 4096
+_yaml.indent(mapping=2, sequence=4, offset=2)
 
 
 def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
-    """Apply ``patch`` (instruction and/or tools) to one agent, then regenerate.
-
-    ``patch`` keys: ``instruction`` (str), ``tools`` (list of short names).
-    Returns {ok, agent, tools, written, rendered_yaml}.
-    """
+    """Apply ``patch`` (instruction and/or tools) to one agent, then regenerate
+    its wrapper and runtime package. Returns {ok, agent, tools, written, rendered_yaml}."""
     ws = Path(workspace_root)
     mpath = ws / "agent_specs" / "agents.yaml"
     data = _yaml.load(mpath.read_text())
@@ -38,11 +42,9 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
         raise KeyError(f"unknown agent: {agent_id}")
     agent = agents[agent_id]
 
-    if "instruction" in patch and patch["instruction"] is not None:
-        text = str(patch["instruction"]).rstrip("\n") + "\n"
-        agent["instruction"] = LiteralScalarString(text)
-
-    if "tools" in patch and patch["tools"] is not None:
+    if patch.get("instruction") is not None:
+        agent["instruction"] = LiteralScalarString(str(patch["instruction"]).rstrip("\n") + "\n")
+    if patch.get("tools") is not None:
         agent["tools"] = [
             t if t.startswith(_TOOL_PREFIX) else _TOOL_PREFIX + t for t in patch["tools"]
         ]
@@ -51,19 +53,22 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
     _yaml.dump(data, buf)
     mpath.write_text(buf.getvalue())
 
-    result = apply(mpath, agent_id, str(ws))
+    # 1) wrapper (root_agent.yaml)
+    written = list(apply(mpath, agent_id, str(ws)).get("written", []))
+    # 2) runtime package (agent.py) — what the bridge imports
+    spec = load_manifest(mpath).agents[agent_id]
+    pkg = [{"path": rel, "content": content} for rel, content in render_agent_package(spec).items()]
+    written += write_files(ws, pkg)
 
     rendered = ""
     entry = agent.get("web_entrypoint")
-    if entry:
-        ra = ws / entry / "root_agent.yaml"
-        if ra.exists():
-            rendered = ra.read_text()
+    if entry and (ra := ws / entry / "root_agent.yaml").exists():
+        rendered = ra.read_text()
 
     return {
         "ok": True,
         "agent": agent_id,
         "tools": [t.rsplit(".", 1)[-1] for t in agent.get("tools", [])],
-        "written": result.get("written", []),
+        "written": written,
         "rendered_yaml": rendered,
     }
