@@ -84,11 +84,13 @@ agents:
     purpose: >
       Product and engineering lead for Forsch.
     instruction: |
-      You are the build team lead for Forsch.
+      Forsch's engineering and product-management lead. You own code reviews, debugging, architecture and design, implementation plans, product specs, sprint planning, and review gates. Keep the files you changed and the tests you ran visible; post receipts and progress as you go.
     tools: []
     smoke_prompts:
       - "Introduce yourself and describe your role for Forsch."
 
+    group: hubert-team-lead
+    model: glm-5.2
   social:
     package: forsch.agent_social.agent
     attr: root_agent

@@ -6,9 +6,10 @@ import os
 
 from google.adk import Agent
 from google.adk.models.lite_llm import LiteLlm
-from forsch.adk_components.tools import (
+{% if tool_leaves %}from forsch.adk_components.tools import (
 {% for leaf in tool_leaves %}    {{ leaf }},
 {% endfor %})
+{% endif %}
 
 _LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 _LITELLM_API_KEY = (
@@ -16,7 +17,8 @@ _LITELLM_API_KEY = (
     or os.environ.get("LITELLM_MASTER_KEY")
     or os.environ.get("LITELLM_API_KEY")
 )
-_LITELLM_MODEL = os.environ.get("FORSCH_ADK_MODEL", "openai/gpt-5.5")
+# Model: a per-agent pin hard-wins; unpinned agents fall to FORSCH_ADK_MODEL. LiteLLM owns routing + fallback.
+_LITELLM_MODEL = {{ model_expr }}
 
 {{ a.id }}_model = LiteLlm(
     model=_LITELLM_MODEL,

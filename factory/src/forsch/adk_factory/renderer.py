@@ -1,13 +1,11 @@
 """Render generated artifacts from an ``AgentSpec`` — deterministic, no LLM.
 
-- ``render_agent`` renders the ADK Web editable surface (``root_agent.yaml``),
-  golden-file-pinned to the live ``web_agents/stability/root_agent.yaml`` so
-  "regenerate" provably equals current behavior.
-- ``render_agent_package`` renders the runnable agent module (``agent.py``).
-  It is NOT byte-pinned (a hand-written agent.py wraps its instruction string
-  arbitrarily); instead it is verified by *functional equivalence* — executing
-  the generated code constructs an ``Agent`` with the manifest's exact name,
-  description, instruction, and tools.
+- ``render_agent`` renders the ADK Web editable surface (``root_agent.yaml``).
+- ``render_agent_package`` renders the runnable agent module (``agent.py``),
+  verified by functional equivalence (executing it builds the right ``Agent``).
+- ``compose_instruction`` prepends a group's preamble component to an agent's
+  own instruction (the manifest keeps only the job; shared identity/discipline
+  lives once in ``preambles/<group>.md``).
 """
 
 from __future__ import annotations
@@ -28,11 +26,33 @@ _env = Environment(
     autoescape=False,
 )
 
+DEFAULT_MODEL = "openai/gpt-5.5"
+
 
 def _indent_block(text: str, spaces: int = 2) -> str:
     """Indent each line of a block scalar by ``spaces`` (no trailing newline)."""
     pad = " " * spaces
     return "\n".join(pad + line for line in text.rstrip("\n").split("\n"))
+
+
+def load_preamble(workspace_root, group: str | None) -> str:
+    """Return the text of ``preambles/<group>.md`` (empty if no group / missing)."""
+    if not group:
+        return ""
+    p = Path(workspace_root) / "preambles" / f"{group}.md"
+    try:
+        return p.read_text().strip()
+    except OSError:
+        return ""
+
+
+def compose_instruction(workspace_root, spec: AgentSpec) -> str:
+    """group preamble + the agent's own job (preamble first, then specialize)."""
+    preamble = load_preamble(workspace_root, spec.group)
+    job = spec.instruction.strip()
+    if preamble and job:
+        return f"{preamble}\n\n{job}"
+    return preamble or job
 
 
 def render_agent(spec: AgentSpec) -> dict[str, str]:
@@ -48,19 +68,19 @@ def render_agent(spec: AgentSpec) -> dict[str, str]:
 
 
 def render_agent_package(spec: AgentSpec) -> dict[str, str]:
-    """Return a map of workspace-relative path -> rendered runnable agent module.
-
-    Tools in the manifest are fully-qualified (``forsch.adk_components.tools.X``);
-    the generated module imports the leaf names from the components package.
-    """
+    """Return a map of workspace-relative path -> rendered runnable agent module."""
     leaves = [t.rsplit(".", 1)[-1] for t in spec.tools]
     tmpl = _env.get_template("agent.py.j2")
+    # Pinned model HARD-wins (ignores the global FORSCH_ADK_MODEL); unpinned agents
+    # fall to the global env default. So "pin model X to agent" actually pins.
+    model_expr = repr(spec.model) if spec.model else f'os.environ.get("FORSCH_ADK_MODEL", {DEFAULT_MODEL!r})'
     content = tmpl.render(
         a=spec,
         tool_leaves=leaves,
         name_repr=repr(spec.adk_name),
         description_repr=repr(spec.description),
         instruction_repr=repr(spec.instruction.rstrip("\n")),
+        model_expr=model_expr,
     )
     rel = f"agents/{spec.id}/src/forsch/agent_{spec.id}/agent.py"
     return {rel: content}

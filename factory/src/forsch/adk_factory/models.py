@@ -23,6 +23,12 @@ class AgentSpec(BaseModel):
     description: str = ""
     model_code: str
     instruction: str = ""
+    # group → a preamble component (preambles/<group>.md) the factory prepends to
+    # the instruction at render time. The manifest keeps only the agent's own job.
+    group: Optional[str] = None
+    # model → the LiteLLM model name pinned for this agent (routing/fallback owned
+    # by LiteLLM). None = the shared FORSCH_ADK_MODEL default.
+    model: Optional[str] = None
     web_entrypoint: Optional[str] = None
     discord_channels: list[str] = Field(default_factory=list)
     safety_level: str = "read_only"

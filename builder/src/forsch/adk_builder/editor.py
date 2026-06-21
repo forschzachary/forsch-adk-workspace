@@ -1,13 +1,12 @@
 """Guarded edits to the manifest, then deterministic regeneration.
 
-Writes ``agent_specs/agents.yaml`` round-trip-safe (ruamel), then regenerates
-BOTH artifacts the manifest owns:
+Writes ``agent_specs/agents.yaml`` round-trip-safe (ruamel), composes the
+agent's group preamble onto its instruction, then regenerates BOTH artifacts:
   - ``web_agents/<id>/root_agent.yaml`` (the ADK-Web wrapper), and
-  - ``agents/<id>/src/forsch/agent_<id>/agent.py`` (the runtime package the
-    Discord bridge actually imports).
+  - ``agents/<id>/src/forsch/agent_<id>/agent.py`` (the runtime the bridge imports).
 
-Regenerating only the wrapper is why edits never reached the running agent;
-the bridge imports the package, so the package must be regenerated too.
+Composition happens here (the render boundary), not in the manifest or the
+canvas view — so the manifest keeps only the agent's own job + its ``group``.
 """
 
 from __future__ import annotations
@@ -18,9 +17,9 @@ from pathlib import Path
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import LiteralScalarString
 
-from forsch.adk_factory.cli import apply, write_files
+from forsch.adk_factory.cli import write_files
 from forsch.adk_factory.loader import load_manifest
-from forsch.adk_factory.renderer import render_agent_package
+from forsch.adk_factory.renderer import compose_instruction, render_agent, render_agent_package
 
 _TOOL_PREFIX = "forsch.adk_components.tools."
 
@@ -53,12 +52,12 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
     _yaml.dump(data, buf)
     mpath.write_text(buf.getvalue())
 
-    # 1) wrapper (root_agent.yaml)
-    written = list(apply(mpath, agent_id, str(ws)).get("written", []))
-    # 2) runtime package (agent.py) — what the bridge imports
     spec = load_manifest(mpath).agents[agent_id]
-    pkg = [{"path": rel, "content": content} for rel, content in render_agent_package(spec).items()]
-    written += write_files(ws, pkg)
+    spec.instruction = compose_instruction(str(ws), spec)  # group preamble + job
+
+    files = [{"path": rel, "content": c} for rel, c in render_agent(spec).items()]
+    files += [{"path": rel, "content": c} for rel, c in render_agent_package(spec).items()]
+    written = write_files(ws, files)
 
     rendered = ""
     entry = agent.get("web_entrypoint")
