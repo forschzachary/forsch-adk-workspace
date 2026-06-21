@@ -26,12 +26,30 @@ from forsch.adk_builder.canvas_api import build_view
 from forsch.adk_builder.editor import update_agent
 from forsch.adk_builder.terminal import pty_bridge
 
-DEFAULT_WORKSPACE = "/opt/data/workspace/adk"
+
+def _tailscale_dnsname() -> str:
+    """Funnel host derived from tailscale (reimage-proof); empty string if unavailable."""
+    import json as _json
+    import subprocess
+    try:
+        out = subprocess.run(["tailscale", "status", "--json"], capture_output=True, text=True, timeout=5)
+        return _json.loads(out.stdout).get("Self", {}).get("DNSName", "").rstrip(".")
+    except Exception:
+        return ""
+
+
+def _required_workspace() -> str:
+    root = os.environ.get("FORSCH_ADK_WORKSPACE")
+    if not root:
+        raise RuntimeError("FORSCH_ADK_WORKSPACE is not set; refusing to guess the workspace root")
+    return root
+
 _CANVAS = Path(__file__).resolve().parents[3] / "templates" / "canvas.html"
 _TERM = Path(__file__).resolve().parents[3] / "templates" / "term.html"
 # The terminal needs WebSockets, which the Frappe HTTP proxy can't forward, so
 # the canvas embeds it straight from the Funnel (same token gate).
-FUNNEL_TERM = "https://hubert-cloud-sp6.tail818cf8.ts.net:8443/term"
+_FUNNEL_HOST = os.environ.get("FORSCH_ADK_FUNNEL_HOST") or _tailscale_dnsname()
+FUNNEL_TERM = f"https://{_FUNNEL_HOST}:8443/term" if _FUNNEL_HOST else ""
 BRIDGE_CONTAINER = "adk-bridge"
 
 
@@ -119,7 +137,7 @@ def serve(workspace_root: str, host: str = "127.0.0.1", port: int = 8765, token:
 
 if __name__ == "__main__":
     serve(
-        os.environ.get("FORSCH_ADK_WORKSPACE", DEFAULT_WORKSPACE),
+        _required_workspace(),
         host=os.environ.get("FORSCH_ADK_HOST", "127.0.0.1"),
         port=int(os.environ.get("FORSCH_ADK_PORT", "8765")),
         token=os.environ.get("COCKPIT_TOKEN") or None,

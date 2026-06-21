@@ -21,17 +21,10 @@ uv venv
 uv pip install -e "$A/components" -e ".[dev]"
 ./.venv/bin/python -m pytest -q
 
-echo "[3/4] bridge venv — built INSIDE the container (python 3.13), NOT host (3.12)"
-# The bridge runs in the adk-bridge container (python 3.13.5). A host-built venv
-# (python 3.12) has version-specific site-packages the container cannot see ->
-# ModuleNotFoundError: forsch on docker restart. Build it with the container
-# python via the hermes container (same image, same /opt/data mount).
-docker exec hermes sh -lc "cd /opt/data/workspace/adk/bridge && rm -rf .venv && uv venv --python /usr/bin/python3 && uv pip install \
-  -e /opt/data/workspace/adk/components \
-  -e /opt/data/workspace/adk/agents/stability -e /opt/data/workspace/adk/agents/ops \
-  -e /opt/data/workspace/adk/agents/social -e /opt/data/workspace/adk/agents/brand \
-  -e /opt/data/workspace/adk/agents/assistant -e /opt/data/workspace/adk/agents/build -e ."
-docker exec hermes sh -lc "cd /opt/data/workspace/adk/bridge && .venv/bin/python -m pytest tests/test_stability_route.py -q" || true
+echo "[3/5] bridge — native container image (no venv; deps baked, code mounted)"
+# The native adk-bridge has no venv: third-party deps are baked into the image
+# and forsch.* is mounted via PYTHONPATH. Rebuild the image, not a venv.
+( cd "$A/bridge" && docker compose build )
 
 echo "[4/5] builder (cockpit dashboard)"
 cd "$A/builder"; rm -rf .venv
