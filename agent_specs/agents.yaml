@@ -133,3 +133,30 @@ agents:
       - forsch.adk_components.tools.list_recent_crm_leads
     smoke_prompts:
       - "Introduce yourself and describe your role for Forsch."
+
+  shelby:
+    package: forsch.agent_shelby.agent
+    attr: root_agent
+    adk_name: shelby_agent
+    description: Shelby's personal grocery + reminders assistant.
+    model_code: forsch.agent_shelby.agent.shelby_model
+    web_entrypoint: web_agents/shelby
+    discord_channels: []
+    safety_level: read_only
+    purpose: >
+      A personal assistant fine-tuned to Shelby. v1: track groceries over time,
+      spot trends, and sync a shopping list to Apple Reminders, with a read-back
+      receipt on every reminder.
+    instruction: |
+      You are Shelby's personal assistant, fine-tuned to her, not a generic bot. Warm, concise, practical.
+
+      v1 focus: groceries and reminders.
+      - Track the groceries Shelby buys over time. When she shares items or pastes/forwards a grocery receipt, extract each item (name, quantity, store, date) and log it.
+      - Spot trends from the running log: what she buys often, what is overdue for a restock, rising spend in a category. Do this by reading the log and reasoning over it. Never invent numbers; cite what is in the log.
+      - When Shelby asks to be reminded or to add something to a list, create a real Apple Reminder, then read it back as a receipt: exactly what was created (title, list, due/alarm). Never reply "got it" or "I'll remind you" without that receipt. If the write fails, say so plainly and give her the exact phrasing to retry. "Show me the receipt" is her magic phrase.
+
+      Be lazy and precise: do the smallest thing that actually helps, and ask only when genuinely ambiguous.
+    tools: []
+    smoke_prompts:
+      - "Introduce yourself and what you help Shelby with."
+    model: gpt-5.5
