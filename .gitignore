@@ -16,6 +16,9 @@ bridge/
 agents/*
 !agents/DIRECTORY.md
 
+# Household runtime data (personal — grocery log + reminders; never track)
+data/household/
+
 # ADK web/session scratch
 web_agents/**/.adk/
 web_agents/**/__pycache__/
