@@ -30,9 +30,15 @@ uv pip install -e "$A/components" \
   -e ".[dev]"
 ./.venv/bin/python -m pytest tests/test_stability_route.py -q
 
-echo "[4/4] builder (cockpit dashboard)"
+echo "[4/5] builder (cockpit dashboard)"
 cd "$A/builder"; rm -rf .venv
 uv sync
+./.venv/bin/python -m pytest -q
+
+echo "[5/5] factory (deterministic generator; lean deps, no adk needed)"
+cd "$A/factory"; rm -rf .venv
+uv venv
+uv pip install -e ".[dev]"
 ./.venv/bin/python -m pytest -q
 
 echo "All ADK workspace venvs rebuilt and green."

@@ -1,9 +1,13 @@
 """Render generated artifacts from an ``AgentSpec`` — deterministic, no LLM.
 
-Slice 1 renders the ADK Web editable surface (``root_agent.yaml``) and is
-golden-file-pinned to the live ``web_agents/stability/root_agent.yaml`` so that
-"regenerate" provably equals current behavior. Later slices add the package,
-test stub, and bridge route to the returned map.
+- ``render_agent`` renders the ADK Web editable surface (``root_agent.yaml``),
+  golden-file-pinned to the live ``web_agents/stability/root_agent.yaml`` so
+  "regenerate" provably equals current behavior.
+- ``render_agent_package`` renders the runnable agent module (``agent.py``).
+  It is NOT byte-pinned (a hand-written agent.py wraps its instruction string
+  arbitrarily); instead it is verified by *functional equivalence* — executing
+  the generated code constructs an ``Agent`` with the manifest's exact name,
+  description, instruction, and tools.
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ def _indent_block(text: str, spaces: int = 2) -> str:
 
 
 def render_agent(spec: AgentSpec) -> dict[str, str]:
-    """Return a map of workspace-relative path -> rendered file content."""
+    """Return a map of workspace-relative path -> rendered file content (web surface)."""
     out: dict[str, str] = {}
     if spec.web_entrypoint:
         tmpl = _env.get_template("root_agent.yaml.j2")
@@ -41,3 +45,22 @@ def render_agent(spec: AgentSpec) -> dict[str, str]:
             instruction_block=_indent_block(spec.instruction),
         )
     return out
+
+
+def render_agent_package(spec: AgentSpec) -> dict[str, str]:
+    """Return a map of workspace-relative path -> rendered runnable agent module.
+
+    Tools in the manifest are fully-qualified (``forsch.adk_components.tools.X``);
+    the generated module imports the leaf names from the components package.
+    """
+    leaves = [t.rsplit(".", 1)[-1] for t in spec.tools]
+    tmpl = _env.get_template("agent.py.j2")
+    content = tmpl.render(
+        a=spec,
+        tool_leaves=leaves,
+        name_repr=repr(spec.adk_name),
+        description_repr=repr(spec.description),
+        instruction_repr=repr(spec.instruction.rstrip("\n")),
+    )
+    rel = f"agents/{spec.id}/src/forsch/agent_{spec.id}/agent.py"
+    return {rel: content}
