@@ -1,15 +1,13 @@
-"""Stability self-audit tools: detect hardcode/config-drift landmines, propose/apply fixes."""
+"""Stability self-audit tools: detect hardcode/config-drift landmines (read-only)."""
 
 from __future__ import annotations
 
 import ast
-import difflib
 import os
-import shutil
 from pathlib import Path
 from typing import Any
 
-from forsch.adk_components.tools.landmine_rules import RULES, rule_hits
+from forsch.adk_components.tools.landmine_rules import rule_hits
 
 _SKIP_DIRS = {".venv", ".git", "__pycache__", "node_modules"}
 _SCAN_EXT = {".py", ".yaml", ".yml", ".sh"}
@@ -88,55 +86,3 @@ def check_env_contract(root: str | None = None) -> list[dict[str, Any]]:
                 seen[var] = {"var": var, "set": var in os.environ,
                              "default": default, "default_looks_dead": dead}
     return list(seen.values())
-
-
-def detect_config_drift() -> dict[str, Any]:
-    """Declared-vs-actual: workspace + env-contract (model/port cross-checks deferred)."""
-    root = os.environ.get("FORSCH_ADK_WORKSPACE")
-    workspace = {"declared": root, "actual_exists": bool(root) and Path(root).is_dir(), "ok": False}
-    workspace["ok"] = workspace["actual_exists"]
-    env = [r for r in check_env_contract(root) if not r["set"] and r["default_looks_dead"]]
-    return {"workspace": workspace, "env_relying_on_dead_default": env}
-
-_AUTO_RULES = {"hardcoded-tailnet"}  # only well-defined mechanical transforms auto-fix
-
-
-def propose_landmine_fixes(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Generate a candidate {file, rules, diff, new_content, auto} per file. Mechanical
-    rules get auto=True with a concrete rewrite; everything else auto=False (human)."""
-    out: list[dict[str, Any]] = []
-    by_file: dict[str, list[dict]] = {}
-    for f in findings:
-        by_file.setdefault(f["file"], []).append(f)
-    for file, items in by_file.items():
-        old = Path(file).read_text()
-        new = old
-        auto = False
-        for f in items:
-            if f["rule"] in _AUTO_RULES:
-                import re
-                new = re.sub(r"https://[\w.-]+\.ts\.net(:\d+)?", "__FUNNEL_BASE__", new)
-                auto = True
-        diff = "".join(difflib.unified_diff(old.splitlines(True), new.splitlines(True),
-                                            fromfile=file, tofile=file))
-        out.append({"file": file, "rules": [f["rule"] for f in items],
-                    "diff": diff, "new_content": new, "auto": auto})
-    return out
-
-
-def apply_landmine_fix(file: str, new_content: str, dry_run: bool = True) -> dict[str, Any]:
-    """Atomic write with .bak backup + rollback (mirrors forsch.adk_factory.cli.write_files's
-    backup->atomic->rollback). Defaults to dry-run."""
-    path = Path(file)
-    if dry_run:
-        return {"applied": False, "file": file, "would_write_bytes": len(new_content)}
-    backup = str(path) + ".bak"
-    shutil.copy2(path, backup)
-    try:
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(new_content)
-        tmp.replace(path)
-    except Exception:
-        shutil.copy2(backup, path)
-        return {"applied": False, "rolled_back": True, "file": file, "backup": backup}
-    return {"applied": True, "file": file, "backup": backup}
