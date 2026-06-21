@@ -1,0 +1,11 @@
+agent_class: {{ a.agent_class }}
+name: {{ a.adk_name }}
+description: {{ a.description }}
+instruction: |
+{{ instruction_block }}
+model_code:
+  name: {{ a.model_code }}
+tools:
+{% for t in a.tools %}
+  - name: {{ t }}
+{% endfor %}
