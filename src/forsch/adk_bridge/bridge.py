@@ -7,13 +7,16 @@ streams responses back. No custom agent loop — ADK owns the runtime.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import importlib
+import json
 import logging
 import os
 import sys
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 
 import discord
 import yaml
@@ -48,6 +51,50 @@ def _build_channel_map(config: dict) -> dict[str, str]:
         for channel in spec.get("channels", []):
             channel_map[channel.lower().lstrip("#")] = name
     return channel_map
+
+
+def _build_crm_assignee_map(config: dict) -> dict[str, str]:
+    """Build CRM assignee -> agent map from config."""
+    return {
+        str(assignee).lower(): str(agent)
+        for assignee, agent in config.get("crm", {}).get("assignees", {}).items()
+    }
+
+
+def _resolve_crm_agent(payload: dict, assignee_map: dict[str, str]) -> Optional[str]:
+    """Resolve a CRM task payload to an agent name."""
+    for key in ("assigned_to", "assignee", "owner"):
+        value = payload.get(key)
+        if value is None:
+            continue
+        agent_name = assignee_map.get(str(value).lower())
+        if agent_name:
+            return agent_name
+    return None
+
+
+def _format_crm_task_message(payload: dict) -> str:
+    """Turn the incoming CRM task shape into a single ADK user message."""
+    lines = ["You were assigned this CRM task from Frappe CRM."]
+    fields = (
+        ("task_id", "Task ID"),
+        ("name", "Task ID"),
+        ("title", "Title"),
+        ("description", "Description"),
+        ("assigned_to", "Assigned to"),
+        ("reference_doctype", "Reference doctype"),
+        ("reference_docname", "Reference docname"),
+    )
+    seen_labels: set[str] = set()
+    for key, label in fields:
+        if label in seen_labels:
+            continue
+        value = payload.get(key)
+        if value in (None, ""):
+            continue
+        lines.append(f"{label}: {value}")
+        seen_labels.add(label)
+    return "\n".join(lines)
 
 
 # ── streaming adapter ──────────────────────────────────────────────────────
@@ -99,6 +146,25 @@ class StreamBuffer:
             await self.flush()
 
 
+class TextBuffer:
+    """Accumulates ADK text for non-Discord callers such as CRM webhooks."""
+
+    def __init__(self) -> None:
+        self.text = ""
+
+    def feed(self, text: str) -> None:
+        self.text += text
+
+    def should_flush(self) -> bool:
+        return False
+
+    async def flush(self) -> None:
+        return None
+
+    async def flush_final(self) -> None:
+        return None
+
+
 # ── Discord client ─────────────────────────────────────────────────────────
 
 class ADKBridgeClient(discord.Client):
@@ -119,6 +185,7 @@ class ADKBridgeClient(discord.Client):
         self._channel_map = channel_map
         self._session_service = session_service
         self._dm_fallback = config["agents"]["dm_fallback"]
+        self._crm_assignee_map = _build_crm_assignee_map(config)
         self._flush_interval = config.get("streaming", {}).get("flush_interval_sec", 0.5)
         self._max_chars = config.get("streaming", {}).get("max_message_chars", 1900)
         self._log = logging.getLogger("adk_bridge")
@@ -141,41 +208,6 @@ class ADKBridgeClient(discord.Client):
             self._log.warning("agent %s not loaded", agent_name)
             return
 
-        # Build ADK content
-        content = types.Content(
-            parts=[types.Part.from_text(text=message.content)],
-            role="user",
-        )
-
-        # Session IDs: one per (user, agent) pair
-        user_id = f"discord:{message.author.id}"
-        session_id = f"{agent_name}:{message.channel.id}"
-        session = await self._session_service.get_session(
-            app_name=agent_name,
-            user_id=user_id,
-            session_id=session_id,
-        )
-        if session is None:
-            await self._session_service.create_session(
-                app_name=agent_name,
-                user_id=user_id,
-                session_id=session_id,
-            )
-
-        # Build runner per message (lightweight — Runner is stateless,
-        # session_service handles persistence)
-        runner = Runner(
-            agent=agent,
-            app_name=agent_name,
-            session_service=self._session_service,
-            artifact_service=InMemoryArtifactService(),
-            memory_service=InMemoryMemoryService(),
-            auto_create_session=False,
-        )
-
-        StreamingMode = RunConfig.model_fields["streaming_mode"].annotation
-        run_config = RunConfig(streaming_mode=StreamingMode.SSE)
-
         buffer = StreamBuffer(
             message.channel,
             flush_interval=self._flush_interval,
@@ -183,32 +215,17 @@ class ADKBridgeClient(discord.Client):
         )
 
         try:
-            async for event in runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=content,
-                run_config=run_config,
-            ):
-                # Extract text from event content
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            buffer.feed(part.text)
-
-                # Flush on sentence break or timer
-                if buffer.should_flush():
-                    await buffer.flush()
-
-                # Stop on final response
-                if event.is_final_response():
-                    await buffer.flush_final()
-                    break
-
-            # Safety net: flush anything left
-            await buffer.flush_final()
+            await self._run_agent_text(
+                agent_name=agent_name,
+                agent=agent,
+                user_id=f"discord:{message.author.id}",
+                session_id=f"{agent_name}:{message.channel.id}",
+                text=message.content,
+                buffer=buffer,
+            )
 
         except Exception:
-            self._log.exception("agent run failed for %s/%s", agent_name, user_id)
+            self._log.exception("agent run failed for %s", agent_name)
             await message.channel.send("(something went wrong — ops agent will see the log)")
 
     def _resolve_agent(self, message: discord.Message) -> Optional[str]:
@@ -221,6 +238,192 @@ class ADKBridgeClient(discord.Client):
         channel_name = message.channel.name.lower()
         return self._channel_map.get(channel_name)
 
+    async def handle_crm_task_assigned(self, payload: dict) -> dict:
+        """Route an outbound CRM task assignment into the targeted ADK agent."""
+        agent_name = _resolve_crm_agent(payload, self._crm_assignee_map)
+        if agent_name is None:
+            return {"ok": False, "error": "unmapped_assignee"}
+
+        agent = self._agents.get(agent_name)
+        if agent is None:
+            self._log.warning("CRM routed to unloaded agent %s", agent_name)
+            return {"ok": False, "error": "agent_not_loaded", "agent": agent_name}
+
+        task_id = payload.get("task_id") or payload.get("name") or "unknown"
+        buffer = TextBuffer()
+        await self._run_agent_text(
+            agent_name=agent_name,
+            agent=agent,
+            user_id="crm:frappe",
+            session_id=f"crm:{agent_name}:{task_id}",
+            text=_format_crm_task_message(payload),
+            buffer=buffer,
+        )
+        return {"ok": True, "agent": agent_name, "task_id": task_id, "response": buffer.text}
+
+    async def _run_agent_text(
+        self,
+        agent_name: str,
+        agent: object,
+        user_id: str,
+        session_id: str,
+        text: str,
+        buffer: StreamBuffer | TextBuffer,
+    ) -> None:
+        """Run one text message through ADK and stream into the supplied buffer."""
+        content = types.Content(
+            parts=[types.Part.from_text(text=text)],
+            role="user",
+        )
+
+        session = await self._session_service.get_session(
+            app_name=agent_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        if session is None:
+            await self._session_service.create_session(
+                app_name=agent_name,
+                user_id=user_id,
+                session_id=session_id,
+            )
+
+        runner = Runner(
+            agent=agent,
+            app_name=agent_name,
+            session_service=self._session_service,
+            artifact_service=InMemoryArtifactService(),
+            memory_service=InMemoryMemoryService(),
+            auto_create_session=False,
+        )
+
+        StreamingMode = RunConfig.model_fields["streaming_mode"].annotation
+        run_config = RunConfig(streaming_mode=StreamingMode.SSE)
+
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=content,
+            run_config=run_config,
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        buffer.feed(part.text)
+
+            if buffer.should_flush():
+                await buffer.flush()
+
+            if event.is_final_response():
+                await buffer.flush_final()
+                break
+
+        await buffer.flush_final()
+
+
+async def _read_http_request(
+    reader: asyncio.StreamReader,
+    max_body_bytes: int = 65536,
+    timeout_sec: float = 5.0,
+) -> tuple[str, str, dict[str, str], bytes]:
+    """Read one small HTTP request. This is intentionally webhook-only."""
+    header_bytes = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout_sec)
+    if len(header_bytes) > 8192:
+        raise ValueError("request_headers_too_large")
+    header_text = header_bytes.decode("iso-8859-1")
+    request_line, *header_lines = header_text.split("\r\n")
+    method, path, _version = request_line.split(" ", 2)
+    headers: dict[str, str] = {}
+    for line in header_lines:
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        headers[key.lower()] = value.strip()
+    content_length = int(headers.get("content-length", "0"))
+    if content_length > max_body_bytes:
+        raise ValueError("request_body_too_large")
+    body = await asyncio.wait_for(reader.readexactly(content_length), timeout_sec) if content_length else b""
+    return method, path, headers, body
+
+
+def _crm_request_authorized(headers: dict[str, str], crm_cfg: dict) -> bool:
+    """Validate optional shared-secret auth for CRM webhooks."""
+    secret_env = crm_cfg.get("secret_env")
+    if not secret_env:
+        return True
+    expected = os.environ.get(secret_env)
+    if not expected:
+        return False
+    provided = headers.get("x-crm-bridge-secret") or headers.get("authorization", "").removeprefix(
+        "Bearer "
+    )
+    return hmac.compare_digest(provided, expected)
+
+
+def _decode_crm_payload(body: bytes) -> dict:
+    """Decode and validate the CRM webhook payload."""
+    try:
+        payload = json.loads(body.decode("utf-8") or "{}")
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid_json") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_payload")
+    return payload
+
+
+async def _write_http_response(
+    writer: asyncio.StreamWriter,
+    status: int,
+    payload: dict,
+) -> None:
+    reason = {
+        200: "OK",
+        400: "Bad Request",
+        401: "Unauthorized",
+        404: "Not Found",
+        500: "Internal Server Error",
+    }[status]
+    body = json.dumps(payload).encode("utf-8")
+    headers = (
+        f"HTTP/1.1 {status} {reason}\r\n"
+        "Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        "Connection: close\r\n\r\n"
+    ).encode("ascii")
+    writer.write(headers + body)
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+
+
+async def _handle_crm_http(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    client: ADKBridgeClient,
+) -> None:
+    log = logging.getLogger("adk_bridge")
+    crm_cfg = client._config.get("crm", {})
+    try:
+        method, path, headers, body = await _read_http_request(
+            reader,
+            max_body_bytes=int(crm_cfg.get("max_body_bytes", 65536)),
+            timeout_sec=float(crm_cfg.get("timeout_sec", 5.0)),
+        )
+        if method != "POST" or urlsplit(path).path != "/crm/task-assigned":
+            await _write_http_response(writer, 404, {"ok": False, "error": "not_found"})
+            return
+        if not _crm_request_authorized(headers, crm_cfg):
+            await _write_http_response(writer, 401, {"ok": False, "error": "unauthorized"})
+            return
+        payload = _decode_crm_payload(body)
+        result = await client.handle_crm_task_assigned(payload)
+        await _write_http_response(writer, 200 if result.get("ok") else 400, result)
+    except ValueError as exc:
+        await _write_http_response(writer, 400, {"ok": False, "error": str(exc)})
+    except Exception:
+        log.exception("CRM webhook failed")
+        await _write_http_response(writer, 500, {"ok": False, "error": "internal_error"})
+
 
 # ── main entrypoint ────────────────────────────────────────────────────────
 
@@ -228,15 +431,21 @@ async def main(config_path: str = "bridge_config.yaml") -> None:
     """Start the bridge."""
     config = _load_config(config_path)
 
-    # Logging
+    # Logging — stderr always (docker logs); a file handler only if its dir is
+    # writable (a container without that path just uses stdout/stderr).
     log_cfg = config.get("logging", {})
+    handlers = [logging.StreamHandler(sys.stderr)]
+    log_file = log_cfg.get("file")
+    if log_file:
+        try:
+            os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
+            handlers.insert(0, logging.FileHandler(log_file))
+        except OSError:
+            pass
     logging.basicConfig(
         level=getattr(logging, log_cfg.get("level", "INFO")),
         format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
-        handlers=[
-            logging.FileHandler(log_cfg.get("file", "/opt/data/logs/adk-bridge.log")),
-            logging.StreamHandler(sys.stderr),
-        ],
+        handlers=handlers,
     )
     log = logging.getLogger("adk_bridge")
 
@@ -276,7 +485,20 @@ async def main(config_path: str = "bridge_config.yaml") -> None:
         intents=intents,
     )
 
-    await client.start(token)
+    crm_cfg = config.get("crm", {})
+    if crm_cfg.get("enabled", False):
+        host = crm_cfg.get("host", "127.0.0.1")
+        port = int(crm_cfg.get("port", 8765))
+        server = await asyncio.start_server(
+            lambda reader, writer: _handle_crm_http(reader, writer, client),
+            host,
+            port,
+        )
+        log.info("CRM webhook endpoint listening on http://%s:%s/crm/task-assigned", host, port)
+        async with server:
+            await asyncio.gather(client.start(token), server.serve_forever())
+    else:
+        await client.start(token)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,22 @@ session:
   # SQLite session store — survives restarts
   db_path: data/adk_sessions.db
 
+crm:
+  # Minimal outbound Frappe CRM webhook receiver.
+  enabled: true
+  host: 127.0.0.1
+  port: 8765
+  secret_env: CRM_BRIDGE_SECRET
+  max_body_bytes: 65536
+  timeout_sec: 5.0
+  assignees:
+    ops: ops
+    build: build
+    assistant: assistant
+    brand: brand
+    social: social
+    stability: stability
+
 streaming:
   # Flush buffer to Discord every N seconds or on sentence break
   flush_interval_sec: 0.5
@@ -54,4 +70,4 @@ streaming:
 
 logging:
   level: INFO
-  file: /opt/data/logs/adk-bridge.log
+  file: ""
