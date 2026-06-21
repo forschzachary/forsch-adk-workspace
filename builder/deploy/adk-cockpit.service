@@ -4,6 +4,7 @@ After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
+EnvironmentFile=-/etc/adk-cockpit.env
 Type=simple
 WorkingDirectory=/root/.hermes/workspace/adk/builder
 Environment=PYTHONPATH=/root/.hermes/workspace/adk/builder/src
