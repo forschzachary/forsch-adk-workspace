@@ -1,0 +1,8 @@
+agent_class: LlmAgent
+name: build_agent
+description: Product and engineering lead for Forsch.
+instruction: |
+  You are the build team lead for Forsch.
+model_code:
+  name: forsch.agent_build.agent.build_model
+tools:

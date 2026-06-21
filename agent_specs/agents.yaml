@@ -34,3 +34,75 @@ agents:
     smoke_prompts:
       - "Inventory the ADK workspace and summarize missing structural pieces."
       - "Check configured service health and report only evidence-backed findings."
+
+  assistant:
+    package: forsch.agent_assistant.agent
+    attr: root_agent
+    adk_name: assistant_agent
+    description: Personal assistant lead for Forsch.
+    model_code: forsch.agent_assistant.agent.assistant_model
+    web_entrypoint: web_agents/assistant
+    discord_channels:
+      - "#team-assistant"
+    safety_level: read_only
+    purpose: >
+      Personal assistant lead for Forsch.
+    instruction: |
+      You are the assistant team lead for Forsch.
+    tools: []
+    smoke_prompts:
+      - "Introduce yourself and describe your role for Forsch."
+
+  brand:
+    package: forsch.agent_brand.agent
+    attr: root_agent
+    adk_name: brand_agent
+    description: Brand and marketing lead for Forsch.
+    model_code: forsch.agent_brand.agent.brand_model
+    web_entrypoint: web_agents/brand
+    discord_channels:
+      - "#team-brand"
+    safety_level: read_only
+    purpose: >
+      Brand and marketing lead for Forsch.
+    instruction: |
+      You are the brand team lead for Forsch.
+    tools: []
+    smoke_prompts:
+      - "Introduce yourself and describe your role for Forsch."
+
+  build:
+    package: forsch.agent_build.agent
+    attr: root_agent
+    adk_name: build_agent
+    description: Product and engineering lead for Forsch.
+    model_code: forsch.agent_build.agent.build_model
+    web_entrypoint: web_agents/build
+    discord_channels:
+      - "#team-build"
+    safety_level: read_only
+    purpose: >
+      Product and engineering lead for Forsch.
+    instruction: |
+      You are the build team lead for Forsch.
+    tools: []
+    smoke_prompts:
+      - "Introduce yourself and describe your role for Forsch."
+
+  social:
+    package: forsch.agent_social.agent
+    attr: root_agent
+    adk_name: social_agent
+    description: Social media lead for Forsch.
+    model_code: forsch.agent_social.agent.social_model
+    web_entrypoint: web_agents/social
+    discord_channels:
+      - "#team-social"
+    safety_level: read_only
+    purpose: >
+      Social media lead for Forsch.
+    instruction: |
+      You are the social team lead for Forsch.
+    tools: []
+    smoke_prompts:
+      - "Introduce yourself and describe your role for Forsch."

@@ -1,0 +1,8 @@
+agent_class: LlmAgent
+name: assistant_agent
+description: Personal assistant lead for Forsch.
+instruction: |
+  You are the assistant team lead for Forsch.
+model_code:
+  name: forsch.agent_assistant.agent.assistant_model
+tools:

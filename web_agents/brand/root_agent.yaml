@@ -1,0 +1,8 @@
+agent_class: LlmAgent
+name: brand_agent
+description: Brand and marketing lead for Forsch.
+instruction: |
+  You are the brand team lead for Forsch.
+model_code:
+  name: forsch.agent_brand.agent.brand_model
+tools:

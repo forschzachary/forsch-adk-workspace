@@ -1,0 +1,8 @@
+agent_class: LlmAgent
+name: social_agent
+description: Social media lead for Forsch.
+instruction: |
+  You are the social team lead for Forsch.
+model_code:
+  name: forsch.agent_social.agent.social_model
+tools:
