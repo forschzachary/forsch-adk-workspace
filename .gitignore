@@ -19,3 +19,4 @@ agents/*
 # ADK web/session scratch
 web_agents/**/.adk/
 web_agents/**/__pycache__/
+chat/.venv/
