@@ -15,7 +15,7 @@ def test_authsome_client_builds_curl_command_with_provider_and_json(monkeypatch)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    client = AuthsomeHTTPClient(base_url="http://127.0.0.1:7998")
+    client = AuthsomeHTTPClient(base_url="http://127.0.0.1:7998", authsome_bin="/usr/local/bin/authsome")
     result = client.request(
         "POST",
         "https://example.test/api",
@@ -25,7 +25,7 @@ def test_authsome_client_builds_curl_command_with_provider_and_json(monkeypatch)
 
     assert result == {"ok": True}
     cmd, env, timeout = calls[0]
-    assert cmd[:5] == ["/opt/data/home/.local/bin/authsome", "run", "--", "python3", "-c"]
+    assert cmd[:5] == ["/usr/local/bin/authsome", "run", "--", "python3", "-c"]
     assert "https://example.test/api" in cmd
     assert "POST" in cmd
     assert '{"params": {"kind": "lead"}, "json": {"name": "CRM Lead"}}' in cmd
@@ -39,6 +39,6 @@ def test_authsome_client_raises_on_failed_command(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    client = AuthsomeHTTPClient()
+    client = AuthsomeHTTPClient(authsome_bin="/usr/local/bin/authsome")
     with pytest.raises(AuthsomeHTTPError, match="401 nope"):
         client.request("GET", "https://example.test/api")

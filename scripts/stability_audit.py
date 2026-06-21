@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,8 @@ _DEFAULT_AGENTS = [
     {"name": "build", "module": "forsch.agent_build.agent", "attr": "agent"},
     {"name": "social", "module": "forsch.agent_social.agent", "attr": "agent"},
 ]
-_DEFAULT_WORKSPACE = Path("/opt/data/workspace/adk").resolve()
+_WORKSPACE_ENV = os.environ.get("FORSCH_ADK_WORKSPACE")
+_DEFAULT_WORKSPACE = Path(_WORKSPACE_ENV).expanduser().resolve() if _WORKSPACE_ENV else None
 
 
 def get_agent_source_paths(root: Path) -> list[Path]:
@@ -120,9 +122,11 @@ def _summarize(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a read-only ADK stability audit.")
-    parser.add_argument("--workspace", default="/opt/data/workspace/adk")
+    parser.add_argument("--workspace", default=_WORKSPACE_ENV)
     parser.add_argument("--skip-services", action="store_true")
     args = parser.parse_args()
+    if not args.workspace:
+        parser.error("set --workspace or the FORSCH_ADK_WORKSPACE env var")
 
     report = build_report(args.workspace, include_services=not args.skip_services)
     print(json.dumps(report, indent=2, sort_keys=True))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from typing import Any
 
@@ -53,12 +54,22 @@ class AuthsomeHTTPClient:
         self,
         *,
         base_url: str = "http://127.0.0.1:7998",
-        authsome_bin: str = "/opt/data/home/.local/bin/authsome",
+        authsome_bin: str | None = None,
         timeout: int = 30,
     ) -> None:
         self.base_url = base_url
-        self.authsome_bin = authsome_bin
+        self._authsome_bin = authsome_bin
         self.timeout = timeout
+
+    @property
+    def authsome_bin(self) -> str:
+        """Resolve the authsome binary lazily: explicit arg, AUTHSOME_BIN, then PATH."""
+        resolved = self._authsome_bin or os.environ.get("AUTHSOME_BIN") or shutil.which("authsome")
+        if not resolved:
+            raise AuthsomeHTTPError(
+                "authsome binary not found; set AUTHSOME_BIN or install authsome on PATH"
+            )
+        return resolved
 
     def request(
         self,
