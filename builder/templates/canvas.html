@@ -338,7 +338,7 @@ function layout(){
   POS.agent = POS.agent || {x:360, y:200};
   state.tools.forEach((nm,i)=>{ POS['tool:'+nm] = POS['tool:'+nm] || {x:40, y:90 + i*104}; });
   POS.route = POS.route || {x:780, y:150};
-  POS.evals = POS.evals || {x:430, y:470};
+  POS.evals = POS.evals || {x:780, y:330};   // right column, below route — clears the variable-height instruction node
 }
 function nodeEl(id, html, cls){
   const d = document.createElement('div'); d.className='node '+(cls||''); d.dataset.id=id;
