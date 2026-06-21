@@ -1,8 +1,9 @@
 """Embedded terminal: a PTY (persistent tmux) bridged to a WebSocket.
 
 Gives a real root shell on the box inside the Agent Builder. Token-gated by the
-cockpit and reached over the same Tailscale Funnel as the canvas. Full powers:
-run git, the factory, `claude`, `docker exec` into Hubert, anything.
+cockpit and reached over the same Tailscale Funnel as the canvas. The shell gets
+a usable environment (PATH incl. ~/.local/bin, a prompt + banner) via
+``deploy/cockpit.bashrc``.
 """
 
 from __future__ import annotations
@@ -11,11 +12,15 @@ import asyncio
 import fcntl
 import os
 import pty
+import shlex
 import signal
 import struct
 import termios
+from pathlib import Path
 
 SHELL_CWD = "/root/.hermes/workspace/adk"
+_RC = Path(__file__).resolve().parents[3] / "deploy" / "cockpit.bashrc"
+_PATH = "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 
 async def pty_bridge(websocket, cwd: str = SHELL_CWD) -> None:
@@ -23,11 +28,13 @@ async def pty_bridge(websocket, cwd: str = SHELL_CWD) -> None:
     pid, fd = pty.fork()
     if pid == 0:  # child -> become the shell
         os.environ["TERM"] = "xterm-256color"
+        os.environ["PATH"] = "/root/.local/bin:" + os.environ.get("PATH", _PATH)
         try:
             os.chdir(cwd)
         except OSError:
             pass
-        os.execvp("tmux", ["tmux", "new", "-A", "-s", "ops"])
+        shell = f"bash --rcfile {shlex.quote(str(_RC))}" if _RC.exists() else "bash"
+        os.execvp("tmux", ["tmux", "new", "-A", "-s", "ops", shell])
         os._exit(1)
 
     loop = asyncio.get_event_loop()
