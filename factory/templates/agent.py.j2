@@ -13,7 +13,8 @@ from google.adk.models.lite_llm import LiteLlm
 
 _LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 _LITELLM_API_KEY = (
-    os.environ.get("LITELLM_HERMES_KEY")
+    os.environ.get("ADK_LITELLM_KEY_{{ a.id|upper }}")  # per-agent key → per-agent LiteLLM analytics
+    or os.environ.get("LITELLM_HERMES_KEY")             # shared fallback (never breaks if the per-agent key is absent)
     or os.environ.get("LITELLM_MASTER_KEY")
     or os.environ.get("LITELLM_API_KEY")
 )
