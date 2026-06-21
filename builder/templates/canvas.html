@@ -30,7 +30,7 @@
   .gen{font-family:"Newsreader",serif;font-weight:600;font-size:15px;color:#f7f1e3;background:var(--sage);
     border:1px solid #4d6849;border-radius:10px;padding:9px 18px;cursor:pointer;}
   .gen:hover{background:#56714f;}.gen:disabled{opacity:.55;cursor:default;}
-  .stage{display:grid;grid-template-columns:1fr 312px;height:calc(100vh - 57px);}
+  .stage{display:grid;grid-template-columns:1fr 300px;height:100%;}
   .canvas{position:relative;overflow:hidden;cursor:grab;
     background-image:radial-gradient(#cdbf9f55 1px,transparent 1.4px);background-size:26px 26px;}
   .canvas.panning{cursor:grabbing;}
@@ -72,14 +72,12 @@
   pre.result{font-family:"Spline Sans Mono",monospace;font-size:11px;line-height:1.45;color:#463c2b;
     background:#fffdf6;border:1px solid #e6dabf;border-radius:9px;padding:10px;white-space:pre-wrap;max-height:240px;overflow:auto;}
   .empty{color:var(--mut);font-size:12.5px;font-style:italic;}
-  .tabs{display:flex;gap:2px;background:#e7ddc8;border:1px solid var(--line);border-radius:9px;padding:2px;}
-  .tabs button{font-family:"Newsreader",serif;font-size:13.5px;border:none;background:transparent;color:var(--ink2);padding:5px 14px;border-radius:7px;cursor:pointer;}
-  .tabs button.on{background:var(--card);color:var(--ink1);box-shadow:0 1px 0 #fffaf0;}
-  .termwrap{position:absolute;left:0;right:0;top:57px;bottom:0;background:#1b1812;display:none;}
-  .termwrap iframe{width:100%;height:100%;border:0;display:block;}
-  body.term .stage{display:none;}
-  body.term .termwrap{display:block;}
-  body.term .gen{display:none;}
+  .split{display:flex;height:calc(100vh - 57px);}
+  .pane-builder{flex:0 0 58%;min-width:400px;overflow:hidden;}
+  .divider{flex:0 0 8px;background:var(--line);cursor:col-resize;transition:background .15s;}
+  .divider:hover{background:var(--sage);}
+  .pane-term{flex:1 1 auto;min-width:300px;background:#1b1812;}
+  .pane-term iframe{width:100%;height:100%;border:0;display:block;}
 </style>
 </head>
 <body>
@@ -87,15 +85,12 @@
     <div class="mark"><span class="dot"></span> Agent&nbsp;Builder</div>
     <span class="crumb">manifest ·</span>
     <select class="agentsel" id="agentsel"></select>
-    <div class="tabs" id="tabs">
-      <button id="tabCanvas" class="on">Canvas</button>
-      <button id="tabTerm">Terminal</button>
-    </div>
     <div class="status" id="status"><span class="tick"></span><span id="statustext">ready</span></div>
     <button class="gen" id="gen">Generate &rsaquo;</button>
   </div>
-  <div class="termwrap" id="termwrap"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
-  <div class="stage">
+  <div class="split">
+    <div class="pane-builder">
+    <div class="stage">
     <div class="canvas" id="canvas">
       <svg class="threads" id="threads"></svg>
       <div class="world" id="world"></div>
@@ -107,6 +102,10 @@
       <div class="div">last generate</div>
       <div id="result"><div class="empty">No generate yet.</div></div>
     </aside>
+    </div>
+    </div>
+    <div class="divider" id="divider" title="drag to resize"></div>
+    <div class="pane-term"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
   </div>
 
 <script>
@@ -251,16 +250,22 @@ canvas.addEventListener('wheel', e=>{ e.preventDefault(); const f=e.deltaY<0?1.0
 VIEW.agents.forEach(a=>{ const o=document.createElement('option'); o.value=a.id; o.textContent=a.id; sel.appendChild(o); });
 sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAgent(sel.value); renderPalette(); });
 document.getElementById('gen').addEventListener('click', generate);
-// canvas / terminal toggle (terminal iframe loads lazily, on first open)
-const tabCanvas=document.getElementById('tabCanvas'), tabTerm=document.getElementById('tabTerm');
-function showTerm(on){
-  document.body.classList.toggle('term', on);
-  tabTerm.classList.toggle('on', on); tabCanvas.classList.toggle('on', !on);
-  const f=document.getElementById('termframe');
-  if(on && !f.getAttribute('src')) f.setAttribute('src', TERM_URL);
-}
-tabCanvas.addEventListener('click', ()=>showTerm(false));
-tabTerm.addEventListener('click', ()=>showTerm(true));
+// terminal is always-on, side by side with the builder
+document.getElementById('termframe').setAttribute('src', TERM_URL);
+// draggable divider (overlay the iframe while dragging so it doesn't swallow the mouse)
+(function(){
+  const div=document.getElementById('divider'), pane=document.querySelector('.pane-builder'),
+        split=document.querySelector('.split'), frame=document.getElementById('termframe');
+  div.addEventListener('mousedown', e=>{
+    e.preventDefault(); document.body.style.cursor='col-resize'; frame.style.pointerEvents='none';
+    function mv(ev){ const r=split.getBoundingClientRect();
+      let pct=((ev.clientX-r.left)/r.width)*100; pct=Math.min(80,Math.max(25,pct));
+      pane.style.flexBasis=pct+'%'; }
+    function up(){ document.body.style.cursor=''; frame.style.pointerEvents='';
+      document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
+})();
 applyCam();
 if(VIEW.agents.length){ selectAgent(VIEW.agents[0].id); renderPalette(); }
 else { W.innerHTML='<div class="node" style="left:40px;top:40px"><div class="empty">No agents in the manifest yet.</div></div>'; }
