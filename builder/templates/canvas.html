@@ -295,7 +295,7 @@
         </div>
       </div>
       <div class="hdivider" id="hdivider" title="drag to resize"></div>
-      <div class="rail-term"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
+      <div class="rail-term"><iframe id="termframe" title="Claude / Hubert chat" allow="clipboard-read; clipboard-write"></iframe></div>
     </aside>
   </div>
 
@@ -716,7 +716,7 @@ sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAg
 document.getElementById('gen').addEventListener('click', generate);
 document.getElementById('deploy').addEventListener('click', deploy);
 document.getElementById('run').addEventListener('click', ()=>runAgent());
-document.getElementById('termframe').setAttribute('src', TERM_URL);
+document.getElementById('termframe').setAttribute('src', 'https://hubert-cloud-sp6.tail818cf8.ts.net/chat?chat_token=bd8936006630cc33833fad3d21140e0c3c90eda3c25803c7');  /* flip-chat (Claude/Hubert) replaces the tmux terminal */
 (function(){
   const div=document.getElementById('hdivider'), top=document.getElementById('railtop'),
         rail=document.querySelector('.rail'), frame=document.getElementById('termframe');
