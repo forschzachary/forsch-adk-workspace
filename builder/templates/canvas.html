@@ -269,6 +269,7 @@
       <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 14.5A8 8 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>
     </button>
+    <button class="act" id="refresh" title="Re-read the manifest (/api/view)">&#8635; Refresh</button>
     <button class="act run" id="run" title="Spin up just this agent in the terminal and watch it behave — isolated, no effect on the live bridge"><span class="rtri">&#9655;</span> Run</button>
     <button class="act deploy" id="deploy" title="docker restart adk-bridge — make generated changes live">Deploy</button>
     <button class="act gen" id="gen">Generate &rsaquo;</button>
@@ -300,7 +301,7 @@
   </div>
 
 <script>
-const VIEW = /*__VIEW__*/;
+let VIEW = /*__VIEW__*/;
 const TERM_URL = /*__TERMURL__*/;
 const W = document.getElementById('world'), SVG = document.getElementById('threads');
 const canvas = document.getElementById('canvas'), sel = document.getElementById('agentsel');
@@ -333,6 +334,22 @@ function selectAgent(id){
   state = { agent:a, instruction:a.instruction||'', tools:[...(a.tools||[])], model:a.model||'', group:a.group||'' };
   seen = new Set();   // fresh agent → let the whole graph ink itself in
   layout(); render(); renderToolbox();
+}
+function applyView(fresh){
+  const keepId = (state && state.agent) ? state.agent.id : (VIEW.agents[0] && VIEW.agents[0].id);
+  const keepCam = { x: cam.x, y: cam.y, k: cam.k };
+  VIEW = fresh;
+  sel.innerHTML = '';
+  VIEW.agents.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.id; sel.appendChild(o); });
+  const useId = VIEW.agents.some(a => a.id === keepId) ? keepId : (VIEW.agents[0] && VIEW.agents[0].id);
+  sel.value = useId;
+  selectAgent(useId);
+  cam.x = keepCam.x; cam.y = keepCam.y; cam.k = keepCam.k; applyCam();
+  if (typeof loadBoxes === 'function') loadBoxes();
+}
+async function refreshView(){
+  try { applyView(await (await fetch(apiUrl('/api/view'))).json()); setStatus('refreshed', ''); }
+  catch (e) { setStatus('refresh failed', 'err'); }
 }
 function layout(){
   POS.agent = POS.agent || {x:360, y:200};
@@ -715,6 +732,7 @@ VIEW.agents.forEach(a=>{ const o=document.createElement('option'); o.value=a.id;
 sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAgent(sel.value); });
 document.getElementById('gen').addEventListener('click', generate);
 document.getElementById('deploy').addEventListener('click', deploy);
+document.getElementById('refresh').addEventListener('click', refreshView);
 document.getElementById('run').addEventListener('click', ()=>runAgent());
 document.getElementById('termframe').setAttribute('src', 'https://hubert-cloud-sp6.tail818cf8.ts.net/chat?chat_token=bd8936006630cc33833fad3d21140e0c3c90eda3c25803c7');  /* flip-chat (Claude/Hubert) replaces the tmux terminal */
 (function(){
