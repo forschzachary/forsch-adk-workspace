@@ -24,9 +24,14 @@ def test_no_tools_agent_compiles():
     assert "import (" not in src  # no empty `from ... import ()`
 
 
-def test_pinned_model_is_hardcoded():
+def test_pinned_bare_model_gets_openai_proxy_prefix():
     src = next(iter(render_agent_package(_spec(model="glm-5.2")).values()))
-    assert "_LITELLM_MODEL = 'glm-5.2'" in src  # pinned wins, not the env default
+    assert "_LITELLM_MODEL = 'openai/glm-5.2'" in src  # pinned + proxy convention, not the env default
+
+
+def test_pinned_model_with_provider_prefix_is_kept():
+    src = next(iter(render_agent_package(_spec(model="vertex/gemini-x")).values()))
+    assert "_LITELLM_MODEL = 'vertex/gemini-x'" in src  # explicit provider kept as-is
 
 
 def test_unpinned_model_uses_env_default():

@@ -72,8 +72,14 @@ def render_agent_package(spec: AgentSpec) -> dict[str, str]:
     leaves = [t.rsplit(".", 1)[-1] for t in spec.tools]
     tmpl = _env.get_template("agent.py.j2")
     # Pinned model HARD-wins (ignores the global FORSCH_ADK_MODEL); unpinned agents
-    # fall to the global env default. So "pin model X to agent" actually pins.
-    model_expr = repr(spec.model) if spec.model else f'os.environ.get("FORSCH_ADK_MODEL", {DEFAULT_MODEL!r})'
+    # fall to the global env default. A bare model name gets the `openai/` proxy
+    # convention (litellm routes it to the LiteLLM proxy as an openai-compatible
+    # endpoint); an explicit provider prefix (has "/") is kept as-is.
+    if spec.model:
+        pinned = spec.model if "/" in spec.model else f"openai/{spec.model}"
+        model_expr = repr(pinned)
+    else:
+        model_expr = f'os.environ.get("FORSCH_ADK_MODEL", {DEFAULT_MODEL!r})'
     content = tmpl.render(
         a=spec,
         tool_leaves=leaves,
