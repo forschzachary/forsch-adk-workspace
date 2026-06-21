@@ -14,12 +14,23 @@ from google.genai import types
 async def tokens_from_events(events) -> AsyncIterator[str]:
     """Yield text tokens from an ADK run_async() event stream, stopping after the
     final response."""
+    streamed = False
     async for event in events:
+        final = event.is_final_response()
         if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    yield part.text
-        if event.is_final_response():
+            if getattr(event, "partial", False):
+                for part in event.content.parts:
+                    if part.text:
+                        streamed = True
+                        yield part.text
+            elif final and not streamed:
+                # Non-streaming run: the final event carries the only text. In a
+                # streaming run the final event re-sends the FULL aggregate, which we
+                # skip (deltas already streamed) to avoid doubling the reply.
+                for part in event.content.parts:
+                    if part.text:
+                        yield part.text
+        if final:
             break
 
 
