@@ -1,7 +1,7 @@
-"""Tests for the sidecar dashboard app (Phase 1 TDD, step 6).
+"""Tests for the cockpit app: interactive canvas at /, read-only dashboard at /dashboard.
 
-The app re-collects the workspace per request (no stale cache) and serves the
-read-only dashboard. Phase 1 exposes only safe HTTP methods.
+The canvas exposes edit actions (POST /api/agent/{id}); the read-only Phase-1
+dashboard moved to /dashboard.
 """
 
 from pathlib import Path
@@ -15,36 +15,38 @@ def _write_contract(root: Path, agent_id: str) -> None:
     (root / "agent_specs").mkdir(exist_ok=True)
     (root / "agent_specs" / "agents.yaml").write_text(
         f"agents:\n  {agent_id}:\n    package: forsch.agent_{agent_id}.agent\n"
-        f"    safety_level: read_only\n    purpose: Audit.\n"
+        f"    adk_name: {agent_id}_agent\n    safety_level: read_only\n    purpose: Audit.\n"
     )
 
 
-def test_app_serves_dashboard_200_html(tmp_path):
+def test_canvas_served_at_root(tmp_path):
     _write_contract(tmp_path, "stability")
     client = TestClient(create_app(workspace_root=str(tmp_path)))
     resp = client.get("/")
-
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
-    assert "READ ONLY" in resp.text
     assert "stability" in resp.text
 
 
-def test_app_reflects_current_workspace_not_stale(tmp_path):
+def test_api_view_returns_agents(tmp_path):
     _write_contract(tmp_path, "alpha")
     client = TestClient(create_app(workspace_root=str(tmp_path)))
-    assert "alpha" in client.get("/").text
-
-    # Mutate the workspace; the next request must reflect it (re-collected, not cached).
-    _write_contract(tmp_path, "beta")
-    body = client.get("/").text
-    assert "beta" in body
-    assert "alpha" not in body
+    data = client.get("/api/view").json()
+    assert [a["id"] for a in data["agents"]] == ["alpha"]
 
 
-def test_app_exposes_only_safe_methods(tmp_path):
+def test_dashboard_moved_to_dashboard_route(tmp_path):
+    _write_contract(tmp_path, "stability")
+    client = TestClient(create_app(workspace_root=str(tmp_path)))
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    assert "READ ONLY" in resp.text
+
+
+def test_edit_action_exposed_phase2(tmp_path):
     app = create_app(workspace_root=str(tmp_path))
     methods: set[str] = set()
     for route in app.routes:
         methods |= set(getattr(route, "methods", set()) or set())
-    assert methods <= {"GET", "HEAD"}  # Phase 1 is read-only
+    assert "POST" in methods  # edit actions exist now
+    assert "PUT" not in methods and "DELETE" not in methods

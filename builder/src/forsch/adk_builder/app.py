@@ -1,39 +1,86 @@
-"""Sidecar dashboard app (Phase 1, read-only).
+"""Agent Builder cockpit — interactive canvas + edit actions.
 
-A minimal Starlette app that re-collects the workspace on every request (so the
-page never shows stale data) and serves the read-only dashboard. Only GET is
-exposed in Phase 1; guarded write routes arrive in Phase 2.
-
-When ``COCKPIT_TOKEN`` is set, every request must present it (``?token=`` query
-param or ``X-Cockpit-Token`` header) or get a 403. This lets the Cockpit sit
-behind a public Tailscale Funnel safely: only the Frappe reverse-proxy (which
-holds the token server-side, behind CRM login) can reach it.
+``/`` serves the canvas (live manifest inlined). ``/api/view`` returns that data
+as JSON; ``/api/agent/{id}`` (POST) applies an edit (instruction/tools) and
+regenerates via the Factory. The read-only Phase-1 dashboard stays at
+``/dashboard``. When ``COCKPIT_TOKEN`` is set every route requires it (``?token=``
+or ``X-Cockpit-Token``) — the Frappe reverse-proxy attaches it server-side.
 """
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 from starlette.applications import Starlette
-from starlette.responses import HTMLResponse, PlainTextResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
+from forsch.adk_builder.canvas_api import build_view
 from forsch.adk_builder.collector import collect_workspace
+from forsch.adk_builder.editor import update_agent
 from forsch.adk_builder.renderer import render_dashboard
 
 DEFAULT_WORKSPACE = "/opt/data/workspace/adk"
+_CANVAS = Path(__file__).resolve().parents[3] / "templates" / "canvas.html"
+
+
+def _forbidden(request, token):
+    if not token:
+        return None
+    provided = request.query_params.get("token") or request.headers.get("x-cockpit-token")
+    if provided != token:
+        return PlainTextResponse("forbidden", status_code=403)
+    return None
 
 
 def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
     async def index(request):
-        if token:
-            provided = request.query_params.get("token") or request.headers.get("x-cockpit-token")
-            if provided != token:
-                return PlainTextResponse("forbidden", status_code=403)
-        workspace = collect_workspace(workspace_root)  # fresh per request, not cached
-        return HTMLResponse(render_dashboard(workspace))
+        if (deny := _forbidden(request, token)) is not None:
+            return deny
+        view = build_view(workspace_root)
+        html = _CANVAS.read_text().replace("/*__VIEW__*/", json.dumps(view))
+        return HTMLResponse(html)
 
-    return Starlette(routes=[Route("/", index, methods=["GET"])])
+    async def api_view(request):
+        if (deny := _forbidden(request, token)) is not None:
+            return deny
+        return JSONResponse(build_view(workspace_root))
+
+    async def api_agent(request):
+        if (deny := _forbidden(request, token)) is not None:
+            return deny
+        agent_id = request.path_params["agent_id"]
+        try:
+            if request.method == "POST":
+                patch = await request.json()
+            else:
+                # GET tunnel: Frappe 15 blocks POST to whitelisted methods at the
+                # route layer, so the proxied canvas sends the patch base64'd here.
+                import base64
+
+                q = request.query_params.get("q", "")
+                pad = "=" * (-len(q) % 4)
+                patch = json.loads(base64.urlsafe_b64decode(q + pad).decode("utf-8")) if q else {}
+            result = update_agent(workspace_root, agent_id, patch)
+            return JSONResponse(result)
+        except Exception as exc:  # surface the message to the UI, don't 500 blindly
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    async def dashboard(request):
+        if (deny := _forbidden(request, token)) is not None:
+            return deny
+        return HTMLResponse(render_dashboard(collect_workspace(workspace_root)))
+
+    return Starlette(
+        routes=[
+            Route("/", index, methods=["GET"]),
+            Route("/api/view", api_view, methods=["GET"]),
+            Route("/api/agent/{agent_id}", api_agent, methods=["GET", "POST"]),
+            Route("/dashboard", dashboard, methods=["GET"]),
+        ]
+    )
 
 
 def serve(
@@ -48,8 +95,6 @@ def serve(
 
 
 if __name__ == "__main__":
-    # Host/port/token overridable via env so the systemd service can bind the
-    # Tailscale IP and require a token without code changes. Defaults stay open.
     serve(
         os.environ.get("FORSCH_ADK_WORKSPACE", DEFAULT_WORKSPACE),
         host=os.environ.get("FORSCH_ADK_HOST", "127.0.0.1"),

@@ -33,6 +33,7 @@ uv pip install -e "$A/components" \
 echo "[4/5] builder (cockpit dashboard)"
 cd "$A/builder"; rm -rf .venv
 uv sync
+uv pip install -e "$A/factory" ruamel.yaml
 ./.venv/bin/python -m pytest -q
 
 echo "[5/5] factory (deterministic generator; lean deps, no adk needed)"

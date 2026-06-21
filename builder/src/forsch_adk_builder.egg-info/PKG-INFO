@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: forsch-adk-builder
+Version: 0.1.0
+Summary: Read-only and guarded builder cockpit for the Forsch ADK workspace
+Requires-Python: >=3.11
+Requires-Dist: jinja2>=3.1
+Requires-Dist: pydantic>=2
+Requires-Dist: pyyaml>=6
+Requires-Dist: starlette>=0.37
+Requires-Dist: uvicorn>=0.30
