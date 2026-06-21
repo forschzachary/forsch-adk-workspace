@@ -72,6 +72,14 @@
   pre.result{font-family:"Spline Sans Mono",monospace;font-size:11px;line-height:1.45;color:#463c2b;
     background:#fffdf6;border:1px solid #e6dabf;border-radius:9px;padding:10px;white-space:pre-wrap;max-height:240px;overflow:auto;}
   .empty{color:var(--mut);font-size:12.5px;font-style:italic;}
+  .tabs{display:flex;gap:2px;background:#e7ddc8;border:1px solid var(--line);border-radius:9px;padding:2px;}
+  .tabs button{font-family:"Newsreader",serif;font-size:13.5px;border:none;background:transparent;color:var(--ink2);padding:5px 14px;border-radius:7px;cursor:pointer;}
+  .tabs button.on{background:var(--card);color:var(--ink1);box-shadow:0 1px 0 #fffaf0;}
+  .termwrap{position:absolute;left:0;right:0;top:57px;bottom:0;background:#1b1812;display:none;}
+  .termwrap iframe{width:100%;height:100%;border:0;display:block;}
+  body.term .stage{display:none;}
+  body.term .termwrap{display:block;}
+  body.term .gen{display:none;}
 </style>
 </head>
 <body>
@@ -79,9 +87,14 @@
     <div class="mark"><span class="dot"></span> Agent&nbsp;Builder</div>
     <span class="crumb">manifest ·</span>
     <select class="agentsel" id="agentsel"></select>
+    <div class="tabs" id="tabs">
+      <button id="tabCanvas" class="on">Canvas</button>
+      <button id="tabTerm">Terminal</button>
+    </div>
     <div class="status" id="status"><span class="tick"></span><span id="statustext">ready</span></div>
     <button class="gen" id="gen">Generate &rsaquo;</button>
   </div>
+  <div class="termwrap" id="termwrap"><iframe id="termframe" title="Terminal" allow="clipboard-read; clipboard-write"></iframe></div>
   <div class="stage">
     <div class="canvas" id="canvas">
       <svg class="threads" id="threads"></svg>
@@ -98,6 +111,7 @@
 
 <script>
 const VIEW = /*__VIEW__*/;
+const TERM_URL = /*__TERMURL__*/;
 const W = document.getElementById('world');
 const SVG = document.getElementById('threads');
 const canvas = document.getElementById('canvas');
@@ -237,6 +251,16 @@ canvas.addEventListener('wheel', e=>{ e.preventDefault(); const f=e.deltaY<0?1.0
 VIEW.agents.forEach(a=>{ const o=document.createElement('option'); o.value=a.id; o.textContent=a.id; sel.appendChild(o); });
 sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAgent(sel.value); renderPalette(); });
 document.getElementById('gen').addEventListener('click', generate);
+// canvas / terminal toggle (terminal iframe loads lazily, on first open)
+const tabCanvas=document.getElementById('tabCanvas'), tabTerm=document.getElementById('tabTerm');
+function showTerm(on){
+  document.body.classList.toggle('term', on);
+  tabTerm.classList.toggle('on', on); tabCanvas.classList.toggle('on', !on);
+  const f=document.getElementById('termframe');
+  if(on && !f.getAttribute('src')) f.setAttribute('src', TERM_URL);
+}
+tabCanvas.addEventListener('click', ()=>showTerm(false));
+tabTerm.addEventListener('click', ()=>showTerm(true));
 applyCam();
 if(VIEW.agents.length){ selectAgent(VIEW.agents[0].id); renderPalette(); }
 else { W.innerHTML='<div class="node" style="left:40px;top:40px"><div class="empty">No agents in the manifest yet.</div></div>'; }

@@ -15,15 +15,20 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
-from starlette.routing import Route
+from starlette.routing import Route, WebSocketRoute
 
 from forsch.adk_builder.canvas_api import build_view
 from forsch.adk_builder.collector import collect_workspace
 from forsch.adk_builder.editor import update_agent
 from forsch.adk_builder.renderer import render_dashboard
+from forsch.adk_builder.terminal import pty_bridge
 
 DEFAULT_WORKSPACE = "/opt/data/workspace/adk"
 _CANVAS = Path(__file__).resolve().parents[3] / "templates" / "canvas.html"
+_TERM = Path(__file__).resolve().parents[3] / "templates" / "term.html"
+# The terminal needs WebSockets, which the Frappe HTTP proxy can't forward, so
+# the canvas embeds it straight from the Funnel (same token gate).
+FUNNEL_TERM = "https://hubert-cloud-sp6.tail818cf8.ts.net:8443/term"
 
 
 def _forbidden(request, token):
@@ -40,7 +45,12 @@ def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
         if (deny := _forbidden(request, token)) is not None:
             return deny
         view = build_view(workspace_root)
-        html = _CANVAS.read_text().replace("/*__VIEW__*/", json.dumps(view))
+        term_url = f"{FUNNEL_TERM}?token={token or ''}"
+        html = (
+            _CANVAS.read_text()
+            .replace("/*__VIEW__*/", json.dumps(view))
+            .replace("/*__TERMURL__*/", json.dumps(term_url))
+        )
         return HTMLResponse(html)
 
     async def api_view(request):
@@ -73,12 +83,25 @@ def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
             return deny
         return HTMLResponse(render_dashboard(collect_workspace(workspace_root)))
 
+    async def term_page(request):
+        if (deny := _forbidden(request, token)) is not None:
+            return deny
+        return HTMLResponse(_TERM.read_text().replace("__TOKEN__", token or ""))
+
+    async def term_ws(websocket):
+        if token and websocket.query_params.get("token") != token:
+            await websocket.close(code=1008)
+            return
+        await pty_bridge(websocket, workspace_root)
+
     return Starlette(
         routes=[
             Route("/", index, methods=["GET"]),
             Route("/api/view", api_view, methods=["GET"]),
             Route("/api/agent/{agent_id}", api_agent, methods=["GET", "POST"]),
             Route("/dashboard", dashboard, methods=["GET"]),
+            Route("/term", term_page, methods=["GET"]),
+            WebSocketRoute("/term/ws", term_ws),
         ]
     )
 

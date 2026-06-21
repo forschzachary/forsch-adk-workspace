@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<style>
+  html,body{margin:0;height:100%;background:#1b1812;overflow:hidden;}
+  #t{height:100vh;padding:8px 10px;}
+  .xterm-viewport::-webkit-scrollbar{width:8px;}
+  .xterm-viewport::-webkit-scrollbar-thumb{background:#4a4234;border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="t"></div>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+const term = new Terminal({
+  fontFamily: '"Spline Sans Mono", ui-monospace, monospace', fontSize: 13,
+  cursorBlink: true, scrollback: 5000,
+  theme: { background:'#1b1812', foreground:'#e8dcc4', cursor:'#a9823f',
+           selectionBackground:'#5f7d5b66', black:'#2a261d', brightBlack:'#6f6450' }
+});
+const fit = new FitAddon.FitAddon();
+term.loadAddon(fit);
+term.open(document.getElementById('t'));
+fit.fit();
+const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+const ws = new WebSocket(`${proto}://${location.host}/term/ws?token=__TOKEN__`);
+ws.binaryType = 'arraybuffer';
+function sendResize(){ if (ws.readyState === 1) ws.send('\x00' + term.cols + ',' + term.rows); }
+ws.onopen = () => { sendResize(); term.focus(); };
+ws.onmessage = (e) => { term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data)); };
+ws.onclose = () => term.write('\r\n\x1b[38;5;131m[session closed]\x1b[0m\r\n');
+term.onData(d => { if (ws.readyState === 1) ws.send(d); });
+addEventListener('resize', () => { fit.fit(); sendResize(); });
+new ResizeObserver(() => { fit.fit(); sendResize(); }).observe(document.getElementById('t'));
+</script>
+</body>
+</html>
