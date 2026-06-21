@@ -30,8 +30,10 @@ _yaml.indent(mapping=2, sequence=4, offset=2)
 
 
 def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
-    """Apply ``patch`` (instruction and/or tools) to one agent, then regenerate
-    its wrapper and runtime package. Returns {ok, agent, tools, written, rendered_yaml}."""
+    """Apply ``patch`` (instruction, tools, model and/or group) to one agent, then
+    regenerate its wrapper and runtime package. ``model`` pins the LiteLLM model
+    (blank = unpin → shared default); ``group`` selects a preamble jacket (blank =
+    none). Returns {ok, agent, tools, model, group, written, rendered_yaml}."""
     ws = Path(workspace_root)
     mpath = ws / "agent_specs" / "agents.yaml"
     data = _yaml.load(mpath.read_text())
@@ -47,6 +49,19 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
         agent["tools"] = [
             t if t.startswith(_TOOL_PREFIX) else _TOOL_PREFIX + t for t in patch["tools"]
         ]
+    # model pin and group jacket are optional manifest keys: a value sets them,
+    # blank removes them (unpin / no jacket). Only act when the key is present so
+    # an instruction/tools-only patch never disturbs them.
+    if "model" in patch:
+        if (m := str(patch["model"] or "").strip()):
+            agent["model"] = m
+        else:
+            agent.pop("model", None)
+    if "group" in patch:
+        if (g := str(patch["group"] or "").strip()):
+            agent["group"] = g
+        else:
+            agent.pop("group", None)
 
     buf = StringIO()
     _yaml.dump(data, buf)
@@ -68,6 +83,8 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
         "ok": True,
         "agent": agent_id,
         "tools": [t.rsplit(".", 1)[-1] for t in agent.get("tools", [])],
+        "model": agent.get("model") or "",
+        "group": agent.get("group") or "",
         "written": written,
         "rendered_yaml": rendered,
     }

@@ -48,11 +48,13 @@ agents:
     purpose: >
       Personal assistant lead for Forsch.
     instruction: |
-      You are the assistant team lead for Forsch.
+      Forsch's assistant lead. Own productivity and home-assistant work: daily planning, calendar, reminders, smart home, household logistics, and practical follow-through.
     tools: []
     smoke_prompts:
       - "Introduce yourself and describe your role for Forsch."
 
+    model: gpt-5.5
+    group: hubert-team-lead
   brand:
     package: forsch.agent_brand.agent
     attr: root_agent

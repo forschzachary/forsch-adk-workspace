@@ -116,6 +116,11 @@
   .agent .sub{font-size:14px;color:var(--ink2);margin-bottom:11px;}
   .meta{display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap;}
   .pill{font-family:"Spline Sans Mono",monospace;font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);background:var(--pill-bg);}
+  .metasel{display:inline-flex;align-items:center;gap:6px;font-family:"Spline Sans Mono",monospace;font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);}
+  .msel,.gsel{font-family:"Spline Sans Mono",monospace;font-size:11.5px;text-transform:none;letter-spacing:0;color:var(--ink1);background:var(--field-bg);border:1px solid var(--field-border);border-radius:7px;padding:3px 7px;transition:border-color .16s ease;}
+  .msel{width:124px;}
+  .msel:focus,.gsel:focus{outline:none;border-color:var(--sage);}
+  .msel::placeholder{color:var(--mut);font-style:italic;}
   .pill.safe{color:var(--sage);background:var(--sage-soft);border-color:var(--chip-route-border);}
   .lead{color:var(--mut);font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;display:block;margin:0 0 5px;}
   textarea.instr{width:100%;border:1px solid var(--field-border);border-radius:9px;background:var(--field-bg);color:var(--field-ink);font-family:"Newsreader",serif;font-size:14px;line-height:1.5;padding:9px 10px;resize:vertical;min-height:96px;}
@@ -325,7 +330,7 @@ function esc(s){ return (s||'').replace(/</g,'&lt;'); }
 function selectAgent(id){
   closePopovers();
   const a = VIEW.agents.find(x=>x.id===id) || VIEW.agents[0];
-  state = { agent:a, instruction:a.instruction||'', tools:[...(a.tools||[])] };
+  state = { agent:a, instruction:a.instruction||'', tools:[...(a.tools||[])], model:a.model||'', group:a.group||'' };
   seen = new Set();   // fresh agent → let the whole graph ink itself in
   layout(); render(); renderToolbox();
 }
@@ -347,7 +352,15 @@ function render(){
     <span class="kind grab" data-drag="agent">agent · ${a.safety||'read_only'}</span>
     <h2 class="grab" data-drag="agent">${esc(a.name||a.id)}</h2>
     <div class="sub">${esc(a.description)}</div>
-    <div class="meta"><span class="pill">${esc(a.model||'openai/gpt-5.5')}</span>
+    <div class="meta">
+      <label class="metasel" title="LiteLLM model pinned for this agent — blank uses the shared default">model
+        <input class="msel" id="modelsel" list="modellist" spellcheck="false" autocomplete="off"
+               value="${esc(state.model)}" placeholder="default"></label>
+      <label class="metasel" title="Persona jacket — a shared preamble composed onto the instruction">jacket
+        <select class="gsel" id="groupsel">
+          <option value="">none</option>
+          ${(VIEW.groups||[]).map(g=>`<option value="${esc(g)}"${state.group===g?' selected':''}>${esc(g)}</option>`).join('')}
+        </select></label>
       <span class="pill safe">safe · ${esc(a.safety||'read_only')}</span></div>
     <span class="lead">instruction</span>
     <textarea class="instr" id="instr">${esc(state.instruction)}</textarea>`, 'agent sel');
@@ -368,6 +381,8 @@ function render(){
   });
   drawThreads(true); wireNodeDrag(); wireRemovals();
   document.getElementById('instr').addEventListener('input', e=>{ state.instruction = e.target.value; markDirty(); });
+  const ms=document.getElementById('modelsel'); if(ms) ms.addEventListener('input', e=>{ state.model = e.target.value.trim(); markDirty(); });
+  const gs=document.getElementById('groupsel'); if(gs) gs.addEventListener('change', e=>{ state.group = e.target.value; markDirty(); });
 }
 function center(id){ const el=W.querySelector(`[data-id="${id}"]`); return el ? {x:POS[id].x+el.offsetWidth/2, y:POS[id].y+el.offsetHeight/2} : null; }
 function thread(a,b,color,animate){ if(!a||!b) return;
@@ -472,7 +487,7 @@ function b64url(s){ return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'
 async function generate(){
   const btn=document.getElementById('gen'); btn.disabled=true; setStatus('generating…','busy');
   try{
-    const q = b64url(JSON.stringify({instruction:state.instruction, tools:state.tools}));
+    const q = b64url(JSON.stringify({instruction:state.instruction, tools:state.tools, model:state.model, group:state.group}));
     const data = await (await fetch(apiUrl('/api/agent/'+state.agent.id+'?q='+q))).json();
     const r=document.getElementById('result');
     if(data.ok){ setStatus('regenerated — Deploy to go live','ok');
@@ -595,7 +610,7 @@ function inspectorHTML(id){
     const instr=esc(state.instruction).slice(0,420)+(state.instruction.length>420?'…':'');
     return `${close}<div class="ik">agent</div><h4>${esc(a.name||a.id)}</h4>
       <div class="desc">${esc(a.description)||'<span class="note">No description in the manifest.</span>'}</div>
-      <div class="field"><span class="fl">model</span><div class="chiprow"><span class="ip">${esc(a.model||'openai/gpt-5.5')}</span><span class="ip safe">${esc(a.safety||'read_only')}</span></div></div>
+      <div class="field"><span class="fl">model · jacket</span><div class="chiprow"><span class="ip">${esc(state.model||'default')}</span><span class="ip">${state.group?esc(state.group):'no jacket'}</span><span class="ip safe">${esc(a.safety||'read_only')}</span></div></div>
       <div class="field"><span class="fl">discord route</span><div class="chiprow">${chans}</div></div>
       <div class="field"><span class="fl">wired tools · ${state.tools.length}</span><div class="chiprow">${state.tools.map(t=>`<span class="ip">${esc(t)}</span>`).join('')||'<span class="fv">none yet — drag from the Toolbox</span>'}</div></div>
       <div class="field"><span class="fl">instruction</span><div class="quote">${instr||'<span class="note">empty</span>'}</div></div>`;
@@ -693,6 +708,9 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePopovers();
 window.addEventListener('resize', ()=>{ closePopovers(); });
 
 // boot
+(function(){ const dl=document.createElement('datalist'); dl.id='modellist';   // model picker suggestions
+  (VIEW.models||[]).forEach(m=>{ const o=document.createElement('option'); o.value=m; dl.appendChild(o); });
+  document.body.appendChild(dl); })();
 VIEW.agents.forEach(a=>{ const o=document.createElement('option'); o.value=a.id; o.textContent=a.id; sel.appendChild(o); });
 sel.addEventListener('change', ()=>{ for(const k in POS) delete POS[k]; selectAgent(sel.value); });
 document.getElementById('gen').addEventListener('click', generate);

@@ -9,11 +9,46 @@ in the embedded terminal. Returns plain dicts the cockpit inlines as JSON.
 from __future__ import annotations
 
 import ast
+import json
+import os
+import urllib.request
 from pathlib import Path
 
 import yaml
 
 DEFAULT_MODEL = "openai/gpt-5.5"
+_LITELLM_BASE = "http://127.0.0.1:4000"  # co-located with the cockpit on the box
+
+# Static fallback for the canvas model picker if LiteLLM is momentarily unreachable.
+# The live list (queried below) supersedes this when available.
+_MODELS_FALLBACK = (
+    "gpt-5.5", "glm-5.2", "glm-5.1", "kimi-k2.6", "kimi-k2.7-code",
+    "deepseek-v4-pro", "deepseek-v4-flash", "gemini-3-pro-preview",
+    "gemini-2.5-pro", "minimax-m3", "qwen3-coder-480b", "cerebras-120b",
+)
+
+
+def _available_models() -> list[str]:
+    """LiteLLM model ids for the canvas picker — live when reachable, else static.
+    The picker is a free-text datalist, so this is suggestions, never a hard gate."""
+    key = os.environ.get("LITELLM_MASTER_KEY") or os.environ.get("LITELLM_HERMES_KEY") or ""
+    try:
+        req = urllib.request.Request(
+            _LITELLM_BASE + "/v1/models", headers={"Authorization": "Bearer " + key}
+        )
+        with urllib.request.urlopen(req, timeout=2) as r:
+            ids = sorted(m["id"] for m in json.load(r).get("data", []))
+        if ids:
+            return ids
+    except Exception:
+        pass
+    return list(_MODELS_FALLBACK)
+
+
+def _available_groups(ws: Path) -> list[str]:
+    """Preamble jackets (``preambles/<group>.md``) selectable from the canvas."""
+    d = ws / "preambles"
+    return sorted(p.stem for p in d.glob("*.md")) if d.is_dir() else []
 
 
 def _safe_yaml(path: Path) -> dict:
@@ -81,7 +116,8 @@ def build_view(workspace_root: str) -> dict:
                 "id": aid,
                 "name": spec.get("adk_name") or aid,
                 "description": spec.get("description", ""),
-                "model": DEFAULT_MODEL,
+                "model": spec.get("model") or "",   # "" = unpinned (shared default)
+                "group": spec.get("group") or "",   # "" = no jacket
                 "safety": spec.get("safety_level", "read_only"),
                 "instruction": (spec.get("instruction", "") or "").strip(),
                 "tools": [t.rsplit(".", 1)[-1] for t in (spec.get("tools") or [])],
@@ -90,4 +126,9 @@ def build_view(workspace_root: str) -> dict:
                 "rendered_yaml": rendered,
             }
         )
-    return {"agents": agents, "toolbox": _toolbox(ws)}
+    return {
+        "agents": agents,
+        "toolbox": _toolbox(ws),
+        "models": _available_models(),
+        "groups": _available_groups(ws),
+    }
