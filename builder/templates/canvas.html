@@ -255,6 +255,11 @@
     *,.node.enter,.ctxmenu,.inspector{animation-duration:.001s!important;transition-duration:.001s!important;}
     .chip:hover{transform:none;}
   }
+
+  /* rail-resize grab handle + collapse toggle */
+  #hdivider{position:relative;}
+  #hdivider::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:3px;border-radius:2px;background:var(--line);opacity:.7;}
+  .railcollapse{position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:11px;color:var(--mut);user-select:none;padding:0 4px;}
 </style>
 </head>
 <body>
@@ -752,10 +757,25 @@ document.getElementById('termframe').setAttribute('src', 'https://hubert-cloud-s
 (function(){
   const div=document.getElementById('hdivider'), top=document.getElementById('railtop'),
         rail=document.querySelector('.rail'), frame=document.getElementById('termframe');
-  div.addEventListener('mousedown', e=>{ e.preventDefault(); document.body.style.cursor='row-resize'; frame.style.pointerEvents='none';
+  const KEY='ab-railtop';
+  try{ const s=localStorage.getItem(KEY); if(s) top.style.flexBasis=s; }catch(e){}
+  let collapsedFrom=null;
+  div.addEventListener('mousedown', e=>{
+    if(e.target.closest('.railcollapse')) return;
+    e.preventDefault(); document.body.style.cursor='row-resize'; frame.style.pointerEvents='none';
     function mv(ev){ const r=rail.getBoundingClientRect(); let pct=((ev.clientY-r.top)/r.height)*100; pct=Math.min(80,Math.max(15,pct)); top.style.flexBasis=pct+'%'; }
-    function up(){ document.body.style.cursor=''; frame.style.pointerEvents=''; document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
-    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up); });
+    function up(){ document.body.style.cursor=''; frame.style.pointerEvents='';
+      try{ localStorage.setItem(KEY, top.style.flexBasis); }catch(e){}
+      document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
+  const tog=document.createElement('span'); tog.className='railcollapse'; tog.title='Collapse / expand the chat'; tog.textContent='▾';
+  div.appendChild(tog);
+  tog.addEventListener('click', e=>{ e.stopPropagation();
+    if(collapsedFrom===null){ collapsedFrom=top.style.flexBasis||'50%'; top.style.flexBasis='94%'; tog.textContent='▴'; }
+    else { top.style.flexBasis=collapsedFrom; collapsedFrom=null; tog.textContent='▾'; }
+    try{ localStorage.setItem(KEY, top.style.flexBasis); }catch(e){}
+  });
 })();
 // theme toggle (re-applied pre-paint by the <head> script; this only flips + persists)
 document.getElementById('themebtn').addEventListener('click', ()=>{
