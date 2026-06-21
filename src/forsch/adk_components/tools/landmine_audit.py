@@ -52,3 +52,43 @@ def scan_hardcoded_paths(root: str | None = None) -> list[dict[str, Any]]:
                 findings.append({"file": str(path), "line": i, "snippet": line.strip()[:120],
                                  "rule": r["id"], "severity": r["severity"], "remedy": r["remedy"]})
     return findings
+
+
+def check_env_contract(root: str | None = None) -> list[dict[str, Any]]:
+    """Every os.environ.get("X", default) / os.environ["X"] -> is X set, and does its
+    default itself trip a rule (e.g. a /opt/data default)?"""
+    base = Path(root or os.environ["FORSCH_ADK_WORKSPACE"]).expanduser().resolve()
+    seen: dict[str, dict[str, Any]] = {}
+    for path in _iter_files(base):
+        if path.suffix != ".py":
+            continue
+        try:
+            tree = ast.parse(path.read_text(errors="replace"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            var = default = None
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                    and node.func.attr == "get" and isinstance(node.func.value, ast.Attribute) \
+                    and node.func.value.attr == "environ" and node.args \
+                    and isinstance(node.args[0], ast.Constant):
+                var = node.args[0].value
+                if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+                    default = node.args[1].value
+            elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) \
+                    and node.value.attr == "environ" and isinstance(node.slice, ast.Constant):
+                var = node.slice.value
+            if isinstance(var, str) and var not in seen:
+                dead = bool(default and isinstance(default, str) and any(h["severity"] == "high" for h in rule_hits(default)))
+                seen[var] = {"var": var, "set": var in os.environ,
+                             "default": default, "default_looks_dead": dead}
+    return list(seen.values())
+
+
+def detect_config_drift() -> dict[str, Any]:
+    """Declared-vs-actual: workspace + env-contract (model/port cross-checks deferred)."""
+    root = os.environ.get("FORSCH_ADK_WORKSPACE")
+    workspace = {"declared": root, "actual_exists": bool(root) and Path(root).is_dir(), "ok": False}
+    workspace["ok"] = workspace["actual_exists"]
+    env = [r for r in check_env_contract(root) if not r["set"] and r["default_looks_dead"]]
+    return {"workspace": workspace, "env_relying_on_dead_default": env}
