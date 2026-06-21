@@ -13,12 +13,17 @@ _LITELLM_API_KEY = (
 )
 _LITELLM_MODEL = os.environ.get("FORSCH_ADK_MODEL", "openai/gpt-5.5")
 
-agent = Agent(
+brand_model = LiteLlm(
+    model=_LITELLM_MODEL,
+    api_base=_LITELLM_BASE_URL,
+    api_key=_LITELLM_API_KEY,
+)
+
+root_agent = Agent(
     name="brand_agent",
-    model=LiteLlm(
-        model=_LITELLM_MODEL,
-        api_base=_LITELLM_BASE_URL,
-        api_key=_LITELLM_API_KEY,
-    ),
+    model=brand_model,
+    description="Brand and marketing lead for Forsch.",
     instruction="You are the brand team lead for Forsch.",
 )
+
+agent = root_agent
