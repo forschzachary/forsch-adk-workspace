@@ -7,19 +7,22 @@ from forsch.adk_factory.cli import apply, write_files
 WS = Path("/root/.hermes/workspace/adk")
 
 
-def test_apply_writes_then_is_idempotent(tmp_path: Path):
+def test_apply_writes_both_surfaces_then_is_idempotent(tmp_path: Path):
     # Apply the real stability manifest into a throwaway workspace root.
     out = apply(WS / "agent_specs" / "agents.yaml", "stability", tmp_path)
-    target = tmp_path / "web_agents" / "stability" / "root_agent.yaml"
-    assert target.exists()
+    web = tmp_path / "web_agents" / "stability" / "root_agent.yaml"
+    pkg = tmp_path / "agents" / "stability" / "src" / "forsch" / "agent_stability" / "agent.py"
+    # apply must render BOTH the web wrapper AND the runnable package (the bridge
+    # imports the package; rendering only the wrapper is how the manifest drifted).
+    assert web.exists() and pkg.exists()
     golden = (WS / "web_agents" / "stability" / "root_agent.yaml").read_text()
-    assert target.read_text() == golden
-    assert out["written"] == [str(target)]
+    assert web.read_text() == golden
+    assert set(out["written"]) == {str(web), str(pkg)}
 
     # Re-applying the unchanged manifest changes nothing (idempotent).
-    before = target.read_text()
+    before = (web.read_text(), pkg.read_text())
     apply(WS / "agent_specs" / "agents.yaml", "stability", tmp_path)
-    assert target.read_text() == before
+    assert (web.read_text(), pkg.read_text()) == before
 
 
 def test_write_files_rolls_back_on_verify_failure(tmp_path: Path):

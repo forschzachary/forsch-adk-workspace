@@ -86,6 +86,6 @@ def test_generated_agent_constructs_equivalent_agent():
     assert agent_kwargs["instruction"] == spec.instruction.rstrip("\n")
     assert [t.__name__ for t in agent_kwargs["tools"]] == leaves
 
-    assert rec["model"]["model"] == "openai/gpt-5.5"  # env-var default
+    assert rec["model"]["model"] == "openai/glm-5.2"  # stability is pinned in the manifest
     ns = rec["namespace"]
     assert ns["root_agent"] is ns["agent"]  # `agent = root_agent` alias
