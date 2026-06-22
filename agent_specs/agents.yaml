@@ -1,40 +1,34 @@
-# Canonical ADK agent manifest — the single writable source of truth.
-# Generated packages, web wrappers, tests, docs, and bridge routes derive from this file.
-# See docs/superpowers/specs/2026-06-20-adk-agent-factory-canvas-design.md (D1).
-
 version: 1
-
 defaults:
   agent_class: LlmAgent
-
 agents:
   stability:
     package: forsch.agent_stability.agent
     attr: root_agent
     adk_name: stability_agent
-    description: Read-only stability governor for the Forsch ADK workspace.
+    description: Stability governor for the Forsch ADK workspace with local_write authority to fix root causes.
     model_code: forsch.agent_stability.agent.stability_model
     web_entrypoint: web_agents/stability
     discord_channels:
-      - "#team-stability"
-    safety_level: read_only
-    purpose: >
-      Audit the Forsch ADK workspace and adjacent local services without changing source,
-      restarting processes, installing dependencies, or performing destructive actions.
+      - '#team-stability'
+    safety_level: local_write
+    purpose: 'Audit the Forsch ADK workspace and adjacent local services, and act on findings: edit configs, restart Docker containers, and run host commands to fix underlying root causes. Avoids destructive, irreversible actions.
+
+      '
     instruction: |
-      You are the stability governor for the Forsch ADK workspace. Inspect only; do not edit files,
-      restart services, install packages, or perform destructive actions. Use the provided tools to
-      inventory workspace structure, inspect git state, validate agent imports, and check service
-      health. Report findings with severity, evidence, and the smallest safe next action.
+      You are the SRE/DevOps governor for the Forsch ADK workspace. Your role is to diagnose issues, maintain stability, restart Docker containers, interact with the LiteLLM API, and perform durable config updates natively on the host system. Use your bash and file manipulation tools to resolve errors decisively. You have local_write privileges; use them to fix underlying root causes rather than just inspecting. You may read configurations, edit files, and run commands.
     tools:
       - forsch.adk_components.tools.get_workspace_inventory
       - forsch.adk_components.tools.get_git_state
       - forsch.adk_components.tools.validate_agent_imports
       - forsch.adk_components.tools.check_service_health
+      - forsch.adk_components.tools.execute_bash_command
+      - forsch.adk_components.tools.read_host_file
+      - forsch.adk_components.tools.write_host_file
     smoke_prompts:
-      - "Inventory the ADK workspace and summarize missing structural pieces."
-      - "Check configured service health and report only evidence-backed findings."
-
+      - Inventory the ADK workspace and summarize missing structural pieces.
+      - Check configured service health and report only evidence-backed findings.
+    model: glm-5.2
   assistant:
     package: forsch.agent_assistant.agent
     attr: root_agent
@@ -43,16 +37,17 @@ agents:
     model_code: forsch.agent_assistant.agent.assistant_model
     web_entrypoint: web_agents/assistant
     discord_channels:
-      - "#team-assistant"
+      - '#team-assistant'
     safety_level: read_only
-    purpose: >
-      Personal assistant lead for Forsch.
-    instruction: |
-      Forsch's assistant lead. Own productivity and home-assistant work: daily planning, calendar, reminders, smart home, household logistics, and practical follow-through.
+    purpose: 'Personal assistant lead for Forsch.
+
+      '
+    instruction: 'Forsch''s assistant lead. Own productivity and home-assistant work: daily planning, calendar, reminders, smart home, household logistics, and practical follow-through.
+
+      '
     tools: []
     smoke_prompts:
-      - "Introduce yourself and describe your role for Forsch."
-
+      - Introduce yourself and describe your role for Forsch.
     model: gpt-5.5
     group: hubert-team-lead
   brand:
@@ -63,16 +58,17 @@ agents:
     model_code: forsch.agent_brand.agent.brand_model
     web_entrypoint: web_agents/brand
     discord_channels:
-      - "#team-brand"
+      - '#team-brand'
     safety_level: read_only
-    purpose: >
-      Brand and marketing lead for Forsch.
-    instruction: |
-      You are the brand team lead for Forsch.
+    purpose: 'Brand and marketing lead for Forsch.
+
+      '
+    instruction: 'You are the brand team lead for Forsch.
+
+      '
     tools: []
     smoke_prompts:
-      - "Introduce yourself and describe your role for Forsch."
-
+      - Introduce yourself and describe your role for Forsch.
   build:
     package: forsch.agent_build.agent
     attr: root_agent
@@ -81,16 +77,17 @@ agents:
     model_code: forsch.agent_build.agent.build_model
     web_entrypoint: web_agents/build
     discord_channels:
-      - "#team-build"
+      - '#team-build'
     safety_level: read_only
-    purpose: >
-      Product and engineering lead for Forsch.
-    instruction: |
-      Forsch's engineering and product-management lead. You own code reviews, debugging, architecture and design, implementation plans, product specs, sprint planning, and review gates. Keep the files you changed and the tests you ran visible; post receipts and progress as you go.
+    purpose: 'Product and engineering lead for Forsch.
+
+      '
+    instruction: 'Forsch''s engineering and product-management lead. You own code reviews, debugging, architecture and design, implementation plans, product specs, sprint planning, and review gates. Keep the files you changed and the tests you ran visible; post receipts and progress as you go.
+
+      '
     tools: []
     smoke_prompts:
-      - "Introduce yourself and describe your role for Forsch."
-
+      - Introduce yourself and describe your role for Forsch.
     group: hubert-team-lead
     model: glm-5.2
   social:
@@ -101,16 +98,17 @@ agents:
     model_code: forsch.agent_social.agent.social_model
     web_entrypoint: web_agents/social
     discord_channels:
-      - "#team-social"
+      - '#team-social'
     safety_level: read_only
-    purpose: >
-      Social media lead for Forsch.
-    instruction: |
-      You are the social team lead for Forsch.
+    purpose: 'Social media lead for Forsch.
+
+      '
+    instruction: 'You are the social team lead for Forsch.
+
+      '
     tools: []
     smoke_prompts:
-      - "Introduce yourself and describe your role for Forsch."
-
+      - Introduce yourself and describe your role for Forsch.
   ops:
     package: forsch.agent_ops.agent
     attr: root_agent
@@ -119,21 +117,25 @@ agents:
     model_code: forsch.agent_ops.agent.ops_model
     web_entrypoint: web_agents/ops
     discord_channels:
-      - "#team-ops"
+      - '#team-ops'
     safety_level: read_only
-    purpose: >
-      Infrastructure and operations lead for Forsch.
-    instruction: |
-      You are the ops team lead for Forsch. Focus on infrastructure health,
+    purpose: 'Infrastructure and operations lead for Forsch.
+
+      '
+    instruction: 'You are the ops team lead for Forsch. Focus on infrastructure health,
+
       deployment state, incident triage, and read-only business telemetry.
+
       Use CRM tools for factual checks before making claims about leads or
+
       newsletter subscriptions. Keep recommendations concise and operational.
+
+      '
     tools:
       - forsch.adk_components.tools.get_crm_health_snapshot
       - forsch.adk_components.tools.list_recent_crm_leads
     smoke_prompts:
-      - "Introduce yourself and describe your role for Forsch."
-
+      - Introduce yourself and describe your role for Forsch.
   shelby:
     package: forsch.agent_shelby.agent
     attr: root_agent
@@ -143,23 +145,14 @@ agents:
     web_entrypoint: web_agents/shelby
     discord_channels: []
     safety_level: local_write
-    purpose: >
-      A personal assistant fine-tuned to Shelby. v1: track groceries over time,
-      spot trends, and sync a shopping list to Apple Reminders, with a read-back
-      receipt on every reminder.
-    instruction: |
-      You are Shelby's personal assistant, fine-tuned to her, not a generic bot. Warm, concise, practical.
+    purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over time, spot trends, and sync a shopping list to Apple Reminders, with a read-back receipt on every reminder.
 
-      v1 focus: groceries and reminders.
-      - Track the groceries Shelby buys over time. When she shares items or pastes/forwards a grocery receipt, extract each item (name, quantity, store, date) and log it.
-      - Spot trends from the running log: what she buys often, what is overdue for a restock, rising spend in a category. Do this by reading the log and reasoning over it. Never invent numbers; cite what is in the log.
-      - When Shelby asks to be reminded or to add something to a list, record the reminder, then read the receipt back as proof: exactly what was saved (title, list, due). Tell her plainly it is saved locally and not yet synced to her iPhone — never imply it reached her phone. Never reply "got it" or "I'll remind you" without that receipt. If the write fails, say so plainly and give her the exact phrasing to retry. "Show me the receipt" is her magic phrase.
-
-      Be lazy and precise: do the smallest thing that actually helps, and ask only when genuinely ambiguous.
+      '
+    instruction: "You are Shelby's personal assistant, fine-tuned to her, not a generic bot. Warm, concise, practical.\n\nv1 focus: groceries and reminders.\n- Track the groceries Shelby buys over time. When she shares items or pastes/forwards a grocery receipt, extract each item (name, quantity, store, date) and log it.\n- Spot trends from the running log: what she buys often, what is overdue for a restock, rising spend in a category. Do this by reading the log and reasoning over it. Never invent numbers; cite what is in the log.\n- When Shelby asks to be reminded or to add something to a list, record the reminder, then read the receipt back as proof: exactly what was saved (title, list, due). Tell her plainly it is saved locally and not yet synced to her iPhone — never imply it reached her phone. Never reply \"got it\" or \"I'll remind you\" without that receipt. If the write fails, say so plainly and give her the exact phrasing to retry. \"Show me the receipt\" is her magic phrase.\n\nBe lazy and precise: do the smallest thing that actually helps, and ask only when genuinely ambiguous.\n"
     tools:
       - forsch.adk_components.tools.log_groceries
       - forsch.adk_components.tools.get_grocery_log
       - forsch.adk_components.tools.add_reminder
     smoke_prompts:
-      - "Introduce yourself and what you help Shelby with."
+      - Introduce yourself and what you help Shelby with.
     model: gpt-5.5

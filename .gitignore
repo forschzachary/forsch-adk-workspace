@@ -25,3 +25,7 @@ web_agents/**/__pycache__/
 chat/.venv/
 chat/chat.env
 chat/hubert_soul.md
+*.egg-info/
+.chainlit/
+.claude/settings.local.json
+*.pyc
