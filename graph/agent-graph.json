@@ -131,6 +131,31 @@
       "kind": "tool"
     },
     {
+      "id": "authsome",
+      "name": "authsome (broker)",
+      "kind": "broker"
+    },
+    {
+      "id": "cred:github",
+      "name": "GitHub (OAuth)",
+      "kind": "credential"
+    },
+    {
+      "id": "cred:resend",
+      "name": "Resend (email)",
+      "kind": "credential"
+    },
+    {
+      "id": "cred:cloudflare-global",
+      "name": "Cloudflare (global)",
+      "kind": "credential"
+    },
+    {
+      "id": "cred:frappe-crm",
+      "name": "Frappe CRM (ff-ops-prod)",
+      "kind": "credential"
+    },
+    {
       "id": "model:gemini-3-pro-preview",
       "name": "gemini-3-pro-preview",
       "kind": "model"
@@ -258,6 +283,36 @@
       "kind": "uses"
     },
     {
+      "source": "authsome",
+      "target": "cred:github",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:resend",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:cloudflare-global",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:frappe-crm",
+      "kind": "brokers"
+    },
+    {
+      "source": "tool:get_crm_health_snapshot",
+      "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:list_recent_crm_leads",
+      "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
       "source": "model:glm-5.2",
       "target": "model:gpt-5.5",
       "kind": "fallback"
@@ -278,6 +333,6 @@
       "kind": "fallback"
     }
   ],
-  "node_count": 27,
-  "link_count": 28
+  "node_count": 32,
+  "link_count": 34
 }

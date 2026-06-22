@@ -55,6 +55,28 @@ for aid, a in agents.items():
         node(f"chan:{c}", c, "channel")
         link(f"agent:{aid}", f"chan:{c}", "listens")
 
+# --- credential plane: the authsome broker + its connections ---
+# authsome is the runtime credential broker (proxy injection / PoP / vault / OAuth refresh).
+CONNECTIONS = {
+    "github": "GitHub (OAuth)",
+    "resend": "Resend (email)",
+    "cloudflare-global": "Cloudflare (global)",
+    "frappe-crm": "Frappe CRM (ff-ops-prod)",
+}
+# Declared tool -> connection map (which tool authenticates via which authsome connection).
+# The rest of the connections are broker-available but not yet bound to a tool.
+TOOL_CONN = {
+    "get_crm_health_snapshot": "frappe-crm",
+    "list_recent_crm_leads": "frappe-crm",
+}
+node("authsome", "authsome (broker)", "broker")
+for cid, cname in CONNECTIONS.items():
+    node(f"cred:{cid}", cname, "credential")
+    link("authsome", f"cred:{cid}", "brokers")
+for tool_leaf, conn in TOOL_CONN.items():
+    if f"tool:{tool_leaf}" in nodes:
+        link(f"tool:{tool_leaf}", f"cred:{conn}", "authenticates-via")
+
 for m, chain in FALLBACKS.items():
     if f"model:{m}" in nodes:
         for fb in chain:
