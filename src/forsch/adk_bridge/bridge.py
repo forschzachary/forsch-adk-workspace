@@ -29,6 +29,16 @@ from google.genai import types
 from forsch.adk_bridge.gateway.router import resolve_agent as gateway_resolve_agent, build_source_defaults
 from forsch.adk_bridge.gateway.sources_discord import discord_to_canonical
 
+
+def _visible_parts_text(parts) -> str:
+    """Concatenated text from parts that should stream to the user — EXCLUDES the model's
+    reasoning/thought parts (`part.thought == True`), which must never reach Discord/CRM."""
+    return "".join(
+        p.text for p in parts
+        if getattr(p, "text", None) and not getattr(p, "thought", False)
+    )
+
+
 # ── config loading ──────────────────────────────────────────────────────────
 
 def _load_config(path: str | Path = "bridge_config.yaml") -> dict:
@@ -314,9 +324,9 @@ class ADKBridgeClient(discord.Client):
             run_config=run_config,
         ):
             if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        buffer.feed(part.text)
+                chunk = _visible_parts_text(event.content.parts)
+                if chunk:
+                    buffer.feed(chunk)
 
             if buffer.should_flush():
                 await buffer.flush()
