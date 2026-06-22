@@ -549,7 +549,7 @@ async function deploy(){
   btn.disabled=false;
 }
 
-canvas.addEventListener('mousedown', e=>{ if(e.button!==0 || e.target.closest('.node')) return;
+canvas.addEventListener('mousedown', e=>{ if(e.button!==0 || e.target.closest('.node') || boxMode) return;   // box-draw mode owns the drag
   canvas.classList.add('panning'); const s={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};
   function mv(ev){ cam.x=s.cx+(ev.clientX-s.x); cam.y=s.cy+(ev.clientY-s.y); applyCam(); }
   function up(){ canvas.classList.remove('panning'); document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
