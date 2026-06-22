@@ -243,7 +243,11 @@ class ADKBridgeClient(discord.Client):
 
     async def handle_crm_task_assigned(self, payload: dict) -> dict:
         """Route an outbound CRM task assignment into the targeted ADK agent."""
-        agent_name = _resolve_crm_agent(payload, self._crm_assignee_map)
+        from forsch.adk_bridge.gateway.sources_crm import crm_to_canonical  # deferred: avoids import cycle
+        canonical = crm_to_canonical(payload, self._crm_assignee_map)
+        agent_name = gateway_resolve_agent(canonical, self._agents.keys(), {
+            **self._config, "source_defaults": self._source_defaults,
+        })
         if agent_name is None:
             return {"ok": False, "error": "unmapped_assignee"}
 
