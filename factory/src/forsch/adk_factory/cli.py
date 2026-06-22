@@ -19,7 +19,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from forsch.adk_factory.loader import load_manifest
-from forsch.adk_factory.renderer import render_agent, render_agent_package
+from forsch.adk_factory.renderer import (
+    compose_instruction,
+    render_agent,
+    render_agent_package,
+)
 
 
 def plan(manifest_path, agent_id: str) -> dict:
@@ -29,9 +33,18 @@ def plan(manifest_path, agent_id: str) -> dict:
     AND the runnable Python package (``agent.py``). The package is what the
     bridge imports at runtime, so omitting it silently drifts code from the
     manifest — the exact bug this used to ship.
+
+    Composes the group preamble into the instruction first (preamble + job),
+    exactly as the Builder cockpit does — otherwise grouped agents (e.g.
+    hubert-team-lead) would render with their preamble stripped. Preambles live
+    next to the manifest at ``<workspace>/preambles/``, so the workspace root is
+    derived from the manifest path, not from any output dir.
     """
+    manifest_path = Path(manifest_path)
     manifest = load_manifest(manifest_path)
     spec = manifest.agents[agent_id]
+    workspace = manifest_path.resolve().parent.parent  # <ws>/agent_specs/agents.yaml
+    spec.instruction = compose_instruction(str(workspace), spec)
     rendered = {**render_agent(spec), **render_agent_package(spec)}
     files = [{"path": rel, "content": content} for rel, content in rendered.items()]
     return {"agent": agent_id, "files": files}
