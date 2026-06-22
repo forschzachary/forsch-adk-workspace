@@ -71,3 +71,14 @@ streaming:
 logging:
   level: INFO
   file: ""
+
+# Team Rooms (Gameplan) PULL integration. enabled:false until the bot user + keys exist.
+teamrooms:
+  enabled: false
+  base_url: https://crm.forschfrontiers.com
+  bot_user: agent-bot@forschfrontiers.com
+  poll_interval_seconds: 10
+  ledger_db: data/teamrooms_ledger.db
+  reply_signature: "— {agent} (ADK agent)"
+  mention_routing: true
+  spaces: {}

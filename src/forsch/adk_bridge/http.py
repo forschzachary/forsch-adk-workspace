@@ -15,7 +15,14 @@ def healthz():
     return {"ok": True}
 
 
-# (Phase 3: @app.post("/crm/events") goes HERE, before the mount.)
+# Team Rooms (Gameplan) integration — a PULL poller started on app startup. Gated:
+# a safe no-op unless teamrooms.enabled + bot creds are configured (see
+# forsch.adk_bridge.teamrooms.wiring). The box has no public inbound, so it polls
+# Gameplan outbound rather than receiving webhooks.
+@app.on_event("startup")
+async def _teamrooms_startup():
+    from forsch.adk_bridge.teamrooms.wiring import maybe_start_poller
+    maybe_start_poller()
 
 _TARGET = str(Path(__file__).with_name("cl_app.py"))
 mount_chainlit(app=app, target=_TARGET, path="/chat")   # MUST be after the routes above
