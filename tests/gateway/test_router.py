@@ -39,3 +39,18 @@ def test_mention_routing_disabled():
     cfg = {"mention_routing": False, "source_defaults": {}}
     m = CanonicalMessage(source="sms", sender="u", text="@shelby hi")
     assert resolve_agent(m, AGENTS, cfg) is None
+
+
+from forsch.adk_bridge.gateway.router import build_source_defaults
+
+
+def test_source_defaults_from_dm_fallback():
+    cfg = {"agents": {"assistant": {}, "dm_fallback": "assistant"}}
+    assert build_source_defaults(cfg) == {"discord": "assistant"}
+
+
+def test_explicit_source_defaults_block_overrides_and_merges():
+    cfg = {"agents": {"dm_fallback": "assistant"}, "source_defaults": {"sms": "assistant", "discord": "ops"}}
+    out = build_source_defaults(cfg)
+    assert out["discord"] == "ops"
+    assert out["sms"] == "assistant"

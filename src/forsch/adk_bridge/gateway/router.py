@@ -26,3 +26,14 @@ def resolve_agent(msg: CanonicalMessage, agents: Iterable[str], config: dict) ->
                 return name
 
     return (config.get("source_defaults") or {}).get(msg.source)
+
+
+def build_source_defaults(config: dict) -> dict[str, str]:
+    """Derive {source: default_agent}. Seeds discord from agents.dm_fallback, then
+    merges any explicit config['source_defaults'] on top (explicit wins)."""
+    defaults: dict[str, str] = {}
+    dm = (config.get("agents") or {}).get("dm_fallback")
+    if dm:
+        defaults["discord"] = dm
+    defaults.update(config.get("source_defaults") or {})
+    return defaults
