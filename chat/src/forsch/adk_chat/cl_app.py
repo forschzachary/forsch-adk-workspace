@@ -4,6 +4,7 @@ import httpx
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from forsch.adk_chat.hubert import stream_hubert
 from forsch.adk_chat.claudewrap import map_block
+from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 
 _TOKEN = os.environ.get("CHAT_TOKEN", "")
 _LITE = os.environ.get("LITELLM_BASE", "http://127.0.0.1:4000")
@@ -15,6 +16,30 @@ _VOICE = ("\n\nChat voice: real texting cadence, mostly lowercase, ASCII punctua
 
 # AskActionMessage timeout (seconds). On timeout the user can still type a reply.
 _ASK_TIMEOUT = 600
+
+
+# --- chat persistence: Chainlit history sidebar (session selection) + resume (message-history continuity) ---
+_HISTORY_DB = os.environ.get("CHAINLIT_PG_URL") or "sqlite+aiosqlite:////root/.hermes/workspace/adk/chat/data/chat_history.db"
+
+
+@cl.data_layer
+def _get_data_layer():
+    return SQLAlchemyDataLayer(conninfo=_HISTORY_DB)
+
+
+@cl.on_chat_resume
+async def resume(thread):
+    cl.user_session.set("who", cl.user_session.get("chat_profile") or "claude")
+    hist = []
+    for step in (thread.get("steps") or []):
+        t = step.get("type") or ""
+        content = step.get("output") or ""
+        if t == "user_message" and content:
+            hist.append({"role": "user", "content": content})
+        elif t in ("assistant_message", "llm") and content:
+            hist.append({"role": "assistant", "content": content})
+    cl.user_session.set("history", hist)
+
 
 
 @cl.header_auth_callback
