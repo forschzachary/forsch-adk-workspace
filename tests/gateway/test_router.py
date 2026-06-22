@@ -45,11 +45,13 @@ from forsch.adk_bridge.gateway.router import build_source_defaults
 
 
 def test_source_defaults_from_dm_fallback():
+    # dm_fallback no longer seeds discord source_defaults — it's injected at the adapter layer.
     cfg = {"agents": {"assistant": {}, "dm_fallback": "assistant"}}
-    assert build_source_defaults(cfg) == {"discord": "assistant"}
+    assert build_source_defaults(cfg) == {}
 
 
 def test_explicit_source_defaults_block_overrides_and_merges():
+    # explicit source_defaults still work as before; dm_fallback is irrelevant here.
     cfg = {"agents": {"dm_fallback": "assistant"}, "source_defaults": {"sms": "assistant", "discord": "ops"}}
     out = build_source_defaults(cfg)
     assert out["discord"] == "ops"

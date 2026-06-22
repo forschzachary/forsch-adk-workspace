@@ -201,7 +201,7 @@ class ADKBridgeClient(discord.Client):
         if message.author == self.user or message.author.bot:
             return
 
-        canonical = discord_to_canonical(message, self._channel_map)
+        canonical = discord_to_canonical(message, self._channel_map, self._dm_fallback)
         agent_name = gateway_resolve_agent(canonical, self._agents.keys(), {
             **self._config, "source_defaults": self._source_defaults,
         })

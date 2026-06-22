@@ -4,12 +4,18 @@ from __future__ import annotations
 from forsch.adk_bridge.gateway.message import CanonicalMessage
 
 
-def discord_to_canonical(message, channel_map: dict[str, str]) -> CanonicalMessage:
-    """Normalize a discord.Message. Resolves the channel->agent target (None for DMs,
-    so the router's source default applies). Mirrors the keying the bridge already uses:
-    sender=discord:<author id>, session_id=<agent>:<channel id>."""
+def discord_to_canonical(message, channel_map: dict[str, str], dm_fallback: str | None = None) -> CanonicalMessage:
+    """Normalize a discord.Message, mirroring the bridge's original _resolve_agent:
+    - DM (no guild)        -> dm_fallback agent
+    - mapped guild channel -> channel_map[name]
+    - UNMAPPED guild channel -> None (NO reply). dm_fallback applies ONLY to DMs, never to
+      unmapped channels (the regression this fixes).
+    Keying mirrors the bridge: sender=discord:<author id>, session_id=<agent|dm>:<channel id>."""
     is_dm = getattr(message, "guild", None) is None
-    target = None if is_dm else channel_map.get(message.channel.name.lower())
+    if is_dm:
+        target = dm_fallback
+    else:
+        target = channel_map.get(message.channel.name.lower())
     prefix = target or "dm"
     return CanonicalMessage(
         source="discord",

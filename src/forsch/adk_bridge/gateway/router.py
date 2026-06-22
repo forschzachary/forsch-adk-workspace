@@ -29,11 +29,7 @@ def resolve_agent(msg: CanonicalMessage, agents: Iterable[str], config: dict) ->
 
 
 def build_source_defaults(config: dict) -> dict[str, str]:
-    """Derive {source: default_agent}. Seeds discord from agents.dm_fallback, then
-    merges any explicit config['source_defaults'] on top (explicit wins)."""
-    defaults: dict[str, str] = {}
-    dm = (config.get("agents") or {}).get("dm_fallback")
-    if dm:
-        defaults["discord"] = dm
-    defaults.update(config.get("source_defaults") or {})
-    return defaults
+    """Per-source default agents from config['source_defaults'] only. NOTE: discord's dm_fallback
+    is NOT a source default — it applies ONLY to DMs (handled in discord_to_canonical). Seeding
+    discord here would wrongly make unmapped guild channels auto-reply (a fixed regression)."""
+    return dict(config.get("source_defaults") or {})
