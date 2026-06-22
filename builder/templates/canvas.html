@@ -256,6 +256,13 @@
     .chip:hover{transform:none;}
   }
 
+  /* ───────── blueprint annotation boxes ───────── */
+  .bpbox{position:absolute;pointer-events:none;border:1.5px dashed var(--brass);border-radius:6px;background:transparent;z-index:0;}
+  .bpbox .bplabel{position:absolute;top:-11px;left:8px;pointer-events:auto;cursor:move;font-size:11px;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 6px;color:var(--ink2);max-width:200px;white-space:nowrap;overflow:hidden;}
+  .bpbox .bprm{position:absolute;top:-11px;right:6px;pointer-events:auto;cursor:pointer;font-size:11px;color:var(--mut);background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 5px;}
+  .bpbox .bpresize{position:absolute;right:-5px;bottom:-5px;width:12px;height:12px;pointer-events:auto;cursor:nwse-resize;border-right:2px solid var(--brass);border-bottom:2px solid var(--brass);}
+  .canvas.boxmode{cursor:crosshair;}
+
   /* rail-resize grab handle + collapse toggle */
   #hdivider{position:relative;}
   #hdivider::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:3px;border-radius:2px;background:var(--line);opacity:.7;}
@@ -339,6 +346,7 @@ function selectAgent(id){
   state = { agent:a, instruction:a.instruction||'', tools:[...(a.tools||[])], model:a.model||'', group:a.group||'' };
   seen = new Set();   // fresh agent → let the whole graph ink itself in
   layout(); render(); renderToolbox();
+  if(typeof loadBoxes==='function') loadBoxes();
 }
 function applyView(fresh){
   const keepId = (state && state.agent) ? state.agent.id : (VIEW.agents[0] && VIEW.agents[0].id);
@@ -743,6 +751,58 @@ document.addEventListener('mousedown', e=>{
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePopovers(); } });
 window.addEventListener('resize', ()=>{ closePopovers(); });
 
+// ───────── blueprint boxes (visual annotation, click-through) ─────────
+let boxMode=false, boxes=[];
+function boxKey(){ return 'ab-boxes:'+((state&&state.agent)?state.agent.id:'_'); }
+function loadBoxes(){ try{ boxes=JSON.parse(localStorage.getItem(boxKey())||'[]'); }catch(e){ boxes=[]; } renderBoxes(); }
+function saveBoxes(){ try{ localStorage.setItem(boxKey(), JSON.stringify(boxes)); }catch(e){} }
+function nodeIdsInside(b){
+  return [...W.querySelectorAll('.node')].filter(n=>{ const x=n.offsetLeft+n.offsetWidth/2, y=n.offsetTop+n.offsetHeight/2;
+    return x>=b.x && x<=b.x+b.w && y>=b.y && y<=b.y+b.h; }).map(n=>n.dataset.id);
+}
+function renderBoxes(){
+  W.querySelectorAll('.bpbox').forEach(n=>n.remove());
+  for(const b of boxes){
+    const el=document.createElement('div'); el.className='bpbox'; el.dataset.id=b.id;
+    el.style.left=b.x+'px'; el.style.top=b.y+'px'; el.style.width=b.w+'px'; el.style.height=b.h+'px';
+    el.innerHTML='<span class="bplabel" title="drag to move, double-click to rename"></span><span class="bprm" title="delete">&times;</span><span class="bpresize"></span>';
+    el.querySelector('.bplabel').textContent=b.label||'group';
+    el.querySelector('.bprm').addEventListener('click', ev=>{ ev.stopPropagation(); boxes=boxes.filter(x=>x.id!==b.id); saveBoxes(); renderBoxes(); });
+    const lab=el.querySelector('.bplabel');
+    lab.addEventListener('dblclick', ev=>{ ev.stopPropagation(); lab.contentEditable='true'; lab.focus(); });
+    lab.addEventListener('blur', ()=>{ lab.contentEditable='false'; b.label=lab.textContent.trim()||'group'; saveBoxes(); });
+    dragHandle(lab, b, 'move'); dragHandle(el.querySelector('.bpresize'), b, 'resize');
+    W.insertBefore(el, W.firstChild);   // behind nodes
+  }
+}
+function dragHandle(handle, b, kind){
+  handle.addEventListener('mousedown', e=>{ e.preventDefault(); e.stopPropagation();
+    const sx=e.clientX, sy=e.clientY, ox=b.x, oy=b.y, ow=b.w, oh=b.h, k=cam.k;
+    function mv(ev){ const dx=(ev.clientX-sx)/k, dy=(ev.clientY-sy)/k;
+      if(kind==='move'){ b.x=ox+dx; b.y=oy+dy; } else { b.w=Math.max(40,ow+dx); b.h=Math.max(30,oh+dy); }
+      b.memberIds=nodeIdsInside(b); renderBoxes(); }
+    function up(){ saveBoxes(); document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
+}
+(function(){
+  const canvas=document.querySelector('.canvas');
+  const btn=document.createElement('button'); btn.className='act'; btn.id='boxbtn'; btn.title='Draw a blueprint box'; btn.innerHTML='&#9633; Box';
+  document.getElementById('refresh').insertAdjacentElement('beforebegin', btn);
+  btn.addEventListener('click', ()=>{ boxMode=!boxMode; canvas.classList.toggle('boxmode', boxMode); btn.classList.toggle('on', boxMode); });
+  function toWorld(ev){ const r=canvas.getBoundingClientRect(); return { x:(ev.clientX-r.left-cam.x)/cam.k, y:(ev.clientY-r.top-cam.y)/cam.k }; }
+  canvas.addEventListener('mousedown', e=>{
+    if(!boxMode || e.target.closest('.node') || e.target.closest('.bpbox')) return;
+    e.preventDefault();
+    const o=toWorld(e); const b={ id:'b'+Date.now(), x:o.x, y:o.y, w:1, h:1, label:'group', memberIds:[] };
+    function mv(ev){ const p=toWorld(ev); b.w=Math.max(1,p.x-o.x); b.h=Math.max(1,p.y-o.y); renderBoxes(); }
+    function up(){ if(b.w>20&&b.h>20){ b.memberIds=nodeIdsInside(b); boxes.push(b); saveBoxes(); }
+      boxMode=false; canvas.classList.remove('boxmode'); btn.classList.remove('on'); renderBoxes();
+      document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
+})();
+
 // boot
 (function(){ const dl=document.createElement('datalist'); dl.id='modellist';   // model picker suggestions
   (VIEW.models||[]).forEach(m=>{ const o=document.createElement('option'); o.value=m; dl.appendChild(o); });
@@ -804,7 +864,7 @@ document.getElementById('themebtn').addEventListener('click', ()=>{
 })();
 
 applyCam();
-if(VIEW.agents.length){ selectAgent(VIEW.agents[0].id); }
+if(VIEW.agents.length){ selectAgent(VIEW.agents[0].id); if(typeof loadBoxes==='function') loadBoxes(); }
 else { renderToolbox(); W.innerHTML='<div class="node" style="left:40px;top:40px"><div class="empty">No agents in the manifest yet.</div></div>'; }
 </script>
 </body>
