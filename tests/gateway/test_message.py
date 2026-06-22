@@ -17,3 +17,12 @@ def test_attachments_are_independent_per_instance():
     b = CanonicalMessage(source="sms", sender="+15559999999", text="y")
     a.attachments.append("file://1")
     assert b.attachments == []
+
+
+def test_existing_buffers_are_renderers():
+    from forsch.adk_bridge.gateway.adapter import Renderer
+    from forsch.adk_bridge.bridge import StreamBuffer, TextBuffer
+    assert isinstance(TextBuffer(), Renderer)
+    class _Chan:
+        id = 1
+    assert isinstance(StreamBuffer(_Chan()), Renderer)
