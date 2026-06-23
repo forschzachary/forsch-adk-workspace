@@ -3,12 +3,22 @@
 
 Usage:
   python3 serve.py [port]
+
+Security:
+  - Binds 127.0.0.1 (not 0.0.0.0). Only reachable from this box.
+  - Mutating endpoints require X-Graph-Secret header matching GRAPH_SERVER_SECRET env var.
+  - Read-only endpoints (/pulse, /clusters, /manifest, /models) are unauthenticated.
+  - /chat enforces session ownership, rate-limits per principal, and logs every invocation.
+  - CORS is pinned to the CRM origin on read-only endpoints; mutating endpoints have no CORS.
 """
 
+import hashlib
+import hmac
 import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -16,30 +26,109 @@ from urllib.parse import parse_qs, urlparse
 
 SPIKE_DIR = Path(__file__).resolve().parent
 WS = Path(os.environ.get("FORSCH_ADK_WORKSPACE", "/opt/data/workspace/adk"))
-CRM_URL = os.environ.get("CRM_URL", "https://frappe-web-production-7412.up.railway.app")
-CRM_API_KEY_FILE = Path("/opt/data/secrets/frappe-admin-api-key")
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 
-# ── CRM API client ──
+GRAPH_SECRET = os.environ.get("GRAPH_SERVER_SECRET", "")
+CRM_ORIGIN = os.environ.get("CRM_ORIGIN", "https://crm.forschfrontiers.com")
+CRM_API_KEY_FILE = Path("/opt/data/secrets/frappe-admin-api-key")
+CRM_BASE = os.environ.get("CRM_BASE_URL", "https://crm.forschfrontiers.com")
 
-def _crm_headers() -> dict:
-    """Return auth headers for CRM API calls."""
-    if CRM_API_KEY_FILE.exists():
+# ── Session ownership ──
+_session_owners: dict[str, tuple[str, float]] = {}  # session_id → (principal, created_at)
+_session_lock = threading.Lock()
+SESSION_MAX_AGE = 3600.0  # evict sessions older than 1 hour
+
+# ── Rate limiting ──
+_rate_state: dict[str, tuple[int, float]] = {}  # principal → (count, window_start)
+_rate_lock = threading.Lock()
+RATE_LIMIT = 30       # max requests
+RATE_WINDOW = 60.0    # per 60 seconds
+
+# ── Audit log ──
+AUDIT_LOG = SPIKE_DIR / "chat_audit.log"
+
+def _evict_stale():
+    """Periodic cleanup: evict stale sessions and rate-limit windows."""
+    while True:
+        time.sleep(300)  # every 5 minutes
+        now = time.time()
+        with _session_lock:
+            stale = [sid for sid, (_, created) in _session_owners.items()
+                     if now - created > SESSION_MAX_AGE]
+            for sid in stale:
+                del _session_owners[sid]
+        with _rate_lock:
+            stale_keys = [p for p, (c, ws) in _rate_state.items()
+                         if now - ws > RATE_WINDOW * 2]
+            for k in stale_keys:
+                del _rate_state[k]
+
+# Start eviction thread
+_evict_thread = threading.Thread(target=_evict_stale, daemon=True)
+_evict_thread.start()
+
+def _audit(principal: str, message: str, session_id: str | None, outcome: str):
+    """Append a chat invocation to the audit log."""
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    entry = json.dumps({
+        "ts": ts,
+        "principal": principal,
+        "message": message[:200],
+        "session_id": session_id,
+        "outcome": outcome,
+    })
+    try:
+        with open(AUDIT_LOG, "a") as f:
+            f.write(entry + "\n")
+    except Exception:
+        pass
+
+def _check_rate(principal: str) -> bool:
+    """Return True if within rate limit, False if exceeded."""
+    with _rate_lock:
+        now = time.time()
+        count, window_start = _rate_state.get(principal, (0, now))
+        if now - window_start > RATE_WINDOW:
+            count = 0
+            window_start = now
+        if count >= RATE_LIMIT:
+            return False
+        _rate_state[principal] = (count + 1, window_start)
+        return True
+
+def _crm_post(endpoint: str, data: dict) -> dict:
+    """Call a whitelisted CRM endpoint with the admin API key."""
+    if not CRM_API_KEY_FILE.exists():
+        return {"ok": False, "error": "CRM API key not available"}
+    try:
+        import urllib.request
         key = CRM_API_KEY_FILE.read_text().strip()
-        return {"Authorization": f"token {key}"}
-    return {}
-
+        url = f"{CRM_BASE}/api/method/{endpoint}"
+        body = json.dumps(data).encode()
+        req = urllib.request.Request(url, data=body, headers={
+            "Authorization": f"token {key}",
+            "Content-Type": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 def _crm_get(endpoint: str, params: dict = None) -> dict | None:
-    """Call a CRM whitelisted API endpoint. Returns parsed JSON or None."""
-    import urllib.request
-    import urllib.parse
-    url = f"{CRM_URL}/api/method/{endpoint}"
-    if params:
-        url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers=_crm_headers())
+    """Call a CRM whitelisted GET endpoint. Returns parsed JSON or None."""
+    if not CRM_API_KEY_FILE.exists():
+        return None
     try:
+        import urllib.request
+        import urllib.parse
+        key = CRM_API_KEY_FILE.read_text().strip()
+        url = f"{CRM_BASE}/api/method/{endpoint}"
+        if params:
+            url += "?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"token {key}",
+        })
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
     except Exception:
@@ -418,6 +507,22 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(SPIKE_DIR), **kwargs)
 
+    def _check_secret(self) -> bool:
+        """Return True if the request carries the correct X-Graph-Secret header.
+
+        Fails closed: if GRAPH_SERVER_SECRET is not set, all mutating requests are refused.
+        Uses hmac.compare_digest to prevent timing attacks.
+        """
+        if not GRAPH_SECRET:
+            return False  # fail closed — no secret configured means no access
+        req_secret = self.headers.get("X-Graph-Secret", "")
+        return hmac.compare_digest(req_secret, GRAPH_SECRET)
+
+    def _is_mutating(self, path: str) -> bool:
+        """Return True for endpoints that mutate state (require auth + no CORS)."""
+        return path in ("/spawn", "/wire", "/save-agent", "/promote",
+                        "/new-cluster", "/add-agent", "/chat")
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
@@ -436,6 +541,21 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(404, {"error": f"cluster '{cluster}' not found or build failed"})
                 return
             self._json_response(200, manifest)
+        elif path == "/models":
+            import urllib.request
+            try:
+                req = urllib.request.Request("http://127.0.0.1:4000/v1/models")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read())
+                    models = [m["id"] for m in data.get("data", [])]
+                    self._json_response(200, {"models": sorted(models)})
+            except Exception:
+                self._json_response(200, {"models": [
+                    "mimo-v2.5", "mimo-v2.5-pro", "gpt-5.5", "gpt-5.4", "gpt-4.1",
+                    "deepseek-v4-pro", "deepseek-v4-flash", "glm-5.2",
+                    "gemini-3-pro-preview", "gemini-3-flash-preview",
+                    "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
+                ]})
         else:
             super().do_GET()
 
@@ -446,6 +566,9 @@ class Handler(SimpleHTTPRequestHandler):
         params = parse_qs(body)
 
         if parsed.path == "/spawn":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
             agent_id = params.get("id", [None])[0]
             model = params.get("model", ["gpt-5.5"])[0]
             description = params.get("description", [f"{agent_id} agent"])[0] if agent_id else ""
@@ -466,11 +589,15 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(500, {"ok": False, "error": result.stderr[:500]})
 
         elif parsed.path == "/wire":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
             source = params.get("source", [None])[0]
             target = params.get("target", [None])[0]
             if not source or not target:
                 self._json_response(400, {"error": "missing source or target"})
                 return
+            # Fallback to local contract_check.py
             result = subprocess.run(
                 [sys.executable, str(SPIKE_DIR / "contract_check.py"), source, target],
                 capture_output=True, text=True,
@@ -478,7 +605,61 @@ class Handler(SimpleHTTPRequestHandler):
             check = json.loads(result.stdout) if result.returncode in (0, 1) else {"valid": False, "error": result.stderr}
             self._json_response(200, check)
 
+        elif parsed.path == "/save-agent":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
+            agent_id = params.get("agent_id", [None])[0]
+            field = params.get("field", [None])[0]
+            value = params.get("value", [None])[0]
+            if not agent_id or not field:
+                self._json_response(400, {"error": "missing agent_id or field"})
+                return
+            # Map frontend field names to CRM field names
+            field_map = {
+                "model": "model", "title": "title", "role": "role",
+                "status": "status", "safety_level": "safety_level",
+            }
+            if field not in field_map:
+                self._json_response(400, {"error": f"unknown field: {field}"})
+                return
+            # Deterministic: call CRM update_agent, no LLM in the loop
+            result = _crm_post("forsch_frontiers.sync.agent_graph.update_agent", {
+                "agent_id": agent_id,
+                field_map[field]: value or "",
+            })
+            if result and result.get("message", {}).get("ok"):
+                self._json_response(200, {"ok": True, "agent_id": agent_id, "field": field, "value": value})
+            else:
+                err = (result or {}).get("message", {}).get("error", "CRM call failed")
+                self._json_response(500, {"error": str(err)})
+
+        elif parsed.path == "/models":
+            # Fetch model list from LiteLLM proxy
+            import urllib.request
+            try:
+                req = urllib.request.Request("http://127.0.0.1:4000/v1/models")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read())
+                    models = [m["id"] for m in data.get("data", [])]
+                    self._json_response(200, {"models": sorted(models)})
+            except Exception:
+                # Hardcoded fallback if proxy unreachable
+                self._json_response(200, {"models": [
+                    "mimo-v2.5", "mimo-v2.5-pro", "gpt-5.5", "gpt-5.4", "gpt-4.1",
+                    "deepseek-v4-pro", "deepseek-v4-flash", "glm-5.2",
+                    "gemini-3-pro-preview", "gemini-3-flash-preview",
+                    "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
+                    "groq-compound-mini", "groq-gpt-oss-20b",
+                    "groq-llama-4-scout", "groq-llama-8b",
+                    "nvidia-llama-vision-11b", "nvidia-llama-vision-90b",
+                    "nvidia-nemotron-30b", "mistral-large",
+                ]})
+
         elif parsed.path == "/promote":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
             agent_id = params.get("agent_id", [None])[0]
             target_role = params.get("target_role", [None])[0]
             if not agent_id or not target_role:
@@ -488,6 +669,9 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/new-cluster":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
             name = params.get("name", [None])[0]
             if not name:
                 self._json_response(400, {"error": "missing name"})
@@ -496,6 +680,9 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/add-agent":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
             cluster = params.get("cluster", [None])[0]
             agent_id = params.get("agent_id", [None])[0]
             if not cluster or not agent_id:
@@ -505,12 +692,54 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/chat":
-            message = params.get("message", [None])[0]
-            session_id = params.get("session_id", [None])[0]
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
+            # Parse JSON body (CRM proxy sends JSON, browser sends form-encoded)
+            principal = None
+            message = None
+            session_id = None
+            try:
+                json_body = json.loads(body) if body else {}
+                principal = json_body.get("principal")
+                message = json_body.get("message")
+                session_id = json_body.get("session_id")
+            except json.JSONDecodeError:
+                pass
+            # Fallback to form-encoded (browser direct, deprecated but kept for transition)
+            if not message:
+                message = params.get("message", [None])[0]
+                session_id = params.get("session_id", [None])[0]
             if not message:
                 self._json_response(400, {"error": "missing message"})
                 return
+            if not principal:
+                principal = "unknown"
+
+            # Rate limit
+            if not _check_rate(principal):
+                self._json_response(429, {"error": "rate limit exceeded"})
+                return
+
+            # Session ownership
+            if session_id:
+                with _session_lock:
+                    entry = _session_owners.get(session_id)
+                    if entry:
+                        owner, _ = entry
+                        if owner != principal:
+                            self._json_response(403, {"error": "session owned by another principal"})
+                            return
+
             result = chat_with_hubert(message, session_id)
+
+            # Track session ownership
+            if result.get("ok") and result.get("session_id"):
+                with _session_lock:
+                    _session_owners[result["session_id"]] = (principal, time.time())
+
+            outcome = "ok" if result.get("ok") else f"error: {result.get('error', 'unknown')[:100]}"
+            _audit(principal, message, session_id, outcome)
             self._json_response(200 if result.get("ok") else 500, result)
 
         else:
@@ -518,15 +747,20 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # CORS: read-only endpoints get pinned origin; mutating endpoints get none
+        path = self.path.rstrip("/") or "/"
+        if not self._is_mutating(path):
+            self.send_header("Access-Control-Allow-Origin", CRM_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Graph-Secret")
         self.end_headers()
 
     def _json_response(self, code, data):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # CORS: read-only endpoints get pinned origin; mutating endpoints get none
+        if not self._is_mutating(self.path.rstrip("/") or "/"):
+            self.send_header("Access-Control-Allow-Origin", CRM_ORIGIN)
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
 
@@ -536,6 +770,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8888
-    server = HTTPServer(("0.0.0.0", port), Handler)
-    print(f"Live Agent Graph server on http://0.0.0.0:{port}")
+    server = HTTPServer(("127.0.0.1", port), Handler)
+    print(f"Live Agent Graph server on http://127.0.0.1:{port} (localhost only)")
     server.serve_forever()

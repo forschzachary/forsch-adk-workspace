@@ -77,6 +77,100 @@
     background: #161b22; border: 1px solid #30363d; border-radius: 6px;
     padding: 8px 12px; font-size: 12px; max-width: 300px; display: none;
   }
+  /* ── Inspect panel (right slide-in) ── */
+  #inspect {
+    position: fixed; top: 40px; right: 0; bottom: 0; width: 320px; z-index: 20;
+    background: #161b22; border-left: 1px solid #30363d;
+    transform: translateX(100%); transition: transform 0.2s ease;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #inspect.open { transform: translateX(0); }
+  #inspect-header {
+    padding: 12px 16px; border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #inspect-header .close-btn {
+    margin-left: auto; background: none; border: none; color: #8b949e;
+    cursor: pointer; font-size: 16px; padding: 2px 6px;
+  }
+  #inspect-header .close-btn:hover { color: #ff7b72; }
+  #inspect-header h3 { margin: 0; font-size: 14px; color: #58a6ff; }
+  #inspect-body { flex: 1; overflow-y: auto; padding: 12px 16px; font-size: 12px; }
+  #inspect-body .field { margin-bottom: 10px; }
+  #inspect-body .field label { display: block; color: #8b949e; margin-bottom: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #inspect-body .field input, #inspect-body .field select, #inspect-body .field textarea {
+    width: 100%; padding: 5px 8px; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 4px; color: #c9d1d9; font-size: 12px; font-family: inherit;
+  }
+  #inspect-body .field textarea { min-height: 60px; resize: vertical; }
+  #inspect-body .field input:focus, #inspect-body .field select:focus, #inspect-body .field textarea:focus {
+    outline: none; border-color: #58a6ff;
+  }
+  #inspect-body .field .ro { color: #8b949e; padding: 5px 0; }
+  #inspect-body .field .contract-tag {
+    display: inline-block; padding: 2px 6px; margin: 2px; border-radius: 3px;
+    font-size: 10px; background: #21262d; border: 1px solid #30363d;
+  }
+  #inspect-body .field .contract-tag.accept { border-color: #3fb950; color: #3fb950; }
+  #inspect-body .field .contract-tag.emit { border-color: #58a6ff; color: #58a6ff; }
+  #inspect-body .gate-row { display: flex; gap: 6px; margin-top: 4px; }
+  #inspect-body .gate-pill {
+    padding: 3px 8px; border-radius: 3px; font-size: 10px; font-weight: 600;
+    background: #21262d; border: 1px solid #30363d; color: #8b949e;
+  }
+  #inspect-body .gate-pill.pass { border-color: #3fb950; color: #3fb950; }
+  #inspect-footer {
+    padding: 10px 16px; border-top: 1px solid #30363d;
+    display: flex; gap: 8px;
+  }
+  #inspect-footer button {
+    flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #30363d;
+    cursor: pointer; font-size: 12px;
+  }
+  #inspect-footer .save-btn { background: #238636; border-color: #2ea043; color: #fff; }
+  #inspect-footer .save-btn:hover { background: #2ea043; }
+  #inspect-footer .wire-btn { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  #inspect-footer .wire-btn:hover { background: #388bfd; }
+  #inspect-footer .wire-btn.active { background: #da3633; border-color: #da3633; }
+  #inspect .save-msg { padding: 0 16px 8px; font-size: 11px; min-height: 16px; }
+  #inspect .save-msg.ok { color: #3fb950; }
+  #inspect .save-msg.err { color: #ff7b72; }
+  /* ── AI sidecar (bottom-left chat) ── */
+  #ai-sidecar {
+    position: fixed; bottom: 0; left: 0; width: 380px; height: 320px; z-index: 20;
+    background: #161b22; border-top: 1px solid #30363d; border-right: 1px solid #30363d;
+    border-radius: 0 8px 0 0; display: flex; flex-direction: column;
+    transform: translateY(100%); transition: transform 0.2s ease;
+  }
+  #ai-sidecar.open { transform: translateY(0); }
+  #ai-sidecar-header {
+    padding: 8px 12px; border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  #ai-sidecar-header .avatar { width: 20px; height: 20px; border-radius: 50%; background: #d29922; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  #ai-sidecar-header span { font-size: 12px; color: #8b949e; }
+  #ai-sidecar-header .close-btn { margin-left: auto; background: none; border: none; color: #8b949e; cursor: pointer; font-size: 14px; }
+  #ai-sidecar-header .close-btn:hover { color: #ff7b72; }
+  #ai-messages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12px; }
+  #ai-messages .msg { margin-bottom: 8px; padding: 6px 10px; border-radius: 6px; max-width: 90%; }
+  #ai-messages .msg.user { background: #1f6feb22; border: 1px solid #1f6feb44; margin-left: auto; }
+  #ai-messages .msg.hubert { background: #d2992222; border: 1px solid #d2992244; }
+  #ai-messages .msg .sender { font-size: 10px; color: #8b949e; margin-bottom: 2px; }
+  #ai-messages .msg.system { background: #21262d; border: 1px solid #30363d; color: #8b949e; font-style: italic; text-align: center; max-width: 100%; }
+  #ai-input-row { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid #30363d; flex-shrink: 0; }
+  #ai-input-row input { flex: 1; padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; }
+  #ai-input-row input:focus { outline: none; border-color: #58a6ff; }
+  #ai-input-row button { padding: 6px 12px; background: #238636; border: 1px solid #2ea043; border-radius: 4px; color: #fff; cursor: pointer; font-size: 12px; }
+  #ai-input-row button:hover { background: #2ea043; }
+  #ai-input-row button:disabled { background: #21262d; border-color: #30363d; color: #484f58; cursor: not-allowed; }
+  /* ── Wiring mode overlay ── */
+  #wire-status {
+    position: fixed; top: 44px; left: 50%; transform: translateX(-50%); z-index: 25;
+    background: #1f6feb; color: #fff; padding: 6px 16px; border-radius: 4px;
+    font-size: 12px; display: none;
+  }
+  #wire-status.active { display: block; }
+  #wire-status .cancel { margin-left: 8px; background: none; border: none; color: #fff; text-decoration: underline; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -113,6 +207,7 @@
 
   <div class="sep"></div>
   <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
+  <button class="action-btn" id="chat-toggle" style="margin-top:4px;background:#1a1a2e;border-color:#d29922;color:#d29922;">💬 Hubert chat</button>
 
   <div class="sep"></div>
   <div class="legend">
@@ -138,6 +233,31 @@
 </div>
 <div id="info">Loading…</div>
 <div id="tooltip"></div>
+<div id="inspect">
+  <div id="inspect-header">
+    <h3 id="inspect-title">—</h3>
+    <button class="close-btn" id="inspect-close">&times;</button>
+  </div>
+  <div id="inspect-body"></div>
+  <div class="save-msg" id="inspect-save-msg"></div>
+  <div id="inspect-footer">
+    <button class="save-btn" id="inspect-save">Save changes</button>
+    <button class="wire-btn" id="inspect-wire">Wire to...</button>
+  </div>
+</div>
+<div id="ai-sidecar">
+  <div id="ai-sidecar-header">
+    <div class="avatar">🐱</div>
+    <span>Hubert</span>
+    <button class="close-btn" id="ai-close">&times;</button>
+  </div>
+  <div id="ai-messages"></div>
+  <div id="ai-input-row">
+    <input id="ai-input" placeholder="Ask about this graph..." maxlength="500">
+    <button id="ai-send">Send</button>
+  </div>
+</div>
+<div id="wire-status">Select target node... <button class="cancel" id="wire-cancel">Cancel</button></div>
 
 <script src="https://unpkg.com/force-graph@1.43.5/dist/force-graph.min.js"></script>
 <script>
@@ -573,10 +693,15 @@ function initGraph(data) {
       }
     })
     .onNodeClick(node => {
+      // Wire mode: handle wire target click
+      if (wireMode) { handleWireClick(node); return; }
+      // Lineage lens: click agent to set root
       if (currentLens === 'lineage' && node.type === 'agent') {
         lineageRoot = node.id;
         renderLens();
       }
+      // Always open inspect panel on click
+      openInspect(node);
     })
     .onNodeHover(node => {
       if (node) {
@@ -741,6 +866,9 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
 // ── Refresh ──
 document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
 
+// ── Chat toggle ──
+document.getElementById('chat-toggle').addEventListener('click', toggleSidecar);
+
 // ── Pulse (live traffic particles) ──
 let pulseInterval;
 function startPulse() {
@@ -766,9 +894,291 @@ function startPulse() {
   }, 3000);
 }
 
+// ── Inspect panel (feature A: node inspect/edit) ──
+let inspectedNode = null;
+let wireMode = false;
+let wireSource = null;
+let availableModels = [];
+
+function openInspect(node) {
+  inspectedNode = node;
+  const panel = document.getElementById('inspect');
+  const title = document.getElementById('inspect-title');
+  const body = document.getElementById('inspect-body');
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.textContent = '';
+
+  title.textContent = node.name;
+  title.style.color = COLORS[node.type] || '#c9d1d9';
+
+  let html = '';
+
+  // Read-only fields
+  html += `<div class="field"><label>ID</label><div class="ro">${node.id}</div></div>`;
+  html += `<div class="field"><label>Type</label><div class="ro">${node.type}</div></div>`;
+  html += `<div class="field"><label>State</label><div class="ro">${node.state}</div></div>`;
+
+  // Editable fields for agents
+  if (node.type === 'agent') {
+    html += `<div class="field"><label>Title</label><input id="insp-title" value="${esc(node.name)}"></div>`;
+    html += `<div class="field"><label>Role</label><input id="insp-role" value="${esc(node.role || '')}"></div>`;
+
+    // Model dropdown (feature D)
+    const modelOpts = availableModels.map(m =>
+      `<option value="${m}" ${m === node.model ? 'selected' : ''}>${m}</option>`
+    ).join('');
+    html += `<div class="field"><label>Model</label><select id="insp-model">
+      <option value="">— none —</option>${modelOpts}</select></div>`;
+
+    html += `<div class="field"><label>Safety Level</label>
+      <select id="insp-safety">
+        <option value="L0" ${(node.gates||{}).L0 ? 'selected' : ''}>L0</option>
+        <option value="L1" ${(node.gates||{}).L1 ? 'selected' : ''}>L1</option>
+        <option value="L2" ${(node.gates||{}).L2 ? 'selected' : ''}>L2</option>
+        <option value="L3" ${(node.gates||{}).L3 ? 'selected' : ''}>L3</option>
+      </select></div>`;
+  }
+
+  // Artifact
+  html += `<div class="field"><label>Artifact</label><div class="ro" style="word-break:break-all;font-size:11px;">${esc(node.artifact || '—')}</div></div>`;
+
+  // Contract (accepts/emits)
+  if (node.contract) {
+    html += `<div class="field"><label>Accepts</label><div>`;
+    (node.contract.accepts || []).forEach(a => {
+      html += `<span class="contract-tag accept">${a}</span>`;
+    });
+    html += `</div></div>`;
+    html += `<div class="field"><label>Emits</label><div>`;
+    (node.contract.emits || []).forEach(e => {
+      html += `<span class="contract-tag emit">${e}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Gates
+  if (node.gates) {
+    html += `<div class="field"><label>Gates</label><div class="gate-row">`;
+    ['L0','L1','L2','L3'].forEach(g => {
+      html += `<span class="gate-pill ${node.gates[g] ? 'pass' : ''}">${g} ${node.gates[g] ? '✓' : '✗'}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Links count
+  const links = graphData.links.filter(l => lid(l.source) === node.id || lid(l.target) === node.id);
+  html += `<div class="field"><label>Connections</label><div class="ro">${links.length} links</div></div>`;
+
+  body.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+document.getElementById('inspect-close').addEventListener('click', () => {
+  document.getElementById('inspect').classList.remove('open');
+  inspectedNode = null;
+});
+
+document.getElementById('inspect-save').addEventListener('click', () => {
+  if (!inspectedNode || inspectedNode.type !== 'agent') return;
+  const agentId = inspectedNode.id.replace('agent:', '');
+  const saveMsg = document.getElementById('inspect-save-msg');
+  const fields = {};
+  const titleEl = document.getElementById('insp-title');
+  const roleEl = document.getElementById('insp-role');
+  const modelEl = document.getElementById('insp-model');
+  const safetyEl = document.getElementById('insp-safety');
+
+  // Collect changed fields
+  if (titleEl && titleEl.value !== inspectedNode.name) fields.title = titleEl.value;
+  if (roleEl && roleEl.value !== (inspectedNode.role || '')) fields.role = roleEl.value;
+  if (modelEl && modelEl.value !== (inspectedNode.model || '')) fields.model = modelEl.value;
+  if (safetyEl) {
+    const level = safetyEl.value;
+    const newGates = {L0: level >= 'L0', L1: level >= 'L1', L2: level >= 'L2', L3: level >= 'L3'};
+    // Map safety level to status
+    if (level === 'L0') fields.status = 'draft';
+    else if (level === 'L1') fields.status = 'queued';
+    else if (level === 'L2') fields.status = 'in_progress';
+    else fields.status = 'complete';
+  }
+
+  if (!Object.keys(fields).length) {
+    saveMsg.className = 'save-msg'; saveMsg.textContent = 'No changes'; return;
+  }
+
+  // Save each field
+  saveMsg.className = 'save-msg'; saveMsg.textContent = 'Saving...';
+  let saved = 0, total = Object.keys(fields).length;
+  for (const [field, value] of Object.entries(fields)) {
+    const body = `agent_id=${encodeURIComponent(agentId)}&field=${encodeURIComponent(field)}&value=${encodeURIComponent(value)}`;
+    fetch('/save-agent', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+      .then(r => r.json())
+      .then(data => {
+        saved++;
+        if (data.error) { saveMsg.className = 'save-msg err'; saveMsg.textContent = `Error: ${data.error}`; return; }
+        if (saved === total) {
+          saveMsg.className = 'save-msg ok'; saveMsg.textContent = `Saved ${saved} field(s)`;
+          // Update local node
+          if (fields.title) inspectedNode.name = fields.title;
+          if (fields.model) inspectedNode.model = fields.model;
+          if (fields.role) inspectedNode.role = fields.role;
+          if (fields.status) inspectedNode.state = fields.status;
+          fg.graphData(graphData);
+          setTimeout(() => { saveMsg.textContent = ''; }, 3000);
+        }
+      })
+      .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+  }
+});
+
+// ── Wire mode (feature C: contract-checked wiring) ──
+document.getElementById('inspect-wire').addEventListener('click', () => {
+  if (!inspectedNode) return;
+  wireMode = true;
+  wireSource = inspectedNode;
+  document.getElementById('wire-status').classList.add('active');
+  document.getElementById('inspect-wire').classList.add('active');
+  document.getElementById('inspect-wire').textContent = 'Wiring...';
+});
+
+document.getElementById('wire-cancel').addEventListener('click', () => {
+  wireMode = false;
+  wireSource = null;
+  document.getElementById('wire-status').classList.remove('active');
+  document.getElementById('inspect-wire').classList.remove('active');
+  document.getElementById('inspect-wire').textContent = 'Wire to...';
+});
+
+function handleWireClick(node) {
+  if (!wireMode || !wireSource || node.id === wireSource.id) return;
+  wireMode = false;
+  document.getElementById('wire-status').classList.remove('active');
+  document.getElementById('inspect-wire').classList.remove('active');
+  document.getElementById('inspect-wire').textContent = 'Wire to...';
+
+  const source = wireSource.id;
+  const target = node.id;
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.className = 'save-msg'; saveMsg.textContent = `Checking contract: ${source} → ${target}...`;
+
+  const body = `source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`;
+  fetch('/wire', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.valid) {
+        saveMsg.className = 'save-msg ok';
+        saveMsg.textContent = `✓ Contract OK: ${data.message || source + ' → ' + target}`;
+        // Add link to graph
+        graphData.links.push({ source, target, kind: 'wired' });
+        fg.graphData(graphData);
+      } else {
+        saveMsg.className = 'save-msg err';
+        saveMsg.textContent = `✗ ${data.error || data.message || 'incompatible contracts'}`;
+        if (data.source_contract) {
+          saveMsg.textContent += ` (accepts: ${data.source_contract.accepts.join(', ')})`;
+        }
+      }
+      wireSource = null;
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; wireSource = null; });
+}
+
+// ── AI Sidecar (feature B: context-aware chat) ──
+let aiSessionId = null;
+const aiMessages = document.getElementById('ai-messages');
+const aiInput = document.getElementById('ai-input');
+const aiSend = document.getElementById('ai-send');
+
+function toggleSidecar() {
+  document.getElementById('ai-sidecar').classList.toggle('open');
+}
+
+document.getElementById('ai-close').addEventListener('click', () => {
+  document.getElementById('ai-sidecar').classList.remove('open');
+});
+
+function addAiMessage(text, role) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  if (role === 'user') {
+    div.innerHTML = `<div class="sender">You</div>${esc(text)}`;
+  } else if (role === 'hubert') {
+    div.innerHTML = `<div class="sender">Hubert</div>${text}`;
+  } else {
+    div.textContent = text;
+  }
+  aiMessages.appendChild(div);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+}
+
+function sendAiMessage() {
+  const text = aiInput.value.trim();
+  if (!text) return;
+
+  // Build context
+  let context = '';
+  if (currentCluster) context += `[cluster: ${currentCluster}] `;
+  if (inspectedNode) context += `[selected: ${inspectedNode.name} (${inspectedNode.type})] `;
+  if (graphData) context += `[graph: ${graphData.node_count} nodes, ${graphData.link_count} links] `;
+
+  addAiMessage(text, 'user');
+  aiInput.value = '';
+  aiSend.disabled = true;
+  addAiMessage('thinking...', 'system');
+
+  const body = `message=${encodeURIComponent(context + text)}${aiSessionId ? '&session_id=' + encodeURIComponent(aiSessionId) : ''}`;
+  fetch('/chat', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+    .then(r => r.json())
+    .then(data => {
+      // Remove "thinking..." message
+      const systemMsgs = aiMessages.querySelectorAll('.msg.system');
+      if (systemMsgs.length) systemMsgs[systemMsgs.length - 1].remove();
+
+      if (data.ok) {
+        addAiMessage(data.response || '(empty response)', 'hubert');
+        if (data.session_id) aiSessionId = data.session_id;
+      } else {
+        addAiMessage(`Error: ${data.error}`, 'system');
+      }
+      aiSend.disabled = false;
+    })
+    .catch(err => {
+      const systemMsgs = aiMessages.querySelectorAll('.msg.system');
+      if (systemMsgs.length) systemMsgs[systemMsgs.length - 1].remove();
+      addAiMessage(`Error: ${err.message}`, 'system');
+      aiSend.disabled = false;
+    });
+}
+
+aiSend.addEventListener('click', sendAiMessage);
+aiInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendAiMessage(); });
+
+// ── Fetch models list ──
+function loadModels() {
+  fetch('/models')
+    .then(r => r.json())
+    .then(data => { availableModels = data.models || []; })
+    .catch(() => {});
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') {
+    if (wireMode) { document.getElementById('wire-cancel').click(); return; }
+    if (document.getElementById('inspect').classList.contains('open')) {
+      document.getElementById('inspect-close').click(); return;
+    }
+  }
+  if (e.key === 'i' || e.key === 'I') { toggleSidecar(); }
+});
+
 // ── Init ──
 loadClusters();
 loadRegistryAgents();
+loadModels();
 startPulse();
 </script>
 </body>

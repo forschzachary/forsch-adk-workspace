@@ -1,22 +1,16 @@
-# Agent Registry — single canonical source of truth for every agent
-#
-# This file is the ONE place an agent is defined. Clusters reference
-# agents by id (members list in cluster.yaml). Editing an agent here
-# updates every cluster that references it. No drift, ever.
-#
-# Format mirrors agents.yaml from the ADK workspace but is owned by
-# the live-agent-graph cockpit, not the ADK factory.
-
 version: 1
 defaults:
   agent_class: LlmAgent
 agents:
   stability:
-    description: Stability governor for the Forsch ADK workspace with local_write authority to fix root causes.
+    description: Stability governor for the Forsch ADK workspace with local_write
+      authority to fix root causes.
     discord_channels:
     - '#team-stability'
     safety_level: local_write
-    purpose: 'Audit the Forsch ADK workspace and adjacent local services, and act on findings: edit configs, restart Docker containers, and run host commands to fix underlying root causes.'
+    purpose: 'Audit the Forsch ADK workspace and adjacent local services, and act
+      on findings: edit configs, restart Docker containers, and run host commands
+      to fix underlying root causes.'
     tools:
     - get_workspace_inventory
     - get_git_state
@@ -32,7 +26,9 @@ agents:
     discord_channels:
     - '#team-assistant'
     safety_level: read_only
-    purpose: 'Forsch''s assistant lead. Own productivity and home-assistant work: daily planning, calendar, reminders, smart home, household logistics, and practical follow-through.'
+    purpose: 'Forsch''s assistant lead. Own productivity and home-assistant work:
+      daily planning, calendar, reminders, smart home, household logistics, and practical
+      follow-through.'
     tools: []
     model: gpt-5.5
     group: hubert-team-lead
@@ -41,7 +37,7 @@ agents:
     discord_channels:
     - '#team-brand'
     safety_level: read_only
-    purpose: 'Brand and marketing lead for Forsch.'
+    purpose: Brand and marketing lead for Forsch.
     tools: []
     model: gpt-5.5
   build:
@@ -49,7 +45,7 @@ agents:
     discord_channels:
     - '#team-build'
     safety_level: read_only
-    purpose: 'Product and engineering lead for Forsch.'
+    purpose: Product and engineering lead for Forsch.
     tools: []
     model: glm-5.2
     group: hubert-team-lead
@@ -58,7 +54,7 @@ agents:
     discord_channels:
     - '#team-social'
     safety_level: read_only
-    purpose: 'Social media lead for Forsch.'
+    purpose: Social media lead for Forsch.
     tools: []
     model: gpt-5.5
   ops:
@@ -66,7 +62,8 @@ agents:
     discord_channels:
     - '#team-ops'
     safety_level: read_only
-    purpose: 'Infrastructure and operations lead for Forsch. Focus on infrastructure health, deployment state, incident triage, and read-only business telemetry.'
+    purpose: Infrastructure and operations lead for Forsch. Focus on infrastructure
+      health, deployment state, incident triage, and read-only business telemetry.
     tools:
     - get_crm_health_snapshot
     - list_recent_crm_leads
@@ -76,7 +73,8 @@ agents:
     description: Shelby's personal grocery + reminders assistant.
     discord_channels: []
     safety_level: local_write
-    purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over time, spot trends, and sync a shopping list to Apple Reminders.'
+    purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over
+      time, spot trends, and sync a shopping list to Apple Reminders.'
     tools:
     - log_groceries
     - get_grocery_log
@@ -87,7 +85,8 @@ agents:
     discord_channels:
     - '#team-linkedin'
     safety_level: read_only
-    purpose: 'Build and maintain LinkedIn posting tools, scheduling, and automation for the linkedin-ops cluster.'
+    purpose: Build and maintain LinkedIn posting tools, scheduling, and automation
+      for the linkedin-ops cluster.
     tools: []
     model: gpt-5.5
   brand-specialist:
@@ -95,14 +94,15 @@ agents:
     discord_channels:
     - '#team-linkedin'
     safety_level: read_only
-    purpose: 'Own visual identity, brand voice, and content strategy for LinkedIn posts.'
+    purpose: Own visual identity, brand voice, and content strategy for LinkedIn posts.
     tools: []
     model: gpt-5.5
   copywriter:
-    description: LinkedIn copywriter — post drafts, hooks, captions, and engagement copy.
+    description: LinkedIn copywriter — post drafts, hooks, captions, and engagement
+      copy.
     discord_channels:
     - '#team-linkedin'
     safety_level: read_only
-    purpose: 'Write LinkedIn post drafts, hooks, captions, and engagement copy.'
+    purpose: Write LinkedIn post drafts, hooks, captions, and engagement copy.
     tools: []
     model: gpt-5.5
