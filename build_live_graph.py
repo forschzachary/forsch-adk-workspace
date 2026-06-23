@@ -19,17 +19,158 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import yaml
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 SPIKE_DIR = Path(__file__).resolve().parent
 ADK_WS = Path("/opt/data/workspace/adk")  # real ADK workspace for filesystem gate checks
+
+# ── Validation schemas (disk-first, CRM-second — gatekeeper before builder) ──
+
+VALID_STATUSES = ("blank", "planning", "building", "stable", "archived")
+
+
+class ClusterConfig(BaseModel):
+    """Schema for clusters/<name>/cluster.yaml"""
+    name: str
+    description: str = ""
+    members: list[str] = Field(default_factory=list, min_length=1)
+    config: dict = Field(default_factory=dict)
+
+    @field_validator("members")
+    @classmethod
+    def no_duplicates(cls, v: list[str]) -> list[str]:
+        if len(v) != len(set(v)):
+            raise ValueError(f"duplicate agent ids in members: {v}")
+        return v
+
+
+class ProjectMeta(BaseModel):
+    """Schema for clusters/<name>/project.md front-matter"""
+    goal: str = ""
+    status: str = "blank"
+    handoff_pct: int = Field(default=0, ge=0, le=100)
+    data_connectors: list[str] = Field(default_factory=list)
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, v: str) -> str:
+        if v not in VALID_STATUSES:
+            raise ValueError(f"status '{v}' not in {VALID_STATUSES}")
+        return v
+
+
+class AgentDef(BaseModel):
+    """Schema for one agent entry in registry/agents/agents.yaml"""
+    description: str = ""
+    discord_channels: list[str] = Field(default_factory=list)
+    safety_level: str = "read_only"
+    purpose: str = ""
+    tools: list[str] = Field(default_factory=list)
+    model: str = ""
+    role: str = "plain"
+    group: str | None = None
+
+
+class AgentRegistry(BaseModel):
+    """Schema for registry/agents/agents.yaml"""
+    version: int = 1
+    defaults: dict = Field(default_factory=dict)
+    agents: dict[str, AgentDef] = Field(default_factory=dict)
+
+
+def validate_cluster(cluster_name: str) -> list[str]:
+    """Validate a cluster's config files. Returns list of error messages (empty = valid).
+
+    Checks:
+      1. cluster.yaml exists and parses against ClusterConfig
+      2. project.md exists with valid front-matter
+      3. every member id exists in registry/agents/agents.yaml
+      4. no duplicate agent ids across membership
+    """
+    errors: list[str] = []
+
+    cluster_yaml = SPIKE_DIR / "clusters" / cluster_name / "cluster.yaml"
+    project_md = SPIKE_DIR / "clusters" / cluster_name / "project.md"
+    registry_yaml = SPIKE_DIR / "registry" / "agents" / "agents.yaml"
+
+    # 1. cluster.yaml
+    if not cluster_yaml.exists():
+        errors.append(f"cluster.yaml missing: {cluster_yaml}")
+    else:
+        try:
+            raw = yaml.safe_load(cluster_yaml.read_text()) or {}
+            ClusterConfig.model_validate(raw)
+        except ValidationError as e:
+            errors.append(f"cluster.yaml invalid ({cluster_yaml}): {e}")
+        except yaml.YAMLError as e:
+            errors.append(f"cluster.yaml parse error ({cluster_yaml}): {e}")
+
+    # 2. project.md
+    if not project_md.exists():
+        errors.append(f"project.md missing: {project_md}")
+    else:
+        try:
+            text = project_md.read_text()
+            if text.startswith("---"):
+                parts = text.split("---", 2)
+                if len(parts) >= 3:
+                    front = yaml.safe_load(parts[1]) or {}
+                    ProjectMeta.model_validate(front)
+                else:
+                    errors.append(f"project.md has no closing --- front-matter delimiter: {project_md}")
+            else:
+                errors.append(f"project.md missing front-matter (no opening ---): {project_md}")
+        except ValidationError as e:
+            errors.append(f"project.md front-matter invalid ({project_md}): {e}")
+        except yaml.YAMLError as e:
+            errors.append(f"project.md front-matter parse error ({project_md}): {e}")
+
+    # 3. cross-file: every member must exist in registry
+    if registry_yaml.exists():
+        try:
+            reg_raw = yaml.safe_load(registry_yaml.read_text()) or {}
+            reg = AgentRegistry.model_validate(reg_raw)
+            if cluster_yaml.exists():
+                try:
+                    cluster_raw = yaml.safe_load(cluster_yaml.read_text()) or {}
+                    member_ids = cluster_raw.get("members", [])
+                    for mid in member_ids:
+                        if mid not in reg.agents:
+                            errors.append(f"agent '{mid}' in cluster '{cluster_name}' not found in registry ({registry_yaml})")
+                except yaml.YAMLError:
+                    pass  # already caught above
+        except ValidationError as e:
+            errors.append(f"registry invalid ({registry_yaml}): {e}")
+        except yaml.YAMLError as e:
+            errors.append(f"registry parse error ({registry_yaml}): {e}")
+    else:
+        errors.append(f"registry missing: {registry_yaml}")
+
+    return errors
+
 
 # ── CLI ──
 
 parser = argparse.ArgumentParser(description="Build per-cluster agent graph manifest")
 parser.add_argument("--cluster", help="Cluster name (reads clusters/<name>/cluster.yaml)")
+parser.add_argument("--validate", action="store_true", help="Validate cluster configs only (no manifest output)")
 args = parser.parse_args()
+
+# ── Validation gate (disk-first — fail loud before anything touches the graph) ──
+
+if args.cluster:
+    errors = validate_cluster(args.cluster)
+    if errors:
+        print(f"VALIDATION FAILED for cluster '{args.cluster}':", file=sys.stderr)
+        for e in errors:
+            print(f"  • {e}", file=sys.stderr)
+        sys.exit(1)
+    if args.validate:
+        print(f"Cluster '{args.cluster}' — all checks passed.")
+        sys.exit(0)
 
 # ── Load data sources ──
 
