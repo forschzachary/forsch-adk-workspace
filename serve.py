@@ -231,9 +231,20 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
 # ── Hubert Chat endpoint ──
 
 def chat_with_hubert(message: str, session_id: str | None = None) -> dict:
-    """Send a message to Hubert via hermes chat -q and return the response."""
-    cmd = ["hermes", "chat", "-q", message, "--quiet", "--source", "tool",
-           "--ignore-user-config", "--ignore-rules",
+    """Send a message to Hubert via hermes chat -q and return the response.
+
+    Loads SOUL.md and rules so Hubert responds as Hubert, not generic Hermes.
+    Context prefix tells Hubert he's in the Builder Cockpit.
+    """
+    context_msg = (
+        "[Builder Cockpit context] You are Hubert, responding inside the "
+        "Live Agent Graph Builder Cockpit chat sidecar. "
+        "The user is interacting with the agent graph visualization. "
+        "Stay in character. Be concise. No bullets in chat. "
+        "If asked about agents/graph/clusters, reference the live data.\n\n"
+        f"User: {message}"
+    )
+    cmd = ["hermes", "chat", "-q", context_msg, "--quiet", "--source", "tool",
            "-m", "gpt-5.5", "--provider", "custom",
            "-t", "terminal,file,web,skills,search,session_search,memory,todo,delegation"]
     if session_id:
