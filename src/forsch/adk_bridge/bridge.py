@@ -20,15 +20,11 @@ from urllib.parse import urlsplit
 
 import discord
 import yaml
-from google.adk.artifacts import InMemoryArtifactService
-from google.adk.memory import InMemoryMemoryService
-from google.adk.runners import Runner, RunConfig
 from google.adk.sessions import DatabaseSessionService
-from google.genai import types
 
-from forsch.adk_bridge.gateway.render import _visible_parts_text
 from forsch.adk_bridge.gateway.router import resolve_agent as gateway_resolve_agent, build_source_defaults
 from forsch.adk_bridge.gateway.sources_discord import discord_to_canonical
+from forsch.adk_bridge.run import stream_agent
 
 
 # ── config loading ──────────────────────────────────────────────────────────
@@ -194,6 +190,7 @@ class ADKBridgeClient(discord.Client):
         self._crm_assignee_map = _build_crm_assignee_map(config)
         self._flush_interval = config.get("streaming", {}).get("flush_interval_sec", 0.5)
         self._max_chars = config.get("streaming", {}).get("max_message_chars", 1900)
+        self._run_timeout = float(config.get("run_timeout_sec", 180))
         self._log = logging.getLogger("adk_bridge")
 
     async def on_ready(self) -> None:
@@ -221,27 +218,20 @@ class ADKBridgeClient(discord.Client):
             max_chars=self._max_chars,
         )
         try:
-            await self._run_agent_text(
-                agent_name=agent_name,
-                agent=agent,
-                user_id=canonical.sender,
-                session_id=f"{agent_name}:{message.channel.id}",
-                text=message.content,
-                buffer=buffer,
+            await asyncio.wait_for(
+                self._run_agent_text(
+                    agent_name=agent_name,
+                    agent=agent,
+                    user_id=canonical.sender,
+                    session_id=f"{agent_name}:{message.channel.id}",
+                    text=message.content,
+                    buffer=buffer,
+                ),
+                timeout=self._run_timeout,
             )
         except Exception:
             self._log.exception("agent run failed for %s", agent_name)
             await message.channel.send("(something went wrong — ops agent will see the log)")
-
-    def _resolve_agent(self, message: discord.Message) -> Optional[str]:
-        """Resolve which agent handles this message."""
-        # DM → fallback
-        if message.guild is None:
-            return self._dm_fallback
-
-        # Guild channel → channel map
-        channel_name = message.channel.name.lower()
-        return self._channel_map.get(channel_name)
 
     async def handle_crm_task_assigned(self, payload: dict) -> dict:
         """Route an outbound CRM task assignment into the targeted ADK agent."""
@@ -260,14 +250,21 @@ class ADKBridgeClient(discord.Client):
 
         task_id = payload.get("task_id") or payload.get("name") or "unknown"
         buffer = TextBuffer()
-        await self._run_agent_text(
-            agent_name=agent_name,
-            agent=agent,
-            user_id="crm:frappe",
-            session_id=f"crm:{agent_name}:{task_id}",
-            text=_format_crm_task_message(payload),
-            buffer=buffer,
-        )
+        try:
+            await asyncio.wait_for(
+                self._run_agent_text(
+                    agent_name=agent_name,
+                    agent=agent,
+                    user_id="crm:frappe",
+                    session_id=f"crm:{agent_name}:{task_id}",
+                    text=_format_crm_task_message(payload),
+                    buffer=buffer,
+                ),
+                timeout=self._run_timeout,
+            )
+        except asyncio.TimeoutError:
+            self._log.warning("CRM run timed out for %s task %s", agent_name, task_id)
+            return {"ok": False, "error": "run_timeout", "agent": agent_name, "task_id": task_id}
         return {"ok": True, "agent": agent_name, "task_id": task_id, "response": buffer.text}
 
     async def _run_agent_text(
@@ -279,54 +276,18 @@ class ADKBridgeClient(discord.Client):
         text: str,
         buffer: StreamBuffer | TextBuffer,
     ) -> None:
-        """Run one text message through ADK and stream into the supplied buffer."""
-        content = types.Content(
-            parts=[types.Part.from_text(text=text)],
-            role="user",
-        )
+        """Run one text message through ADK and stream into the supplied buffer.
 
-        session = await self._session_service.get_session(
-            app_name=agent_name,
-            user_id=user_id,
-            session_id=session_id,
-        )
-        if session is None:
-            await self._session_service.create_session(
-                app_name=agent_name,
-                user_id=user_id,
-                session_id=session_id,
-            )
-
-        runner = Runner(
-            agent=agent,
-            app_name=agent_name,
-            session_service=self._session_service,
-            artifact_service=InMemoryArtifactService(),
-            memory_service=InMemoryMemoryService(),
-            auto_create_session=False,
-        )
-
-        StreamingMode = RunConfig.model_fields["streaming_mode"].annotation
-        run_config = RunConfig(streaming_mode=StreamingMode.SSE)
-
-        async for event in runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=content,
-            run_config=run_config,
+        Delegates to run.stream_agent so the Discord/CRM path shares ONE run loop
+        with the Chainlit surface — including thought-part filtering and the
+        final-aggregate dedup (a streaming run re-sends the full text in the final
+        event; stream_agent skips it, so replies are never doubled)."""
+        async for chunk in stream_agent(
+            agent, agent_name, self._session_service, user_id, session_id, text
         ):
-            if event.content and event.content.parts:
-                chunk = _visible_parts_text(event.content.parts)
-                if chunk:
-                    buffer.feed(chunk)
-
+            buffer.feed(chunk)
             if buffer.should_flush():
                 await buffer.flush()
-
-            if event.is_final_response():
-                await buffer.flush_final()
-                break
-
         await buffer.flush_final()
 
 
@@ -356,10 +317,13 @@ async def _read_http_request(
 
 
 def _crm_request_authorized(headers: dict[str, str], crm_cfg: dict) -> bool:
-    """Validate optional shared-secret auth for CRM webhooks."""
+    """Validate the shared-secret auth for CRM webhooks. Fails CLOSED: if no
+    secret is configured (or its env var is unset) the request is rejected, so a
+    misconfigured deploy can never expose an open task-injection endpoint that
+    spends model budget and runs agent side-effects."""
     secret_env = crm_cfg.get("secret_env")
     if not secret_env:
-        return True
+        return False
     expected = os.environ.get(secret_env)
     if not expected:
         return False

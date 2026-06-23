@@ -72,6 +72,12 @@ async def handle_comment(comment, *, client, runtime, config, ledger, bot_email,
 
     disc_name = comment.get("reference_name")
     discussion = client.get_discussion(disc_name)
+    if discussion is None:
+        # Discussion deleted/unreadable (or no reference_name). Mark seen so this
+        # comment is not retried forever — otherwise a single poison comment would
+        # raise every poll cycle and wedge all later comments behind it.
+        ledger.mark(cid)
+        return {"ok": False, "skipped": "no_discussion", "comment": cid}
     if discussion.get("closed_at"):  # Frappe rejects comments on closed discussions
         return {"ok": False, "skipped": "closed", "comment": cid}
 

@@ -65,7 +65,7 @@ def main() -> None:
         key = _generate(mk, "adk-" + a, a)
         lines.append(f"{var}={key}")
         added += 1
-        print(f"  {a}: created adk-{a} -> {key[:12]}…")
+        print(f"  {a}: created adk-{a} (key -> {var} in bridge.env)")
     if added:
         ENVP.write_text("\n".join(lines) + "\n")
     print(f"seed-keys: +{added} key(s) created, {len(AGENTS) - added} already present")
