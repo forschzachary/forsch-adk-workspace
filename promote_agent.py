@@ -13,7 +13,9 @@ from pathlib import Path
 
 import yaml
 
-WS = Path(sys.argv[1]) if len(sys.argv) > 3 else Path("/opt/data/workspace/adk")
+from workspace_resolver import workspace_root
+
+WS = Path(sys.argv[1]) if len(sys.argv) > 3 else workspace_root() / "adk"
 SPIKE_DIR = WS / "spikes" / "live-agent-graph"
 
 

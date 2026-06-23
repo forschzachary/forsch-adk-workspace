@@ -24,8 +24,10 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from workspace_resolver import workspace_root
+
 SPIKE_DIR = Path(__file__).resolve().parent
-WS = Path(os.environ.get("FORSCH_ADK_WORKSPACE", "/opt/data/workspace/adk"))
+WS = workspace_root() / "adk"
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 

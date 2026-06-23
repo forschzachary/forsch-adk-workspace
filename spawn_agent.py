@@ -19,7 +19,9 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
-WS = Path(os.environ.get("FORSCH_ADK_WORKSPACE", "/opt/data/workspace/adk"))
+from workspace_resolver import workspace_root
+
+WS = workspace_root() / "adk"
 
 AGENT_PY_TEMPLATE = '''"""agent_{id}_agent — blank agent (spawned from Live Agent Graph).
 

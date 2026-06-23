@@ -24,8 +24,10 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from workspace_resolver import workspace_root
+
 SPIKE_DIR = Path(__file__).resolve().parent
-ADK_WS = Path("/opt/data/workspace/adk")  # real ADK workspace for filesystem gate checks
+ADK_WS = workspace_root() / "adk"  # real ADK workspace for filesystem gate checks
 
 # ── Validation schemas (disk-first, CRM-second — gatekeeper before builder) ──
 
