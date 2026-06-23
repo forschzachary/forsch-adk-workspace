@@ -24,9 +24,15 @@ from forsch.adk_factory.renderer import (
     render_agent,
     render_agent_package,
 )
+from forsch.adk_factory.validation import (
+    validate_agent_tools,
+    check_deploy_gate,
+    DeployGateBlocked,
+    format_report_text,
+)
 
 
-def plan(manifest_path, agent_id: str) -> dict:
+def plan(manifest_path, agent_id: str, *, manifest=None, spec=None) -> dict:
     """Dry-run: return {agent, files:[{path, content}]}. Writes nothing.
 
     Renders BOTH generated surfaces: the ADK Web wrapper (``root_agent.yaml``)
@@ -39,12 +45,19 @@ def plan(manifest_path, agent_id: str) -> dict:
     hubert-team-lead) would render with their preamble stripped. Preambles live
     next to the manifest at ``<workspace>/preambles/``, so the workspace root is
     derived from the manifest path, not from any output dir.
+
+    Pass ``manifest`` and ``spec`` to avoid re-loading (used by apply() which
+    already loaded them for validation).
     """
     manifest_path = Path(manifest_path)
-    manifest = load_manifest(manifest_path)
-    spec = manifest.agents[agent_id]
+    if manifest is None:
+        manifest = load_manifest(manifest_path)
+    if spec is None:
+        spec = manifest.agents[agent_id]
     workspace = manifest_path.resolve().parent.parent  # <ws>/agent_specs/agents.yaml
-    spec.instruction = compose_instruction(str(workspace), spec)
+    # Compose on a COPY — never mutate the shared manifest spec in place, or a second
+    # render of it (apply --all reuse, plan-then-apply) would double the preamble.
+    spec = spec.model_copy(update={"instruction": compose_instruction(str(workspace), spec)})
     rendered = {**render_agent(spec), **render_agent_package(spec)}
     files = [{"path": rel, "content": content} for rel, content in rendered.items()]
     return {"agent": agent_id, "files": files}
@@ -95,9 +108,29 @@ def write_files(
         raise
 
 
-def apply(manifest_path, agent_id: str, workspace_root) -> dict:
-    """Render an agent and write its files under workspace_root, safely."""
-    result = plan(manifest_path, agent_id)
+def apply(manifest_path, agent_id: str, workspace_root, *, force: bool = False, skip_validate: bool = False) -> dict:
+    """Render an agent and write its files under workspace_root, safely.
+
+    By default, runs the deploy gate: validates all tools before writing and
+    blocks if any are red. Pass ``force=True`` to bypass the gate (writes
+    anyway with a warning). Pass ``skip_validate=True`` to skip validation
+    entirely.
+    """
+    manifest_path = Path(manifest_path)
+    manifest = load_manifest(manifest_path)
+    spec = manifest.agents[agent_id]
+
+    if not skip_validate:
+        report = validate_agent_tools(spec)
+        try:
+            check_deploy_gate(agent_id, report)
+        except DeployGateBlocked as e:
+            if force:
+                print(f"[{agent_id}] ⚠ deploy gate bypassed (--force): {e.report.summary['red']} red tool(s)")
+            else:
+                raise
+
+    result = plan(manifest_path, agent_id, manifest=manifest, spec=spec)
     written = write_files(workspace_root, result["files"])
     return {"agent": agent_id, "written": written}
 
@@ -125,16 +158,25 @@ def main(argv: Optional[list[str]] = None) -> int:
         prog="forsch.adk_factory.cli",
         description="Render ADK agent packages (root_agent.yaml + agent.py) from the manifest.",
     )
-    p.add_argument("command", choices=["apply", "plan"],
-                   help="apply writes files; plan is a dry-run that lists targets")
+    p.add_argument("command", choices=["apply", "plan", "validate"],
+                   help="apply writes files; plan is a dry-run that lists targets; validate checks tool health")
     p.add_argument("--agent", help="agent id to render")
     p.add_argument("--all", action="store_true", help="render every agent in the manifest")
     p.add_argument("--manifest",
                    help="path to agents.yaml (default: <workspace>/agent_specs/agents.yaml)")
     p.add_argument("--workspace", help="workspace root (default: $FORSCH_ADK_WORKSPACE)")
+    p.add_argument("--target", default="cloud",
+                   choices=["cloud", "local", "hetzner", "railway"],
+                   help="which box to validate against (default: cloud)")
+    p.add_argument("--ttl", type=int, default=24,
+                   help="behavioral TTL in hours (default: 24)")
+    p.add_argument("--force", action="store_true",
+                   help="bypass the deploy gate (write even if tools are red)")
+    p.add_argument("--skip-validate", action="store_true",
+                   help="skip validation entirely (no gate check)")
     args = p.parse_args(argv)
 
-    if not args.agent and not args.all:
+    if not args.agent and not args.all and args.command != "validate":
         p.error("specify --agent <id> or --all")
 
     workspace = Path(args.workspace) if args.workspace else _default_workspace()
@@ -142,6 +184,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         Path(args.manifest) if args.manifest
         else workspace / "agent_specs" / "agents.yaml"
     )
+
+    # validate is a different code path — no agent selection needed
+    if args.command == "validate":
+        manifest = load_manifest(manifest_path)
+        agent_ids = [args.agent] if args.agent else list(manifest.agents)
+        for aid in agent_ids:
+            spec = manifest.agents[aid]
+            report = validate_agent_tools(spec, target=args.target, ttl_hours=args.ttl)
+            print(f"\n[{aid}]")
+            print(format_report_text(report))
+        return 0
 
     manifest = load_manifest(manifest_path)
     if args.all:
@@ -158,10 +211,16 @@ def main(argv: Optional[list[str]] = None) -> int:
             for f in result["files"]:
                 print(f"    {f['path']}")
         else:
-            result = apply(manifest_path, aid, workspace)
-            print(f"[apply] {aid}: wrote {len(result['written'])} file(s)")
-            for w in result["written"]:
-                print(f"    {w}")
+            try:
+                result = apply(manifest_path, aid, workspace,
+                               force=args.force, skip_validate=args.skip_validate)
+                print(f"[apply] {aid}: wrote {len(result['written'])} file(s)")
+                for w in result["written"]:
+                    print(f"    {w}")
+            except DeployGateBlocked as e:
+                print(f"[apply] {aid}: BLOCKED — {e.report.summary['red']} red tool(s)")
+                print(format_report_text(e.report))
+                return 1
     return 0
 
 
