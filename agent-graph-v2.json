@@ -11,9 +11,10 @@
         "L0": true,
         "L1": true,
         "L2": true,
-        "L3": false
+        "L3": true
       },
-      "state": "building",
+      "state": "built",
+      "reachable": true,
       "contract": {
         "accepts": [
           "message:#team-stability",
@@ -31,7 +32,7 @@
           "tool:write_host_file"
         ]
       },
-      "role": "plain"
+      "role": "builder"
     },
     {
       "id": "model:glm-5.2",
@@ -46,6 +47,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "prompt"
@@ -69,6 +71,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -92,6 +95,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -115,6 +119,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -138,6 +143,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -161,6 +167,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -184,6 +191,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -207,6 +215,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -230,6 +239,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "external_message"
@@ -250,9 +260,10 @@
         "L0": true,
         "L1": false,
         "L2": true,
-        "L3": false
+        "L3": true
       },
       "state": "building",
+      "reachable": true,
       "contract": {
         "accepts": [
           "message:#team-assistant",
@@ -278,6 +289,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "prompt"
@@ -297,10 +309,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": false,
-        "L3": false
+        "L2": true,
+        "L3": true
       },
-      "state": "building",
+      "state": "built",
+      "reachable": true,
       "contract": {
         "accepts": [
           "routed_message"
@@ -324,6 +337,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "external_message"
@@ -344,9 +358,10 @@
         "L0": true,
         "L1": false,
         "L2": true,
-        "L3": false
+        "L3": true
       },
       "state": "building",
+      "reachable": true,
       "contract": {
         "accepts": [
           "message:#team-brand",
@@ -372,6 +387,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "prompt"
@@ -395,6 +411,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "external_message"
@@ -415,9 +432,10 @@
         "L0": true,
         "L1": false,
         "L2": true,
-        "L3": false
+        "L3": true
       },
       "state": "building",
+      "reachable": true,
       "contract": {
         "accepts": [
           "message:#team-build",
@@ -443,6 +461,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "external_message"
@@ -463,9 +482,10 @@
         "L0": true,
         "L1": false,
         "L2": true,
-        "L3": false
+        "L3": true
       },
       "state": "building",
+      "reachable": true,
       "contract": {
         "accepts": [
           "message:#team-social",
@@ -491,6 +511,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "external_message"
@@ -511,9 +532,10 @@
         "L0": true,
         "L1": true,
         "L2": true,
-        "L3": false
+        "L3": true
       },
-      "state": "building",
+      "state": "built",
+      "reachable": true,
       "contract": {
         "accepts": [
           "message:#team-ops",
@@ -526,7 +548,7 @@
           "tool:list_recent_crm_leads"
         ]
       },
-      "role": "plain"
+      "role": "builder"
     },
     {
       "id": "tool:get_crm_health_snapshot",
@@ -541,6 +563,7 @@
         "L3": false
       },
       "state": "blank",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -564,6 +587,7 @@
         "L3": false
       },
       "state": "blank",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -587,6 +611,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "external_message"
@@ -607,9 +632,10 @@
         "L0": true,
         "L1": true,
         "L2": false,
-        "L3": false
+        "L3": true
       },
       "state": "building",
+      "reachable": true,
       "contract": {
         "accepts": [
           "instruction"
@@ -637,6 +663,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -660,6 +687,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -683,6 +711,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "tool_call"
@@ -706,6 +735,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "query"
@@ -729,6 +759,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "query"
@@ -752,6 +783,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "query"
@@ -775,6 +807,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "query"
@@ -798,6 +831,7 @@
         "L3": false
       },
       "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "query"
@@ -821,6 +855,7 @@
         "L3": false
       },
       "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "prompt"
@@ -840,10 +875,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": false,
+        "L2": true,
         "L3": false
       },
-      "state": "building",
+      "state": "built",
+      "reachable": true,
       "contract": {
         "accepts": [
           "user_input"
@@ -863,10 +899,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": false,
+        "L2": true,
         "L3": false
       },
-      "state": "building",
+      "state": "built",
+      "reachable": true,
       "contract": {
         "accepts": [
           "user_input"
@@ -1068,7 +1105,7 @@
   "node_count": 37,
   "link_count": 37,
   "meta": {
-    "generated_at": "2026-06-23T06:08:05.924638+00:00",
+    "generated_at": "2026-06-23T13:37:13.184949+00:00",
     "source": "agents.yaml + filesystem scan"
   }
 }

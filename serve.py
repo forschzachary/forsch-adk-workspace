@@ -9,12 +9,29 @@ import json
 import os
 import subprocess
 import sys
+import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs
 
 SPIKE_DIR = Path(__file__).resolve().parent
 WS = Path(os.environ.get("FORSCH_ADK_WORKSPACE", "/opt/data/workspace/adk"))
+
+
+def promote_agent(agent_id: str, target_role: str) -> dict:
+    """Operator-confirmed role promotion. Delegates to promote_agent.py (factory venv)."""
+    factory_python = WS / "factory" / ".venv" / "bin" / "python"
+    py = str(factory_python) if factory_python.exists() else sys.executable
+    result = subprocess.run(
+        [py, str(SPIKE_DIR / "promote_agent.py"), agent_id, target_role],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode == 0:
+        try:
+            return json.loads(result.stdout.strip().split("\n")[-1])
+        except json.JSONDecodeError:
+            return {"ok": False, "error": f"parse error: {result.stdout[:200]}"}
+    return {"ok": False, "error": result.stderr[:300] or f"exit {result.returncode}"}
 
 
 def get_pulse():
@@ -91,9 +108,21 @@ def get_pulse():
             live_set.add(e["target"])
         live_nodes = list(live_set)
 
+    # Round-trip liveness for ops slice (read from cache, populated by cron/manual run)
+    roundtrip = {}
+    cache_file = SPIKE_DIR / ".roundtrip_cache.json"
+    try:
+        if cache_file.exists():
+            roundtrip = json.loads(cache_file.read_text())
+    except Exception:
+        pass
+
     return {"active_edges": active_edges, "live_nodes": live_nodes,
             "bridge_alive": bridge_alive, "authsome_alive": authsome_alive,
-            "litellm_alive": litellm_alive}
+            "litellm_alive": litellm_alive,
+            "roundtrip": roundtrip.get("ops", {}),
+            "reachable_nodes": [n["id"] for n in graph.get("nodes", [])
+                               if n.get("reachable")] if graph_path.exists() else []}
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -131,6 +160,36 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(200, {"ok": True, "agent_id": agent_id, "output": result.stdout})
             else:
                 self._json_response(500, {"ok": False, "error": result.stderr[:500]})
+        elif self.path == "/wire":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode()
+            params = parse_qs(body)
+            source = params.get("source", [None])[0]
+            target = params.get("target", [None])[0]
+
+            if not source or not target:
+                self._json_response(400, {"error": "missing source or target"})
+                return
+
+            result = subprocess.run(
+                [sys.executable, str(SPIKE_DIR / "contract_check.py"), source, target],
+                capture_output=True, text=True,
+            )
+            check = json.loads(result.stdout) if result.returncode in (0, 1) else {"valid": False, "error": result.stderr}
+            self._json_response(200, check)
+        elif self.path == "/promote":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode()
+            params = parse_qs(body)
+            agent_id = params.get("agent_id", [None])[0]
+            target_role = params.get("target_role", [None])[0]
+
+            if not agent_id or not target_role:
+                self._json_response(400, {"error": "missing agent_id or target_role"})
+                return
+
+            result = promote_agent(agent_id, target_role)
+            self._json_response(200 if result.get("ok") else 400, result)
         else:
             self._json_response(404, {"error": "not found"})
 

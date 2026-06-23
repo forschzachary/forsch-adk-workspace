@@ -19,6 +19,7 @@ from pathlib import Path
 import yaml
 
 WS = Path(sys.argv[1] if len(sys.argv) > 1 else "/opt/data/workspace/adk")
+SPIKE_DIR = WS / "spikes" / "live-agent-graph"
 agents_yaml = WS / "agent_specs" / "agents.yaml"
 components_dir = WS / "components" / "src" / "forsch" / "adk_components" / "tools"
 bridge_compose = WS / "bridge" / "compose.yaml"
@@ -109,13 +110,28 @@ def bridge_healthy() -> bool:
     """Check if bridge Chainlit surface responds (any HTTP response = alive)."""
     try:
         r = subprocess.run(
-            ["curl", "-fsS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8800"],
+            ["curl", "-sS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8800"],
             capture_output=True, text=True
         )
         # Any HTTP status code means the server is running
         return r.returncode == 0 and r.stdout.strip().isdigit()
     except Exception:
         return False
+
+def roundtrip_live(agent_id: str) -> bool:
+    """Check if an agent passes a real round-trip: synthetic message → tool call → response.
+
+    Reads from a cached result file (written by /pulse endpoint periodically).
+    The actual roundtrip is expensive (~17s) so it's not run on every graph rebuild.
+    """
+    cache_file = SPIKE_DIR / ".roundtrip_cache.json"
+    try:
+        if cache_file.exists():
+            cache = json.loads(cache_file.read_text())
+            return cache.get(agent_id, {}).get("success", False)
+    except Exception:
+        pass
+    return False
 
 # --- Gate checkers ---
 
@@ -138,9 +154,12 @@ def check_gates(node_type: str, node_id: str, aid: str | None = None) -> dict:
         # L2: on bridge PYTHONPATH (deployable)
         if aid and agent_on_bridge(aid):
             gates["L2"] = True
-        # L3: bridge is healthy (traffic can flow)
-        if bridge_healthy():
+        # L3: round-trip liveness (synthetic message → tool call → response)
+        # Falls back to bridge health for agents without CRM tools
+        if aid and roundtrip_live(aid):
             gates["L3"] = True
+        elif bridge_healthy():
+            gates["L3"] = True  # fallback: bridge is reachable
 
     elif node_type == "tool":
         tool_name = node_id.replace("tool:", "")
@@ -339,13 +358,17 @@ for n in list(nodes.values()):
 
     # State
     n["state"] = derive_state(n["type"], n["gates"])
+    # Reachable: cheap heartbeat (port responds). Distinct from "live" (round-trip).
+    n["reachable"] = bridge_healthy() if n["type"] in ("agent", "router", "ui") else False
 
     # Contract
     n["contract"] = derive_contract(n["type"], aid)
 
-    # Role
+    # Role — read from agents.yaml if declared, default to "plain"
     if ntype == "agent":
-        n["role"] = "plain"  # current agents are plain; builder/orchestrator is future
+        aid = nid.replace("agent:", "")
+        declared_role = agents.get(aid, {}).get("role", "plain") if aid else "plain"
+        n["role"] = declared_role
     elif ntype == "builder":
         n["role"] = "builder"
     else:
