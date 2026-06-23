@@ -73,8 +73,8 @@
   <div class="legend">
     <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span> agent</div>
     <div class="legend-item"><span class="legend-dot" style="background:#f0883e"></span> tool</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span> logic</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#d2a8ff"></span> intake</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span> logic (model)</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#d2a8ff"></span> interface</div>
     <div class="legend-item"><span class="legend-dot" style="background:#ff7b72"></span> router</div>
     <div class="legend-item"><span class="legend-dot" style="background:#a5d6ff"></span> database</div>
     <div class="legend-item"><span class="legend-dot" style="background:#f0c040"></span> ui</div>
@@ -98,25 +98,84 @@ const COLORS = {
 const STATE_SIZE = { blank: 3, building: 5, built: 7, live: 10, error: 6 };
 
 // ── PADI swim-lane geometry ──
-// Top band: INTAKE + UI (coupled).  Then ROUTER.  Then AGENT.
-// Bottom band: TOOLS + LOGIC + DATA (grouped under "tools").
+// Top: INTERFACES (intake channel-types + hosted ui).  Then ROUTER.
+// Then AGENT + LOGIC (the model IS the agent's brain/operations).
+// Bottom: TOOLS + DATA.
 const LANE_Y = {
   intake: -210, ui: -210,
   router: -70,
-  agent: 70,
-  tool: 210, logic: 210, database: 210,
+  agent: 70, logic: 70,
+  tool: 210, database: 210,
 };
 const BANDS = [
-  { cy: -210, label: 'INTAKE · UI',          fill: 'rgba(210,168,255,0.07)' },
-  { cy: -70,  label: 'ROUTER',               fill: 'rgba(255,123,114,0.07)' },
-  { cy: 70,   label: 'AGENT',                fill: 'rgba(88,166,255,0.07)' },
-  { cy: 210,  label: 'TOOLS · LOGIC · DATA',  fill: 'rgba(240,136,62,0.07)' },
+  { cy: -210, label: 'INTERFACES',    fill: 'rgba(210,168,255,0.07)' },
+  { cy: -70,  label: 'ROUTER',        fill: 'rgba(255,123,114,0.07)' },
+  { cy: 70,   label: 'AGENT · LOGIC', fill: 'rgba(88,166,255,0.07)' },
+  { cy: 210,  label: 'TOOLS · DATA',  fill: 'rgba(240,136,62,0.07)' },
 ];
 const RAIL_X = 900;          // left dependency rail x-position (graph coords)
 const BAND_X0 = -1800, BAND_X1 = 1800;
 
 // id extractor — force-graph mutates link.source/target from string to node obj
 const lid = x => (x && typeof x === 'object') ? x.id : x;
+
+// ── Interface abstraction ──
+// Collapse per-channel intake nodes into channel-TYPE interfaces. This is a
+// VIEW transform: the manifest keeps the per-channel detail (truth); the
+// cockpit shows the higher-level hierarchy. Only configured types appear.
+const CHANNEL_LABEL = {
+  discord: 'Discord', text: 'Text', sms: 'Text', email: 'Email',
+  telegram: 'Telegram', slack: 'Slack', web: 'Hosted Chat', hosted: 'Hosted Chat',
+};
+function channelTypeOf(n) {
+  if (n.channel) return n.channel;
+  if (n.id.startsWith('chan:')) return 'discord';   // legacy per-channel nodes
+  if (n.id.startsWith('iface:')) return n.id.split(':')[1];
+  return (n.id.split(':')[1] || 'other');
+}
+function collapseIntake(data) {
+  const intakeNodes = data.nodes.filter(n => n.type === 'intake');
+  if (!intakeNodes.length) return data;
+  const remap = {};      // old intake id -> iface id
+  const groups = {};     // type -> { type, names[], members[] }
+  intakeNodes.forEach(n => {
+    const t = channelTypeOf(n);
+    remap[n.id] = 'iface:' + t;
+    (groups[t] = groups[t] || { type: t, names: [], members: [] });
+    groups[t].names.push(n.name);
+    groups[t].members.push(n);
+  });
+  const ifaceNodes = Object.values(groups).map(g => {
+    const has = s => g.members.some(m => m.state === s);
+    const state = has('live') ? 'live' : has('built') ? 'built' : has('building') ? 'building' : 'blank';
+    const gates = ['L0','L1','L2','L3'].reduce((o,k) => { o[k] = g.members.some(m => m.gates && m.gates[k]); return o; }, {});
+    return {
+      id: 'iface:' + g.type, name: CHANNEL_LABEL[g.type] || g.type,
+      kind: 'intake', type: 'intake', channel: g.type,
+      artifact: g.type === 'discord' ? ('Discord channels: ' + g.names.join(', ')) : (g.members[0].artifact || ''),
+      gates, state, reachable: false,
+      contract: { accepts: ['external_message'], emits: ['routed_message'] },
+      role: 'plain', members: g.names,
+    };
+  });
+  data.nodes = data.nodes.filter(n => n.type !== 'intake').concat(ifaceNodes);
+  // rewrite + dedupe links through the remap
+  const seen = new Set();
+  const newLinks = [];
+  for (const l of data.links) {
+    const s = remap[lid(l.source)] || lid(l.source);
+    const t = remap[lid(l.target)] || lid(l.target);
+    if (s === t) continue;
+    const key = s + '→' + t + '→' + (l.kind || '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    newLinks.push({ source: s, target: t, kind: l.kind });
+  }
+  data.links = newLinks;
+  data.node_count = data.nodes.length;
+  data.link_count = data.links.length;
+  return data;
+}
 
 // ── State ──
 let graphData, currentLens = 'all', lineageRoot = null, showDeps = false;
@@ -131,13 +190,14 @@ function loadGraph() {
     fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
   ])
     .then(([data, caps]) => {
-      // Merge the cross-cutting capability (rail) nodes from their single
-      // source of truth. Skip any id already present to stay idempotent.
       const have = new Set(data.nodes.map(n => n.id));
       (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
       (caps.links || []).forEach(l => data.links.push(l));
-      data.node_count = data.nodes.length;
-      data.link_count = data.links.length;
+      // Relabel the hosted web chat surface
+      const hosted = data.nodes.find(n => n.id === 'ui:bridge');
+      if (hosted) hosted.name = 'Hosted Chat';
+      // Collapse per-channel intake into channel-type interfaces (view abstraction)
+      collapseIntake(data);
       graphData = data;
       info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}`;
       if (!fg) initGraph(graphData);
@@ -184,7 +244,6 @@ function getVisibleData() {
     base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
   }
 
-  // Dependency rail toggle: hide capability nodes (and their links) unless shown.
   if (!showDeps) {
     const capIds = new Set(base.nodes.filter(n => n.type === 'capability').map(n => n.id));
     if (capIds.size) {
@@ -197,10 +256,8 @@ function getVisibleData() {
   return base;
 }
 
-// ── PADI layout: pin nodes into tier bands; anchor agents to X slots so each
-//    agent's vertical slice reads as a clean column. ──
+// ── PADI layout ──
 function applyLayout(vd) {
-  // Capabilities always pinned to the left rail, stacked in Y.
   const caps = vd.nodes.filter(n => n.type === 'capability');
   caps.forEach((n, i) => {
     n.fx = -RAIL_X;
@@ -211,17 +268,17 @@ function applyLayout(vd) {
     const ags = vd.nodes.filter(n => n.type === 'agent').sort((a, b) => a.id.localeCompare(b.id));
     const gap = 200;
     ags.forEach((n, i) => {
-      n.fx = (i - (ags.length - 1) / 2) * gap;  // even X slots
+      n.fx = (i - (ags.length - 1) / 2) * gap;
       n.fy = LANE_Y.agent;
     });
     vd.nodes.forEach(n => {
       if (n.type === 'agent' || n.type === 'capability') return;
-      n.fy = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;  // pin to band
-      n.fx = null;  // free in X — link force pulls toward connected agent's column
+      n.fy = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
+      n.fx = null;
     });
   } else {
     vd.nodes.forEach(n => {
-      if (n.type === 'capability') return;  // rail stays pinned in every lens
+      if (n.type === 'capability') return;
       n.fx = null;
       n.fy = null;
     });
@@ -232,8 +289,8 @@ function applyForces() {
   const charge = fg.d3Force('charge');
   const link = fg.d3Force('link');
   if (currentLens === 'padi') {
-    if (charge) charge.strength(-120);            // spread siblings within a lane
-    if (link) link.distance(48).strength(0.12);   // gentle pull toward parent column
+    if (charge) charge.strength(-120);
+    if (link) link.distance(48).strength(0.12);
   } else {
     if (charge) charge.strength(-30);
     if (link) link.distance(30).strength(1);
@@ -264,7 +321,6 @@ function initGraph(data) {
     .linkDirectionalParticleWidth(1.5)
     .linkDirectionalParticleColor(() => '#3fb950')
     .onRenderFramePre((ctx, scale) => {
-      // Swim-lane bands + dependency rail painted behind the nodes (PADI only).
       if (currentLens !== 'padi') return;
       for (const b of BANDS) {
         ctx.fillStyle = b.fill;
@@ -292,11 +348,12 @@ function initGraph(data) {
     .onNodeHover(node => {
       if (node) {
         tooltip.style.display = 'block';
+        const extra = node.members ? `<br>channels: ${node.members.join(', ')}` : '';
         tooltip.innerHTML = `
           <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span><br>
           state: <b>${node.state}</b> · role: ${node.role}<br>
           artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
-          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}
+          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}${extra}
         `;
         tooltip.style.left = (node.x + 20) + 'px';
         tooltip.style.top = (node.y - 10) + 'px';
@@ -327,7 +384,7 @@ document.querySelectorAll('.lens-btn').forEach(btn => {
   btn.addEventListener('click', () => applyLens(btn.dataset.lens));
 });
 
-// ── Dependency rail toggle (slide in/out) ──
+// ── Dependency rail toggle ──
 document.getElementById('deps-btn').addEventListener('click', () => {
   showDeps = !showDeps;
   const b = document.getElementById('deps-btn');
