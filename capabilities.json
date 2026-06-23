@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "_comment": "Single source of truth for cross-cutting 'rail' dependencies. Read by BOTH index.html (runtime merge) and build_live_graph.py (manifest merge) so the rail can never drift from the manifest. Link targets must reference node ids that exist in agent-graph-v2.json.",
+  "nodes": [
+    {
+      "id": "cap:local-mac-access",
+      "name": "Local Mac Access",
+      "kind": "capability",
+      "type": "capability",
+      "artifact": "external dependency (LMCP host bridge)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["request"], "emits": ["host_access"] },
+      "role": "plain",
+      "rail": "left",
+      "external": true
+    },
+    {
+      "id": "cap:ollama-cloud",
+      "name": "Ollama Cloud",
+      "kind": "capability",
+      "type": "capability",
+      "artifact": "external dependency (local relay -> Ollama Cloud)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["request"], "emits": ["completion"] },
+      "role": "plain",
+      "rail": "left",
+      "external": true
+    },
+    {
+      "id": "cap:railway",
+      "name": "Railway (host)",
+      "kind": "capability",
+      "type": "capability",
+      "artifact": "external dependency",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["request"], "emits": ["host"] },
+      "role": "plain",
+      "rail": "left",
+      "external": true
+    },
+    {
+      "id": "cap:cloudflare",
+      "name": "Cloudflare (edge)",
+      "kind": "capability",
+      "type": "capability",
+      "artifact": "external dependency",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["request"], "emits": ["edge"] },
+      "role": "plain",
+      "rail": "left",
+      "external": true
+    },
+    {
+      "id": "cap:supabase",
+      "name": "Supabase",
+      "kind": "capability",
+      "type": "capability",
+      "artifact": "external dependency",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["query"], "emits": ["data"] },
+      "role": "plain",
+      "rail": "left",
+      "external": true
+    }
+  ],
+  "links": [
+    { "source": "tool:execute_bash_command", "target": "cap:local-mac-access", "kind": "requires" },
+    { "source": "tool:read_host_file", "target": "cap:local-mac-access", "kind": "requires" },
+    { "source": "tool:write_host_file", "target": "cap:local-mac-access", "kind": "requires" }
+  ]
+}
