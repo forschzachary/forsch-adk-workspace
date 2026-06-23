@@ -86,14 +86,15 @@
 </div>
 <div id="graph"></div>
 <div id="panel">
+  <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
   <h3>Lens</h3>
-  <button class="lens-btn active" data-lens="all">All nodes</button>
+  <button class="lens-btn" data-lens="all">All nodes</button>
   <button class="lens-btn" data-lens="tier">Tier (by type)</button>
   <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
   <button class="lens-btn" data-lens="live">Live only</button>
-  <button class="lens-btn" data-lens="padi">PADI (swim lanes)</button>
+  <button class="lens-btn active" data-lens="padi">PADI (swim lanes)</button>
   <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies (rail)</button>
-  <button class="action-btn shared" id="shared-btn" style="margin-top:4px;">▸ Show shared</button>
+  <button class="action-btn shared on" id="shared-btn" style="margin-top:4px;">▾ Show shared</button>
 
   <div class="sep"></div>
   <h3>Add Agent to Cluster</h3>
@@ -183,16 +184,17 @@ function nodeRadius(node) {
 
 // ── PADI swim-lane geometry ──
 const LANE_Y = {
-  intake: -210, ui: -210,
-  router: -70,
-  agent: 70, logic: 70,
-  tool: 210, database: 210,
+  intake: -240, ui: -240,
+  router: -80,
+  agent: 80, logic: 80,
+  tool: 240, database: 240,
 };
+const LANE_SPREAD = 60;  // vertical jitter range within lane
 const BANDS = [
-  { cy: -210, label: 'INTERFACES',    fill: 'rgba(210,168,255,0.07)' },
-  { cy: -70,  label: 'ROUTER',        fill: 'rgba(255,123,114,0.07)' },
-  { cy: 70,   label: 'AGENT · LOGIC', fill: 'rgba(88,166,255,0.07)' },
-  { cy: 210,  label: 'TOOLS · DATA',  fill: 'rgba(240,136,62,0.07)' },
+  { cy: -240, label: 'INTERFACES',    fill: 'rgba(210,168,255,0.07)' },
+  { cy: -80,  label: 'ROUTER',        fill: 'rgba(255,123,114,0.07)' },
+  { cy: 80,   label: 'AGENT · LOGIC', fill: 'rgba(88,166,255,0.07)' },
+  { cy: 240,  label: 'TOOLS · DATA',  fill: 'rgba(240,136,62,0.07)' },
 ];
 const RAIL_X = 900;
 const BAND_X0 = -1800, BAND_X1 = 1800;
@@ -252,7 +254,7 @@ function collapseIntake(data) {
 }
 
 // ── State ──
-let graphData, currentLens = 'all', lineageRoot = null, showDeps = false, showShared = false;
+let graphData, currentLens = 'padi', lineageRoot = null, showDeps = false, showShared = true;
 let currentCluster = null;
 let clusters = [];
 const info = document.getElementById('info');
@@ -294,6 +296,12 @@ function renderTabs() {
 function selectCluster(name) {
   currentCluster = name;
   renderTabs();
+  // Update panel indicator
+  const ci = document.getElementById('cluster-indicator');
+  const c = clusters.find(x => x.name === name);
+  const pct = c && c.handoff_pct ? ` · ${c.handoff_pct}%` : '';
+  ci.textContent = c ? `📋 ${c.name}${pct}` : '— no cluster —';
+  ci.style.color = c ? '#58a6ff' : '#8b949e';
   loadGraph(name);
 }
 
@@ -397,7 +405,10 @@ function applyLayout(vd) {
     });
     vd.nodes.forEach(n => {
       if (n.type === 'agent' || n.type === 'capability') return;
-      n.fy = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
+      const baseY = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
+      // Spread vertically within lane to reduce label overlap
+      const hash = n.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      n.fy = baseY + ((hash % 100) / 100 - 0.5) * LANE_SPREAD;
       n.fx = null;
     });
   } else {
@@ -413,8 +424,8 @@ function applyForces() {
   const charge = fg.d3Force('charge');
   const link = fg.d3Force('link');
   if (currentLens === 'padi') {
-    if (charge) charge.strength(-120);
-    if (link) link.distance(48).strength(0.12);
+    if (charge) charge.strength(-1200);
+    if (link) link.distance(120).strength(0.04);
   } else {
     if (charge) charge.strength(-30);
     if (link) link.distance(30).strength(1);
@@ -706,7 +717,20 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
         spawnMsg.className = 'msg ok'; spawnMsg.textContent = `✓ Spawned ${data.agent_id}`;
         document.getElementById('spawn-id').value = '';
         document.getElementById('spawn-desc').value = '';
-        setTimeout(() => loadGraph(currentCluster), 500);
+        // Auto-add to current cluster
+        if (currentCluster) {
+          const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
+          fetch('/add-agent', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: addBody })
+            .then(r => r.json())
+            .then(addData => {
+              if (addData.ok) spawnMsg.textContent += ` → added to ${currentCluster}`;
+              else spawnMsg.textContent += ` (add failed: ${addData.error})`;
+              setTimeout(() => loadGraph(currentCluster), 500);
+            })
+            .catch(() => setTimeout(() => loadGraph(currentCluster), 500));
+        } else {
+          setTimeout(() => loadGraph(currentCluster), 500);
+        }
       } else {
         spawnMsg.className = 'msg err'; spawnMsg.textContent = data.error || 'Spawn failed';
       }
