@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 SPIKE_DIR = Path(__file__).resolve().parent
 WS = Path(os.environ.get("FORSCH_ADK_WORKSPACE", "/opt/data/workspace/adk"))
-FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python"
+FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 
 
@@ -206,8 +206,16 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
             return {"ok": False, "error": f"agent '{agent_id}' not in registry"}
     # Read current members
     text = cluster_yaml.read_text()
+    # Check if already a member
+    if f"- {agent_id}" in text:
+        return {"ok": True, "name": cluster_name, "agent_id": agent_id, "already_member": True}
+    # Replace empty members list with the new entry
+    if "members: []" in text:
+        new_text = text.replace("members: []", f"members:\n  - {agent_id}")
+        cluster_yaml.write_text(new_text)
+        return {"ok": True, "name": cluster_name, "agent_id": agent_id}
+    # Append to existing members list
     lines = text.split("\n")
-    # Find the members list and append
     new_lines = []
     in_members = False
     appended = False
@@ -215,15 +223,11 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
         if line.strip().startswith("members:") and not in_members:
             in_members = True
             new_lines.append(line)
-            # Check if agent already listed
-            if f"- {agent_id}" in text:
-                return {"ok": True, "name": cluster_name, "agent_id": agent_id, "already_member": True}
             continue
         if in_members and line.strip().startswith("- "):
             new_lines.append(line)
             continue
         if in_members and not line.strip().startswith("- "):
-            # End of members list — insert before this line
             new_lines.append(f"  - {agent_id}")
             appended = True
             in_members = False
