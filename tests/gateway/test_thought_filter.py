@@ -1,5 +1,5 @@
 from types import SimpleNamespace as NS
-from forsch.adk_bridge.bridge import _visible_parts_text
+from forsch.adk_bridge.gateway.render import _visible_parts_text
 
 
 def test_thought_parts_excluded():
