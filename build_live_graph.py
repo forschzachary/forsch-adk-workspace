@@ -26,13 +26,6 @@ bridge_compose = WS / "bridge" / "compose.yaml"
 
 agents = (yaml.safe_load(agents_yaml.read_text()) or {}).get("agents", {})
 
-DEFAULT_MODEL = "nvidia-deepseek-v4-flash"
-FALLBACKS = {
-    "glm-5.2": ["gpt-5.5", "gemini-3-pro-preview"],
-    "glm-5.1": ["gpt-5.5", "gemini-3-pro-preview"],
-    "nvidia-deepseek-v4-flash": ["gpt-5.5", "gemini-3-pro-preview"],
-}
-
 CONNECTIONS = {
     "github": "GitHub (OAuth)",
     "resend": "Resend (email)",
@@ -173,16 +166,6 @@ def check_gates(node_type: str, node_id: str, aid: str | None = None) -> dict:
         if gates["L1"]:
             gates["L2"] = True
 
-    elif node_type == "logic":
-        model_name = node_id.replace("model:", "")
-        # L0: model declared in agents.yaml or fallbacks
-        gates["L0"] = True  # always true if it's in the graph
-        # L1: in LiteLLM config (assume yes if in graph)
-        gates["L1"] = True
-        # L2: responds to /v1/models
-        if model_responds(model_name):
-            gates["L2"] = True
-
     elif node_type == "intake":
         # L0: channel declared
         gates["L0"] = True
@@ -281,10 +264,6 @@ def link(s, t, kind):
 for aid, a in agents.items():
     nid = f"agent:{aid}"
     node(nid, aid, "agent")
-    model = a.get("model") or DEFAULT_MODEL
-    node(f"model:{model}", model, "logic")
-    link_kind = "pinned-model" if a.get("model") else "default-model"
-    link(nid, f"model:{model}", link_kind)
 
     if (g := a.get("group")):
         node(f"group:{g}", g, "router")
@@ -308,13 +287,6 @@ for tool_leaf, conn in TOOL_CONN.items():
     if f"tool:{tool_leaf}" in nodes:
         link(f"tool:{tool_leaf}", f"cred:{conn}", "authenticates-via")
 
-# Model fallbacks
-for m, chain in FALLBACKS.items():
-    if f"model:{m}" in nodes:
-        for fb in chain:
-            node(f"model:{fb}", fb, "logic")
-            link(f"model:{m}", f"model:{fb}", "fallback")
-
 # Bridge UI
 node("ui:bridge", "Chainlit Bridge", "ui")
 node("ui:cockpit", "Builder Cockpit", "ui")
@@ -327,10 +299,10 @@ for n in list(nodes.values()):
 
     # Map kind to the spike's type taxonomy
     type_map = {
-        "agent": "agent", "tool": "tool", "logic": "logic",
+        "agent": "agent", "tool": "tool",
         "intake": "intake", "router": "router", "database": "database",
         "ui": "ui", "group": "router", "channel": "intake",
-        "model": "logic", "credential": "database", "broker": "database",
+        "credential": "database", "broker": "database",
         "capability": "capability",
     }
     n["type"] = type_map.get(ntype, ntype)
@@ -339,11 +311,11 @@ for n in list(nodes.values()):
     if ntype == "agent":
         aid = nid.replace("agent:", "")
         n["artifact"] = f"agents/{aid}/src/forsch/agent_{aid}/agent.py"
+        # Model: embed as agent field (not a separate node)
+        n["model"] = agents.get(aid, {}).get("model", "nvidia-deepseek-v4-flash") if aid else "nvidia-deepseek-v4-flash"
     elif ntype == "tool":
         tname = nid.replace("tool:", "")
         n["artifact"] = f"components/src/forsch/adk_components/tools/*.py (def {tname})"
-    elif ntype in ("logic", "model"):
-        n["artifact"] = "LiteLLM config"
     elif ntype in ("intake", "channel"):
         n["artifact"] = "Discord channel config"
     elif ntype in ("router", "group"):
