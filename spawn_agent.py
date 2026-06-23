@@ -14,6 +14,7 @@ Then re-runs build_live_graph.py to show the new node in the graph.
 This is D3 of the Live Agent Graph spike: prove graph→code works.
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -22,6 +23,10 @@ from textwrap import dedent
 from workspace_resolver import workspace_root
 
 WS = workspace_root() / "adk"
+
+# Profile homes live outside the filebrowser-served workspace tree
+# (HERMES_HOME/profiles, not workspace_root/profiles) since they hold per-agent creds.
+PROFILES_ROOT = Path(os.environ.get("HERMES_HOME", "/opt/data")) / "profiles"
 
 AGENT_PY_TEMPLATE = '''"""agent_{id}_agent — blank agent (spawned from Live Agent Graph).
 
@@ -259,6 +264,53 @@ def main():
     )
     with open(agents_yaml, "a") as f:
         f.write(entry)
+
+    # ── Create per-agent profile home ──
+    profile_home = PROFILES_ROOT / agent_id
+    if not profile_home.exists():
+        profile_home.mkdir(parents=True, exist_ok=True)
+        (profile_home / "home").mkdir(exist_ok=True)
+        (profile_home / "memory").mkdir(exist_ok=True)
+        (profile_home / "README").write_text(
+            f"# {agent_id} profile home\n\n"
+            f"Per-agent runtime home for the {agent_id} agent.\n"
+            f"Created: {__import__('datetime').datetime.now().isoformat()}\n\n"
+            f"## Structure\n\n"
+            f"- `home/` — agent's $HOME at runtime (creds, config, state)\n"
+            f"- `memory/` — persistent memory store\n\n"
+            f"## Runtime binding\n\n"
+            f"The agent process should launch with HOME={profile_home}\n"
+            f"(or HERMES_HOME={profile_home}) so cred/CLI resolution\n"
+            f"points here, not the shared workspace.\n"
+        )
+        print(f"  profile:  {profile_home} (new)")
+    else:
+        print(f"  profile:  {profile_home} (exists — not clobbered)")
+
+    # ── Record workspace on FF Agent in CRM ──
+    try:
+        import urllib.request
+        crm_api_key = Path("/opt/data/secrets/frappe-admin-api-key").read_text().strip()
+        payload = json.dumps({
+            "agent_id": agent_id,
+            "workspace": str(profile_home),
+        }).encode()
+        req = urllib.request.Request(
+            "https://crm.forschfrontiers.com/api/method/forsch_frontiers.sync.agent_graph.update_agent",
+            data=payload,
+            headers={
+                "Authorization": f"token {crm_api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+            if result.get("message", {}).get("ok"):
+                print(f"  recorded: workspace on FF Agent '{agent_id}'")
+            else:
+                print(f"  record:   CRM returned {result.get('message', {}).get('error', 'unknown')}", file=sys.stderr)
+    except Exception as e:
+        print(f"  record:   CRM unreachable — {e}", file=sys.stderr)
 
     print(f"✓ Spawned agent '{agent_id}'")
     print(f"  package:  {agent_dir}")
