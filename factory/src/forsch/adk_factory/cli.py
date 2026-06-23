@@ -137,11 +137,10 @@ def apply(manifest_path, agent_id: str, workspace_root, *, force: bool = False, 
 
 def _default_workspace() -> Path:
     root = os.environ.get("FORSCH_ADK_WORKSPACE")
-    if not root:
-        raise SystemExit(
-            "FORSCH_ADK_WORKSPACE is not set (and --workspace was not given)"
-        )
-    return Path(root)
+    if root:
+        return Path(root)
+    from forsch.adk_components.workspace_resolver import workspace_root
+    return workspace_root() / "adk"
 
 
 def main(argv: Optional[list[str]] = None) -> int:

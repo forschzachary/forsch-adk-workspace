@@ -40,9 +40,10 @@ def _tailscale_dnsname() -> str:
 
 def _required_workspace() -> str:
     root = os.environ.get("FORSCH_ADK_WORKSPACE")
-    if not root:
-        raise RuntimeError("FORSCH_ADK_WORKSPACE is not set; refusing to guess the workspace root")
-    return root
+    if root:
+        return root
+    from forsch.adk_components.workspace_resolver import workspace_root
+    return str(workspace_root() / "adk")
 
 _CANVAS = Path(__file__).resolve().parents[3] / "templates" / "canvas.html"
 _TERM = Path(__file__).resolve().parents[3] / "templates" / "term.html"
