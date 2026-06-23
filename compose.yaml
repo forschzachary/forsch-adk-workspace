@@ -27,6 +27,7 @@ services:
   # of http. --restart unless-stopped = Docker owns its lifecycle, so a hermes/container restart
   # can no longer wipe it (the bug that took it down).
   adk-leads:
+    profiles: ["future-leads"]   # STOOD DOWN: forward infra for future ADK leads. rowboatx owns the Memory Lead token (...Th7w). Re-enable: docker compose --profile future-leads up -d adk-leads
     image: adk-bridge:native
     container_name: adk-leads
     command: ["python", "-m", "forsch.adk_bridge.bridge"]
