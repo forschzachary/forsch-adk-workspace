@@ -160,9 +160,6 @@ const BANDS = [
 const RAIL_X = 900;
 const BAND_X0 = -1800, BAND_X1 = 1800;
 
-// id extractor — force-graph mutates link.source/target from string to node obj
-const lid = x => (x && typeof x === 'object') ? x.id : x;
-
 // ── Interface abstraction ──
 // Collapse per-channel intake nodes into channel-TYPE interfaces. This is a
 // VIEW transform: the manifest keeps the per-channel detail (truth); the
@@ -221,8 +218,6 @@ function collapseIntake(data) {
   return data;
 }
 
-=======
->>>>>>> 207645e (spike: agent status visuals — size=connected nodes, fill arc=gate progress, center symbol=state)
 // ── State ──
 let graphData, currentLens = 'all', lineageRoot = null, showDeps = false;
 const info = document.getElementById('info');
