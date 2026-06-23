@@ -46,7 +46,7 @@ def get_pulse():
     # Bridge health → all agent→channel and agent→model edges are "live"
     try:
         r = subprocess.run(
-            ["curl", "-sS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}",
+            ["curl", "-s", "-S", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}",
              "http://127.0.0.1:8800"],
             capture_output=True, text=True,
         )
@@ -57,7 +57,7 @@ def get_pulse():
     # Authsome health → credential edges are "live"
     try:
         r = subprocess.run(
-            ["curl", "-sS", "-m", "3", "http://127.0.0.1:7998/health"],
+            ["curl", "-s", "-S", "-m", "3", "http://127.0.0.1:7998/health"],
             capture_output=True, text=True,
         )
         authsome_alive = r.returncode == 0 and '"status":"ok"' in r.stdout
@@ -67,7 +67,7 @@ def get_pulse():
     # LiteLLM health → model edges are "live"
     try:
         r = subprocess.run(
-            ["curl", "-sS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}",
+            ["curl", "-s", "-S", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}",
              "http://127.0.0.1:4000/v1/models"],
             capture_output=True, text=True,
         )

@@ -110,7 +110,7 @@ def bridge_healthy() -> bool:
     """Check if bridge Chainlit surface responds (any HTTP response = alive)."""
     try:
         r = subprocess.run(
-            ["curl", "-sS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8800"],
+            ["curl", "-s", "-S", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8800"],
             capture_output=True, text=True
         )
         # Any HTTP status code means the server is running
