@@ -3,15 +3,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live Agent Graph — ADK Bridge</title>
+<title>Live Agent Graph — Cluster Tabs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
   #graph { width: 100vw; height: 100vh; }
+  /* ── Tab bar ── */
+  #tab-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 15;
+    display: flex; align-items: center; gap: 0;
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 0 8px; height: 36px; overflow-x: auto;
+  }
+  #tab-bar .tab {
+    padding: 6px 14px; font-size: 12px; color: #8b949e;
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #tab-bar .tab:hover { color: #c9d1d9; }
+  #tab-bar .tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+  #tab-bar .tab .pct { font-size: 10px; color: #3fb950; margin-left: 4px; }
+  #tab-bar .tab-new {
+    padding: 6px 10px; font-size: 14px; color: #3fb950;
+    background: transparent; border: 1px dashed #30363d; border-radius: 4px;
+    cursor: pointer; flex-shrink: 0; margin-left: 4px;
+  }
+  #tab-bar .tab-new:hover { background: #1a3a1a; border-color: #2ea043; }
+  #tab-bar .tab-add-agent {
+    padding: 4px 8px; font-size: 11px; color: #d2a8ff;
+    background: transparent; border: 1px dashed #30363d; border-radius: 4px;
+    cursor: pointer; flex-shrink: 0; margin-left: 8px;
+  }
+  #tab-bar .tab-add-agent:hover { background: #1a1a2e; border-color: #d2a8ff; }
+  /* ── Panel (shifted down for tab bar) ── */
   #panel {
-    position: fixed; top: 16px; right: 16px; z-index: 10;
+    position: fixed; top: 48px; right: 16px; z-index: 10;
     background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-    padding: 12px 16px; min-width: 220px; font-size: 13px; max-height: 90vh; overflow-y: auto;
+    padding: 12px 16px; min-width: 220px; font-size: 13px; max-height: calc(100vh - 64px); overflow-y: auto;
   }
   #panel h3 { margin: 12px 0 6px; color: #58a6ff; font-size: 14px; }
   #panel h3:first-child { margin-top: 0; }
@@ -27,12 +56,13 @@
   #panel .action-btn.refresh { background: #1a2a3a; border-color: #1f6feb; color: #58a6ff; }
   #panel .action-btn.refresh:hover { background: #1f6feb; color: #fff; }
   #panel .action-btn.deps.on { background: #0f3a3d; border-color: #56d4dd; color: #56d4dd; }
-  #panel input {
+  #panel .action-btn.shared.on { background: #1a2a1a; border-color: #3fb950; color: #3fb950; }
+  #panel input, #panel select {
     width: 100%; margin: 4px 0; padding: 5px 8px;
     background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
     color: #c9d1d9; font-size: 12px;
   }
-  #panel input:focus { outline: none; border-color: #58a6ff; }
+  #panel input:focus, #panel select:focus { outline: none; border-color: #58a6ff; }
   #panel .legend { margin-top: 12px; }
   #panel .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
   #panel .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
@@ -50,15 +80,29 @@
 </style>
 </head>
 <body>
+<div id="tab-bar">
+  <!-- Populated by loadClusters() -->
+  <button class="tab-new" id="new-tab-btn" title="New cluster">+</button>
+</div>
 <div id="graph"></div>
 <div id="panel">
+  <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
   <h3>Lens</h3>
-  <button class="lens-btn active" data-lens="all">All nodes</button>
+  <button class="lens-btn" data-lens="all">All nodes</button>
   <button class="lens-btn" data-lens="tier">Tier (by type)</button>
   <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
   <button class="lens-btn" data-lens="live">Live only</button>
-  <button class="lens-btn" data-lens="padi">PADI (swim lanes)</button>
+  <button class="lens-btn active" data-lens="padi">PADI (swim lanes)</button>
   <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies (rail)</button>
+  <button class="action-btn shared on" id="shared-btn" style="margin-top:4px;">▾ Show shared</button>
+
+  <div class="sep"></div>
+  <h3>Add Agent to Cluster</h3>
+  <select id="add-agent-select" style="margin-bottom:4px;">
+    <option value="">— select agent —</option>
+  </select>
+  <button class="action-btn spawn" id="add-agent-btn" style="background:#1a1a2e;border-color:#d2a8ff;color:#d2a8ff;">Add to current cluster</button>
+  <div class="msg" id="add-agent-msg"></div>
 
   <div class="sep"></div>
   <h3>Spawn Agent</h3>
@@ -109,16 +153,14 @@ const COLORS = {
 const hexAlpha = a => Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
 const lid = x => (x && typeof x === 'object') ? x.id : x;
 
-// ── Node metrics (computed once from full graphData) ──
+// ── Node metrics ──
 function computeNodeMetrics(data) {
-  // connected count per node
   const cc = {};
   for (const l of data.links) {
     const s = lid(l.source), t = lid(l.target);
     cc[s] = (cc[s] || 0) + 1;
     cc[t] = (cc[t] || 0) + 1;
   }
-  // gate completion (agents only)
   const gc = {};
   for (const n of data.nodes) {
     if (n.type === 'agent' && n.gates) {
@@ -135,50 +177,44 @@ function computeNodeMetrics(data) {
 
 let nodeMetrics = { cc: {}, gc: {} };
 
-// ── Radius from connected count ──
 function nodeRadius(node) {
   const count = nodeMetrics.cc[node.id] || 0;
   return Math.max(4, Math.min(16, 4 + count * 1.3));
 }
 
 // ── PADI swim-lane geometry ──
-// Top: INTERFACES (intake channel-types + hosted ui).  Then ROUTER.
-// Then AGENT + LOGIC (the model IS the agent's brain/operations).
-// Bottom: TOOLS + DATA.
 const LANE_Y = {
-  intake: -210, ui: -210,
-  router: -70,
-  agent: 70, logic: 70,
-  tool: 210, database: 210,
+  intake: -240, ui: -240,
+  router: -80,
+  agent: 80, logic: 80,
+  tool: 240, database: 240,
 };
+const LANE_SPREAD = 60;  // vertical jitter range within lane
 const BANDS = [
-  { cy: -210, label: 'INTERFACES',    fill: 'rgba(210,168,255,0.07)' },
-  { cy: -70,  label: 'ROUTER',        fill: 'rgba(255,123,114,0.07)' },
-  { cy: 70,   label: 'AGENT · LOGIC', fill: 'rgba(88,166,255,0.07)' },
-  { cy: 210,  label: 'TOOLS · DATA',  fill: 'rgba(240,136,62,0.07)' },
+  { cy: -240, label: 'INTERFACES',    fill: 'rgba(210,168,255,0.07)' },
+  { cy: -80,  label: 'ROUTER',        fill: 'rgba(255,123,114,0.07)' },
+  { cy: 80,   label: 'AGENT · LOGIC', fill: 'rgba(88,166,255,0.07)' },
+  { cy: 240,  label: 'TOOLS · DATA',  fill: 'rgba(240,136,62,0.07)' },
 ];
 const RAIL_X = 900;
 const BAND_X0 = -1800, BAND_X1 = 1800;
 
 // ── Interface abstraction ──
-// Collapse per-channel intake nodes into channel-TYPE interfaces. This is a
-// VIEW transform: the manifest keeps the per-channel detail (truth); the
-// cockpit shows the higher-level hierarchy. Only configured types appear.
 const CHANNEL_LABEL = {
   discord: 'Discord', text: 'Text', sms: 'Text', email: 'Email',
   telegram: 'Telegram', slack: 'Slack', web: 'Hosted Chat', hosted: 'Hosted Chat',
 };
 function channelTypeOf(n) {
   if (n.channel) return n.channel;
-  if (n.id.startsWith('chan:')) return 'discord';   // legacy per-channel nodes
+  if (n.id.startsWith('chan:')) return 'discord';
   if (n.id.startsWith('iface:')) return n.id.split(':')[1];
   return (n.id.split(':')[1] || 'other');
 }
 function collapseIntake(data) {
   const intakeNodes = data.nodes.filter(n => n.type === 'intake');
   if (!intakeNodes.length) return data;
-  const remap = {};      // old intake id -> iface id
-  const groups = {};     // type -> { type, names[], members[] }
+  const remap = {};
+  const groups = {};
   intakeNodes.forEach(n => {
     const t = channelTypeOf(n);
     remap[n.id] = 'iface:' + t;
@@ -200,7 +236,6 @@ function collapseIntake(data) {
     };
   });
   data.nodes = data.nodes.filter(n => n.type !== 'intake').concat(ifaceNodes);
-  // rewrite + dedupe links through the remap
   const seen = new Set();
   const newLinks = [];
   for (const l of data.links) {
@@ -219,29 +254,75 @@ function collapseIntake(data) {
 }
 
 // ── State ──
-let graphData, currentLens = 'all', lineageRoot = null, showDeps = false;
+let graphData, currentLens = 'padi', lineageRoot = null, showDeps = false, showShared = true;
+let currentCluster = null;
+let clusters = [];
 const info = document.getElementById('info');
 const tooltip = document.getElementById('tooltip');
 const spawnMsg = document.getElementById('spawn-msg');
+const addAgentMsg = document.getElementById('add-agent-msg');
 
-function loadGraph() {
+// ── Cluster loading ──
+function loadClusters() {
+  fetch('/clusters')
+    .then(r => r.json())
+    .then(data => {
+      clusters = data;
+      renderTabs();
+      // Auto-select first cluster
+      if (clusters.length && !currentCluster) {
+        selectCluster(clusters[0].name);
+      }
+    })
+    .catch(err => { info.textContent = 'Failed to load clusters — ' + err.message; });
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tab-bar');
+  // Clear existing tabs (keep the + button)
+  bar.querySelectorAll('.tab').forEach(t => t.remove());
+  clusters.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (c.name === currentCluster ? ' active' : '');
+    btn.dataset.cluster = c.name;
+    const pct = c.handoff_pct ? `<span class="pct">${c.handoff_pct}%</span>` : '';
+    btn.innerHTML = `${c.name}${pct}`;
+    btn.title = c.goal || c.name;
+    btn.addEventListener('click', () => selectCluster(c.name));
+    bar.insertBefore(btn, document.getElementById('new-tab-btn'));
+  });
+}
+
+function selectCluster(name) {
+  currentCluster = name;
+  renderTabs();
+  // Update panel indicator
+  const ci = document.getElementById('cluster-indicator');
+  const c = clusters.find(x => x.name === name);
+  const pct = c && c.handoff_pct ? ` · ${c.handoff_pct}%` : '';
+  ci.textContent = c ? `📋 ${c.name}${pct}` : '— no cluster —';
+  ci.style.color = c ? '#58a6ff' : '#8b949e';
+  loadGraph(name);
+}
+
+function loadGraph(clusterName) {
   info.textContent = 'Loading…';
+  const url = clusterName ? `/manifest?cluster=${encodeURIComponent(clusterName)}` : 'agent-graph-v2.json';
   Promise.all([
-    fetch('agent-graph-v2.json').then(r => r.json()),
+    fetch(url).then(r => r.json()),
     fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
   ])
     .then(([data, caps]) => {
       const have = new Set(data.nodes.map(n => n.id));
       (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
       (caps.links || []).forEach(l => data.links.push(l));
-      // Relabel the hosted web chat surface
       const hosted = data.nodes.find(n => n.id === 'ui:bridge');
       if (hosted) hosted.name = 'Hosted Chat';
-      // Collapse per-channel intake into channel-type interfaces (view abstraction)
       collapseIntake(data);
       graphData = data;
       nodeMetrics = computeNodeMetrics(data);
-      info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}`;
+      const clusterTag = data.cluster ? ` · ${data.cluster}` : '';
+      info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
       if (!fg) initGraph(graphData);
       renderLens();
     })
@@ -295,6 +376,15 @@ function getVisibleData() {
       };
     }
   }
+  if (!showShared) {
+    const sharedIds = new Set(base.nodes.filter(n => n.shared).map(n => n.id));
+    if (sharedIds.size) {
+      base = {
+        nodes: base.nodes.filter(n => !sharedIds.has(n.id)),
+        links: base.links.filter(l => !sharedIds.has(lid(l.source)) && !sharedIds.has(lid(l.target))),
+      };
+    }
+  }
   return base;
 }
 
@@ -315,7 +405,10 @@ function applyLayout(vd) {
     });
     vd.nodes.forEach(n => {
       if (n.type === 'agent' || n.type === 'capability') return;
-      n.fy = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
+      const baseY = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
+      // Spread vertically within lane to reduce label overlap
+      const hash = n.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      n.fy = baseY + ((hash % 100) / 100 - 0.5) * LANE_SPREAD;
       n.fx = null;
     });
   } else {
@@ -331,8 +424,8 @@ function applyForces() {
   const charge = fg.d3Force('charge');
   const link = fg.d3Force('link');
   if (currentLens === 'padi') {
-    if (charge) charge.strength(-120);
-    if (link) link.distance(48).strength(0.12);
+    if (charge) charge.strength(-1200);
+    if (link) link.distance(120).strength(0.04);
   } else {
     if (charge) charge.strength(-30);
     if (link) link.distance(30).strength(1);
@@ -379,7 +472,8 @@ function initGraph(data) {
     .nodeLabel(node => {
       const g = node.gates || {};
       const gateStr = `L0:${g.L0?'✓':'✗'} L1:${g.L1?'✓':'✗'} L2:${g.L2?'✓':'✗'} L3:${g.L3?'✓':'✗'}`;
-      return `${node.name} (${node.type}) · ${node.state} · ${gateStr}`;
+      const sharedTag = node.shared ? ' [shared]' : '';
+      return `${node.name} (${node.type}) · ${node.state} · ${gateStr}${sharedTag}`;
     })
     .nodeCanvasObjectMode(() => 'replace')
     .nodeCanvasObject((node, ctx, globalScale) => {
@@ -391,30 +485,32 @@ function initGraph(data) {
       const state = node.state;
       const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
 
-      // Alpha: dim for blank/building
+      // Alpha: dim for blank/building, extra-dim for shared
       let alpha = 1.0;
       if (state === 'blank') alpha = 0.35;
       else if (state === 'building') alpha = 0.6;
       else if (state === 'error') alpha = 0.75;
+      if (node.shared) alpha *= 0.5;
 
-      // ── Outer circle (subtle fill + outline) ──
+      // ── Outer circle ──
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
       ctx.fillStyle = color + hexAlpha(alpha * 0.25);
       ctx.fill();
       ctx.strokeStyle = color + hexAlpha(alpha);
       ctx.lineWidth = 1.5 / globalScale;
+      if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
       ctx.stroke();
+      ctx.setLineDash([]);
 
       // ── Fill arc (gate completion, agents only) ──
       if (isAgent && completion > 0) {
         const innerR = r - 1.5 / globalScale;
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
-        // Start at top (12 o'clock = -π/2), fill clockwise
         ctx.arc(node.x, node.y, innerR, -Math.PI / 2, -Math.PI / 2 + completion * 2 * Math.PI);
         ctx.closePath();
-        ctx.fillStyle = color + hexAlpha(0.55);
+        ctx.fillStyle = color + hexAlpha(0.55 * (node.shared ? 0.5 : 1));
         ctx.fill();
       }
 
@@ -422,7 +518,6 @@ function initGraph(data) {
       if (isAgent) {
         const symSize = r * 0.55;
         if (state === 'blank') {
-          // Tiny dot
           ctx.beginPath();
           ctx.arc(node.x, node.y, 1.2 / globalScale, 0, 2 * Math.PI);
           ctx.fillStyle = '#8b949e';
@@ -432,14 +527,12 @@ function initGraph(data) {
         } else if (state === 'error') {
           drawX(ctx, node.x, node.y, symSize, globalScale);
         } else if (state === 'live') {
-          // Green pulse ring
           ctx.beginPath();
           ctx.arc(node.x, node.y, r + 2.5 / globalScale, 0, 2 * Math.PI);
           ctx.strokeStyle = '#3fb950';
           ctx.lineWidth = 2 / globalScale;
           ctx.stroke();
         }
-        // Built: no symbol — the full arc speaks for itself
       }
 
       // ── Label below circle ──
@@ -448,7 +541,7 @@ function initGraph(data) {
       ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = '#c9d1d9';
+      ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
       ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
     })
     .linkColor(() => '#30363d')
@@ -489,11 +582,12 @@ function initGraph(data) {
       if (node) {
         tooltip.style.display = 'block';
         const extra = node.members ? `<br>channels: ${node.members.join(', ')}` : '';
+        const sharedTag = node.shared ? '<br><span style="color:#8b949e">shared component</span>' : '';
         const cc = nodeMetrics.cc[node.id] || 0;
         const gc = node.type === 'agent' ? Math.round((nodeMetrics.gc[node.id] || 0) * 100) : null;
         const gcStr = gc !== null ? ` · gates: ${gc}%` : '';
         tooltip.innerHTML = `
-          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span><br>
+          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span>${sharedTag}<br>
           state: <b>${node.state}</b> · role: ${node.role} · links: ${cc}${gcStr}<br>
           artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
           gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}${extra}
@@ -519,7 +613,8 @@ function renderLens() {
   fg.cooldownTicks(150);
   fg.d3ReheatSimulation();
   const tag = currentLens === 'padi' ? ' · swim lanes' : '';
-  info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}`;
+  const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
+  info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
 }
 
 // ── Lens buttons ──
@@ -534,6 +629,76 @@ document.getElementById('deps-btn').addEventListener('click', () => {
   b.textContent = (showDeps ? '▾' : '▸') + ' Dependencies (rail)';
   b.classList.toggle('on', showDeps);
   renderLens();
+});
+
+// ── Shared components toggle ──
+document.getElementById('shared-btn').addEventListener('click', () => {
+  showShared = !showShared;
+  const b = document.getElementById('shared-btn');
+  b.textContent = (showShared ? '▾' : '▸') + ' Show shared';
+  b.classList.toggle('on', showShared);
+  renderLens();
+});
+
+// ── New cluster tab ──
+document.getElementById('new-tab-btn').addEventListener('click', () => {
+  const name = prompt('New cluster name (a-z, 0-9, -, _):');
+  if (!name) return;
+  const body = `name=${encodeURIComponent(name)}`;
+  fetch('/new-cluster', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        loadClusters();
+      } else {
+        alert(data.error || 'Failed to create cluster');
+      }
+    })
+    .catch(err => alert('Server error: ' + err.message));
+});
+
+// ── Add agent to cluster ──
+function loadRegistryAgents() {
+  fetch('registry/agents/agents.yaml')
+    .then(r => r.text())
+    .then(text => {
+      // Crude YAML parse — extract agent ids from "  <id>:" lines under "agents:"
+      const select = document.getElementById('add-agent-select');
+      select.innerHTML = '<option value="">— select agent —</option>';
+      let inAgents = false;
+      for (const line of text.split('\n')) {
+        if (line.startsWith('agents:')) { inAgents = true; continue; }
+        if (inAgents && /^  [a-z][a-z0-9_]*:/.test(line)) {
+          const id = line.trim().replace(':', '');
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = id;
+          select.appendChild(opt);
+        }
+        if (inAgents && line && !line.startsWith('  ')) break;
+      }
+    })
+    .catch(() => {});
+}
+
+document.getElementById('add-agent-btn').addEventListener('click', () => {
+  if (!currentCluster) { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'No cluster selected'; return; }
+  const agentId = document.getElementById('add-agent-select').value;
+  if (!agentId) { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'Select an agent'; return; }
+  addAgentMsg.className = 'msg'; addAgentMsg.textContent = 'Adding…';
+  const body = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(agentId)}`;
+  fetch('/add-agent', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        addAgentMsg.className = 'msg ok';
+        addAgentMsg.textContent = data.already_member ? `✓ ${agentId} already in ${currentCluster}` : `✓ Added ${agentId} to ${currentCluster}`;
+        setTimeout(() => loadGraph(currentCluster), 500);
+      } else {
+        addAgentMsg.className = 'msg err'; addAgentMsg.textContent = data.error || 'Failed';
+      }
+    })
+    .catch(err => { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'Server error: ' + err.message; });
 });
 
 // ── Spawn ──
@@ -552,7 +717,20 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
         spawnMsg.className = 'msg ok'; spawnMsg.textContent = `✓ Spawned ${data.agent_id}`;
         document.getElementById('spawn-id').value = '';
         document.getElementById('spawn-desc').value = '';
-        setTimeout(loadGraph, 500);
+        // Auto-add to current cluster
+        if (currentCluster) {
+          const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
+          fetch('/add-agent', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: addBody })
+            .then(r => r.json())
+            .then(addData => {
+              if (addData.ok) spawnMsg.textContent += ` → added to ${currentCluster}`;
+              else spawnMsg.textContent += ` (add failed: ${addData.error})`;
+              setTimeout(() => loadGraph(currentCluster), 500);
+            })
+            .catch(() => setTimeout(() => loadGraph(currentCluster), 500));
+        } else {
+          setTimeout(() => loadGraph(currentCluster), 500);
+        }
       } else {
         spawnMsg.className = 'msg err'; spawnMsg.textContent = data.error || 'Spawn failed';
       }
@@ -561,7 +739,7 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
 });
 
 // ── Refresh ──
-document.getElementById('refresh-btn').addEventListener('click', loadGraph);
+document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
 
 // ── Pulse (live traffic particles) ──
 let pulseInterval;
@@ -580,7 +758,8 @@ function startPulse() {
           const authStr = p.authsome_alive ? '🔐' : '';
           const llmStr = p.litellm_alive ? '🧠' : '';
           const liveStr = [pulseStr, authStr, llmStr].filter(Boolean).join(' ');
-          info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}`;
+          const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
+          info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}${clusterTag}`;
         }
       })
       .catch(() => {});
@@ -588,7 +767,8 @@ function startPulse() {
 }
 
 // ── Init ──
-loadGraph();
+loadClusters();
+loadRegistryAgents();
 startPulse();
 </script>
 </body>

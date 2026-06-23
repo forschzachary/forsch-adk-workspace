@@ -1,10 +1,550 @@
 {
   "version": 2,
+  "cluster": "ops",
   "nodes": [
+    {
+      "id": "tool:log_groceries",
+      "name": "log_groceries",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def log_groceries)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_git_state",
+      "name": "get_git_state",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_git_state)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_crm_health_snapshot",
+      "name": "get_crm_health_snapshot",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_crm_health_snapshot)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_workspace_inventory",
+      "name": "get_workspace_inventory",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_workspace_inventory)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:list_recent_crm_leads",
+      "name": "list_recent_crm_leads",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def list_recent_crm_leads)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:read_host_file",
+      "name": "read_host_file",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def read_host_file)",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:write_host_file",
+      "name": "write_host_file",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def write_host_file)",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:execute_bash_command",
+      "name": "execute_bash_command",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def execute_bash_command)",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:add_reminder",
+      "name": "add_reminder",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def add_reminder)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_grocery_log",
+      "name": "get_grocery_log",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_grocery_log)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:validate_agent_imports",
+      "name": "validate_agent_imports",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def validate_agent_imports)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:check_service_health",
+      "name": "check_service_health",
+      "kind": "tool",
+      "shared": true,
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def check_service_health)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:nvidia-deepseek-v4-flash",
+      "name": "nvidia-deepseek-v4-flash",
+      "kind": "logic",
+      "shared": true,
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [],
+        "emits": []
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:gpt-5.5",
+      "name": "gpt-5.5",
+      "kind": "logic",
+      "shared": true,
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [],
+        "emits": []
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:glm-5.2",
+      "name": "glm-5.2",
+      "kind": "logic",
+      "shared": true,
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [],
+        "emits": []
+      },
+      "role": "plain"
+    },
+    {
+      "id": "authsome",
+      "name": "authsome (broker)",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:github",
+      "name": "GitHub (OAuth)",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:resend",
+      "name": "Resend (email)",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:cloudflare-global",
+      "name": "Cloudflare (global)",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:frappe-crm",
+      "name": "Frappe CRM (ff-ops-prod)",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "ui:bridge",
+      "name": "Chainlit Bridge",
+      "kind": "ui",
+      "shared": true,
+      "type": "ui",
+      "artifact": "bridge/compose.yaml",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": true,
+      "contract": {
+        "accepts": [
+          "user_input"
+        ],
+        "emits": [
+          "display"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "ui:cockpit",
+      "name": "Builder Cockpit",
+      "kind": "ui",
+      "shared": true,
+      "type": "ui",
+      "artifact": "builder/pyproject.toml",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": true,
+      "contract": {
+        "accepts": [
+          "user_input"
+        ],
+        "emits": [
+          "display"
+        ]
+      },
+      "role": "plain"
+    },
     {
       "id": "agent:stability",
       "name": "stability",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/stability/src/forsch/agent_stability/agent.py",
       "model": "glm-5.2",
@@ -36,177 +576,10 @@
       "role": "builder"
     },
     {
-      "id": "tool:get_workspace_inventory",
-      "name": "get_workspace_inventory",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_workspace_inventory)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_git_state",
-      "name": "get_git_state",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_git_state)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:validate_agent_imports",
-      "name": "validate_agent_imports",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def validate_agent_imports)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:check_service_health",
-      "name": "check_service_health",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def check_service_health)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:execute_bash_command",
-      "name": "execute_bash_command",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def execute_bash_command)",
-      "gates": {
-        "L0": true,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:read_host_file",
-      "name": "read_host_file",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def read_host_file)",
-      "gates": {
-        "L0": true,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:write_host_file",
-      "name": "write_host_file",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def write_host_file)",
-      "gates": {
-        "L0": true,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
       "id": "chan:#team-stability",
       "name": "#team-stability",
       "kind": "intake",
+      "shared": false,
       "type": "intake",
       "artifact": "Discord channel config",
       "gates": {
@@ -231,6 +604,7 @@
       "id": "agent:assistant",
       "name": "assistant",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/assistant/src/forsch/agent_assistant/agent.py",
       "model": "gpt-5.5",
@@ -258,6 +632,7 @@
       "id": "group:hubert-team-lead",
       "name": "hubert-team-lead",
       "kind": "router",
+      "shared": false,
       "type": "router",
       "artifact": "agents.yaml group field",
       "gates": {
@@ -282,6 +657,7 @@
       "id": "chan:#team-assistant",
       "name": "#team-assistant",
       "kind": "intake",
+      "shared": false,
       "type": "intake",
       "artifact": "Discord channel config",
       "gates": {
@@ -306,9 +682,10 @@
       "id": "agent:brand",
       "name": "brand",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/brand/src/forsch/agent_brand/agent.py",
-      "model": "nvidia-deepseek-v4-flash",
+      "model": "gpt-5.5",
       "gates": {
         "L0": true,
         "L1": false,
@@ -333,6 +710,7 @@
       "id": "chan:#team-brand",
       "name": "#team-brand",
       "kind": "intake",
+      "shared": false,
       "type": "intake",
       "artifact": "Discord channel config",
       "gates": {
@@ -357,6 +735,7 @@
       "id": "agent:build",
       "name": "build",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/build/src/forsch/agent_build/agent.py",
       "model": "glm-5.2",
@@ -384,6 +763,7 @@
       "id": "chan:#team-build",
       "name": "#team-build",
       "kind": "intake",
+      "shared": false,
       "type": "intake",
       "artifact": "Discord channel config",
       "gates": {
@@ -408,9 +788,10 @@
       "id": "agent:social",
       "name": "social",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/social/src/forsch/agent_social/agent.py",
-      "model": "nvidia-deepseek-v4-flash",
+      "model": "gpt-5.5",
       "gates": {
         "L0": true,
         "L1": false,
@@ -435,6 +816,7 @@
       "id": "chan:#team-social",
       "name": "#team-social",
       "kind": "intake",
+      "shared": false,
       "type": "intake",
       "artifact": "Discord channel config",
       "gates": {
@@ -459,9 +841,10 @@
       "id": "agent:ops",
       "name": "ops",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/ops/src/forsch/agent_ops/agent.py",
-      "model": "nvidia-deepseek-v4-flash",
+      "model": "gpt-5.5",
       "gates": {
         "L0": true,
         "L1": true,
@@ -485,57 +868,10 @@
       "role": "builder"
     },
     {
-      "id": "tool:get_crm_health_snapshot",
-      "name": "get_crm_health_snapshot",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_crm_health_snapshot)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:list_recent_crm_leads",
-      "name": "list_recent_crm_leads",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def list_recent_crm_leads)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
       "id": "chan:#team-ops",
       "name": "#team-ops",
       "kind": "intake",
+      "shared": false,
       "type": "intake",
       "artifact": "Discord channel config",
       "gates": {
@@ -560,6 +896,7 @@
       "id": "agent:shelby",
       "name": "shelby",
       "kind": "agent",
+      "shared": false,
       "type": "agent",
       "artifact": "agents/shelby/src/forsch/agent_shelby/agent.py",
       "model": "gpt-5.5",
@@ -581,246 +918,6 @@
           "tool:log_groceries",
           "tool:get_grocery_log",
           "tool:add_reminder"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:log_groceries",
-      "name": "log_groceries",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def log_groceries)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_grocery_log",
-      "name": "get_grocery_log",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_grocery_log)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:add_reminder",
-      "name": "add_reminder",
-      "kind": "tool",
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def add_reminder)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "authsome",
-      "name": "authsome (broker)",
-      "kind": "database",
-      "type": "database",
-      "artifact": "authsome vault",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "query"
-        ],
-        "emits": [
-          "data"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "cred:github",
-      "name": "GitHub (OAuth)",
-      "kind": "database",
-      "type": "database",
-      "artifact": "authsome vault",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "query"
-        ],
-        "emits": [
-          "data"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "cred:resend",
-      "name": "Resend (email)",
-      "kind": "database",
-      "type": "database",
-      "artifact": "authsome vault",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "query"
-        ],
-        "emits": [
-          "data"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "cred:cloudflare-global",
-      "name": "Cloudflare (global)",
-      "kind": "database",
-      "type": "database",
-      "artifact": "authsome vault",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "query"
-        ],
-        "emits": [
-          "data"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "cred:frappe-crm",
-      "name": "Frappe CRM (ff-ops-prod)",
-      "kind": "database",
-      "type": "database",
-      "artifact": "authsome vault",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "query"
-        ],
-        "emits": [
-          "data"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "ui:bridge",
-      "name": "Chainlit Bridge",
-      "kind": "ui",
-      "type": "ui",
-      "artifact": "bridge/compose.yaml",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": true,
-      "contract": {
-        "accepts": [
-          "user_input"
-        ],
-        "emits": [
-          "display"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "ui:cockpit",
-      "name": "Builder Cockpit",
-      "kind": "ui",
-      "type": "ui",
-      "artifact": "builder/pyproject.toml",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": true,
-      "contract": {
-        "accepts": [
-          "user_input"
-        ],
-        "emits": [
-          "display"
         ]
       },
       "role": "plain"
@@ -958,6 +1055,36 @@
   ],
   "links": [
     {
+      "source": "authsome",
+      "target": "cred:github",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:resend",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:cloudflare-global",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:frappe-crm",
+      "kind": "brokers"
+    },
+    {
+      "source": "tool:get_crm_health_snapshot",
+      "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:list_recent_crm_leads",
+      "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
       "source": "agent:stability",
       "target": "tool:get_workspace_inventory",
       "kind": "uses"
@@ -1058,36 +1185,6 @@
       "kind": "uses"
     },
     {
-      "source": "authsome",
-      "target": "cred:github",
-      "kind": "brokers"
-    },
-    {
-      "source": "authsome",
-      "target": "cred:resend",
-      "kind": "brokers"
-    },
-    {
-      "source": "authsome",
-      "target": "cred:cloudflare-global",
-      "kind": "brokers"
-    },
-    {
-      "source": "authsome",
-      "target": "cred:frappe-crm",
-      "kind": "brokers"
-    },
-    {
-      "source": "tool:get_crm_health_snapshot",
-      "target": "cred:frappe-crm",
-      "kind": "authenticates-via"
-    },
-    {
-      "source": "tool:list_recent_crm_leads",
-      "target": "cred:frappe-crm",
-      "kind": "authenticates-via"
-    },
-    {
       "source": "tool:execute_bash_command",
       "target": "cap:local-mac-access",
       "kind": "requires"
@@ -1103,10 +1200,10 @@
       "kind": "requires"
     }
   ],
-  "node_count": 38,
+  "node_count": 41,
   "link_count": 29,
   "meta": {
-    "generated_at": "2026-06-23T15:05:42.668538+00:00",
-    "source": "agents.yaml + filesystem scan + capabilities.json"
+    "generated_at": "2026-06-23T15:26:00.471359+00:00",
+    "source": "registry/agents/agents.yaml + shared/components.yaml + clusters/ops/cluster.yaml"
   }
 }

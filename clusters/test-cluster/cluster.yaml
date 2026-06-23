@@ -1,0 +1,7 @@
+# test-cluster cluster
+name: test-cluster
+description: ''
+members:
+  - ops
+config:
+  default_model: gpt-5.5
