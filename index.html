@@ -173,6 +173,10 @@ function initGraph(data) {
     .linkDirectionalArrowRelPos(0.95)
     .linkLabel(l => l.kind)
     .linkWidth(1)
+    .linkDirectionalParticles(0)  // default off, pulse sets it
+    .linkDirectionalParticleSpeed(0.004)
+    .linkDirectionalParticleWidth(1.5)
+    .linkDirectionalParticleColor(() => '#3fb950')
     .onNodeClick(node => {
       if (currentLens === 'lineage' && node.type === 'agent') {
         lineageRoot = node.id;
@@ -243,8 +247,35 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
 // ── Refresh ──
 document.getElementById('refresh-btn').addEventListener('click', loadGraph);
 
+// ── Pulse (live traffic particles) ──
+let pulseInterval;
+function startPulse() {
+  pulseInterval = setInterval(() => {
+    fetch('/pulse')
+      .then(r => r.json())
+      .then(p => {
+        if (fg && p.active_edges) {
+          // Set particles to the number of active edges
+          fg.linkDirectionalParticles(p.active_edges.length);
+          // Color active edges green, inactive stay dark
+          const activeSet = new Set(p.active_edges.map(e => `${e.source}→${e.target}`));
+          fg.linkColor(l => activeSet.has(`${l.source}→${l.target}`) ? '#2ea043' : '#30363d');
+          fg.linkWidth(l => activeSet.has(`${l.source}→${l.target}`) ? 2 : 1);
+          // Update info
+          const pulseStr = p.bridge_alive ? '🌉' : '';
+          const authStr = p.authsome_alive ? '🔐' : '';
+          const llmStr = p.litellm_alive ? '🧠' : '';
+          const liveStr = [pulseStr, authStr, llmStr].filter(Boolean).join(' ');
+          info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}`;
+        }
+      })
+      .catch(() => {}); // silent — server might be restarting
+  }, 3000);
+}
+
 // ── Init ──
 loadGraph();
+startPulse();
 </script>
 </body>
 </html>
