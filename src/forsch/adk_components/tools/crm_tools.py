@@ -8,12 +8,22 @@ from .frappe_client import FrappeClient
 
 
 def get_crm_health_snapshot() -> dict[str, Any]:
-    """Return a read-only snapshot of Frappe CRM health and key counts."""
+    """Return a read-only snapshot of Frappe CRM health and key counts.
+
+    Each probe is isolated: a single failing call reports its error rather than
+    crashing the whole snapshot (this is a health check — partial data is useful)."""
     client = FrappeClient()
+
+    def _probe(fn):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 - health probes report failures, don't raise
+            return {"error": str(exc)}
+
     return {
-        "ping": client.ping(),
-        "crm_lead_count": client.get_count("CRM Lead"),
-        "newsletter_subscription_count": client.get_count("FF Newsletter Subscription"),
+        "ping": _probe(client.ping),
+        "crm_lead_count": _probe(lambda: client.get_count("CRM Lead")),
+        "newsletter_subscription_count": _probe(lambda: client.get_count("FF Newsletter Subscription")),
     }
 
 

@@ -43,6 +43,8 @@ class FrappeClient:
             self._method_url("frappe.client.get_count"),
             params={"doctype": doctype},
         )
+        if not isinstance(response, dict) or response.get("message") is None:
+            raise ValueError(f"unexpected Frappe response for get_count({doctype!r}): {response!r}")
         return int(response["message"])
 
     def get_list(
@@ -61,6 +63,8 @@ class FrappeClient:
                 "limit_page_length": limit_page_length,
             },
         )
+        if not isinstance(response, dict) or response.get("message") is None:
+            raise ValueError(f"unexpected Frappe response for get_list({doctype!r}): {response!r}")
         return response["message"]
 
     def _method_url(self, method: str) -> str:
