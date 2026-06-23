@@ -10,32 +10,38 @@ agents:
   stability:
     agent_package: forsch.agent_stability.agent
     agent_attr: root_agent
+    profile_home: /profiles/stability
     channels:
       - "#team-stability"
   ops:
     agent_package: forsch.agent_ops.agent
     agent_attr: root_agent
+    profile_home: /profiles/ops
     channels:
       - "#team-ops"
   social:
     agent_package: forsch.agent_social.agent
     agent_attr: agent
+    profile_home: /profiles/social
     channels:
       - "#team-social"
   brand:
     agent_package: forsch.agent_brand.agent
     agent_attr: agent
+    profile_home: /profiles/brand
     channels:
       - "#team-brand"
   assistant:
     agent_package: forsch.agent_assistant.agent
     agent_attr: agent
+    profile_home: /profiles/assistant
     channels:
       - "#team-assistant"
       - "#team-memory"
   build:
     agent_package: forsch.agent_build.agent
     agent_attr: agent
+    profile_home: /profiles/build
     channels:
       - "#team-build"
 

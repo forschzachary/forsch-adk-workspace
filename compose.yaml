@@ -19,8 +19,10 @@ services:
       # forsch namespace merges across each package's src dir
       PYTHONPATH: /workspace/bridge/src:/workspace/components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src
       FORSCH_ADK_WORKSPACE: /workspace   # stability tools inventory the live mount, not the dead /opt/data path
+      AGENT_PROFILES_ROOT: /profiles     # per-agent profile homes (creds, config, state)
     volumes:
       - /root/.hermes/workspace/adk:/workspace   # live agent code + bridge_config.yaml + sessions
+      - /opt/data/profiles:/profiles             # per-agent profile homes
 
   # Discord leads + CRM webhook (:8765). SEPARATE container from hermes/Hubert (token ...Th7w,
   # a different Discord bot than Hubert's ...YpRo). Same image, runs the bridge entrypoint instead
