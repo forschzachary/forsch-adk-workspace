@@ -1,0 +1,1074 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "agent:stability",
+      "name": "stability",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/stability/src/forsch/agent_stability/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "message:#team-stability",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call",
+          "tool:get_workspace_inventory",
+          "tool:get_git_state",
+          "tool:validate_agent_imports",
+          "tool:check_service_health",
+          "tool:execute_bash_command",
+          "tool:read_host_file",
+          "tool:write_host_file"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:glm-5.2",
+      "name": "glm-5.2",
+      "kind": "logic",
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "prompt"
+        ],
+        "emits": [
+          "completion"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_workspace_inventory",
+      "name": "get_workspace_inventory",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_workspace_inventory)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_git_state",
+      "name": "get_git_state",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_git_state)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:validate_agent_imports",
+      "name": "validate_agent_imports",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def validate_agent_imports)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:check_service_health",
+      "name": "check_service_health",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def check_service_health)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:execute_bash_command",
+      "name": "execute_bash_command",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def execute_bash_command)",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:read_host_file",
+      "name": "read_host_file",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def read_host_file)",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:write_host_file",
+      "name": "write_host_file",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def write_host_file)",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:#team-stability",
+      "name": "#team-stability",
+      "kind": "intake",
+      "type": "intake",
+      "artifact": "Discord channel config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:assistant",
+      "name": "assistant",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/assistant/src/forsch/agent_assistant/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "message:#team-assistant",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:gpt-5.5",
+      "name": "gpt-5.5",
+      "kind": "logic",
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "prompt"
+        ],
+        "emits": [
+          "completion"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "group:hubert-team-lead",
+      "name": "hubert-team-lead",
+      "kind": "router",
+      "type": "router",
+      "artifact": "agents.yaml group field",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "routed_message"
+        ],
+        "emits": [
+          "agent_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:#team-assistant",
+      "name": "#team-assistant",
+      "kind": "intake",
+      "type": "intake",
+      "artifact": "Discord channel config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:brand",
+      "name": "brand",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/brand/src/forsch/agent_brand/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "message:#team-brand",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:nvidia-deepseek-v4-flash",
+      "name": "nvidia-deepseek-v4-flash",
+      "kind": "logic",
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "prompt"
+        ],
+        "emits": [
+          "completion"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:#team-brand",
+      "name": "#team-brand",
+      "kind": "intake",
+      "type": "intake",
+      "artifact": "Discord channel config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:build",
+      "name": "build",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/build/src/forsch/agent_build/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "message:#team-build",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:#team-build",
+      "name": "#team-build",
+      "kind": "intake",
+      "type": "intake",
+      "artifact": "Discord channel config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:social",
+      "name": "social",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/social/src/forsch/agent_social/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": false,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "message:#team-social",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:#team-social",
+      "name": "#team-social",
+      "kind": "intake",
+      "type": "intake",
+      "artifact": "Discord channel config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:ops",
+      "name": "ops",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/ops/src/forsch/agent_ops/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "message:#team-ops",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call",
+          "tool:get_crm_health_snapshot",
+          "tool:list_recent_crm_leads"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_crm_health_snapshot",
+      "name": "get_crm_health_snapshot",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_crm_health_snapshot)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:list_recent_crm_leads",
+      "name": "list_recent_crm_leads",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def list_recent_crm_leads)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:#team-ops",
+      "name": "#team-ops",
+      "kind": "intake",
+      "type": "intake",
+      "artifact": "Discord channel config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:shelby",
+      "name": "shelby",
+      "kind": "agent",
+      "type": "agent",
+      "artifact": "agents/shelby/src/forsch/agent_shelby/agent.py",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call",
+          "tool:log_groceries",
+          "tool:get_grocery_log",
+          "tool:add_reminder"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:log_groceries",
+      "name": "log_groceries",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def log_groceries)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_grocery_log",
+      "name": "get_grocery_log",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_grocery_log)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:add_reminder",
+      "name": "add_reminder",
+      "kind": "tool",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def add_reminder)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "authsome",
+      "name": "authsome (broker)",
+      "kind": "database",
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:github",
+      "name": "GitHub (OAuth)",
+      "kind": "database",
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:resend",
+      "name": "Resend (email)",
+      "kind": "database",
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:cloudflare-global",
+      "name": "Cloudflare (global)",
+      "kind": "database",
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:frappe-crm",
+      "name": "Frappe CRM (ff-ops-prod)",
+      "kind": "database",
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "model:gemini-3-pro-preview",
+      "name": "gemini-3-pro-preview",
+      "kind": "logic",
+      "type": "logic",
+      "artifact": "LiteLLM config",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "prompt"
+        ],
+        "emits": [
+          "completion"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "ui:bridge",
+      "name": "Chainlit Bridge",
+      "kind": "ui",
+      "type": "ui",
+      "artifact": "bridge/compose.yaml",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "user_input"
+        ],
+        "emits": [
+          "display"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "ui:cockpit",
+      "name": "Builder Cockpit",
+      "kind": "ui",
+      "type": "ui",
+      "artifact": "builder/pyproject.toml",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "building",
+      "contract": {
+        "accepts": [
+          "user_input"
+        ],
+        "emits": [
+          "display"
+        ]
+      },
+      "role": "plain"
+    }
+  ],
+  "links": [
+    {
+      "source": "agent:stability",
+      "target": "model:glm-5.2",
+      "kind": "pinned-model"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:get_workspace_inventory",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:get_git_state",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:validate_agent_imports",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:check_service_health",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:execute_bash_command",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:read_host_file",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "tool:write_host_file",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:stability",
+      "target": "chan:#team-stability",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:assistant",
+      "target": "model:gpt-5.5",
+      "kind": "pinned-model"
+    },
+    {
+      "source": "agent:assistant",
+      "target": "group:hubert-team-lead",
+      "kind": "wears"
+    },
+    {
+      "source": "agent:assistant",
+      "target": "chan:#team-assistant",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:brand",
+      "target": "model:nvidia-deepseek-v4-flash",
+      "kind": "default-model"
+    },
+    {
+      "source": "agent:brand",
+      "target": "chan:#team-brand",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:build",
+      "target": "model:glm-5.2",
+      "kind": "pinned-model"
+    },
+    {
+      "source": "agent:build",
+      "target": "group:hubert-team-lead",
+      "kind": "wears"
+    },
+    {
+      "source": "agent:build",
+      "target": "chan:#team-build",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:social",
+      "target": "model:nvidia-deepseek-v4-flash",
+      "kind": "default-model"
+    },
+    {
+      "source": "agent:social",
+      "target": "chan:#team-social",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:ops",
+      "target": "model:nvidia-deepseek-v4-flash",
+      "kind": "default-model"
+    },
+    {
+      "source": "agent:ops",
+      "target": "tool:get_crm_health_snapshot",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:ops",
+      "target": "tool:list_recent_crm_leads",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:ops",
+      "target": "chan:#team-ops",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "model:gpt-5.5",
+      "kind": "pinned-model"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:log_groceries",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:get_grocery_log",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:add_reminder",
+      "kind": "uses"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:github",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:resend",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:cloudflare-global",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:frappe-crm",
+      "kind": "brokers"
+    },
+    {
+      "source": "tool:get_crm_health_snapshot",
+      "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:list_recent_crm_leads",
+      "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "model:glm-5.2",
+      "target": "model:gpt-5.5",
+      "kind": "fallback"
+    },
+    {
+      "source": "model:glm-5.2",
+      "target": "model:gemini-3-pro-preview",
+      "kind": "fallback"
+    },
+    {
+      "source": "model:nvidia-deepseek-v4-flash",
+      "target": "model:gpt-5.5",
+      "kind": "fallback"
+    },
+    {
+      "source": "model:nvidia-deepseek-v4-flash",
+      "target": "model:gemini-3-pro-preview",
+      "kind": "fallback"
+    }
+  ],
+  "node_count": 37,
+  "link_count": 37,
+  "meta": {
+    "generated_at": "2026-06-23T05:55:44.499075+00:00",
+    "source": "agents.yaml + filesystem scan"
+  }
+}

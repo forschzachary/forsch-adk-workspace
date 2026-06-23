@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Agent Graph — ADK Bridge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+  #graph { width: 100vw; height: 100vh; }
+  #panel {
+    position: fixed; top: 16px; right: 16px; z-index: 10;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 16px; min-width: 200px; font-size: 13px;
+  }
+  #panel h3 { margin-bottom: 8px; color: #58a6ff; font-size: 14px; }
+  #panel .lens-btn {
+    display: block; width: 100%; margin: 4px 0; padding: 6px 10px;
+    background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; cursor: pointer; text-align: left; font-size: 12px;
+  }
+  #panel .lens-btn:hover { background: #30363d; }
+  #panel .lens-btn.active { background: #1f6feb; border-color: #1f6feb; }
+  #panel .legend { margin-top: 12px; }
+  #panel .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
+  #panel .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  #info { position: fixed; bottom: 16px; left: 16px; z-index: 10; font-size: 12px; color: #8b949e; }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 20;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px 12px; font-size: 12px; max-width: 300px; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="graph"></div>
+<div id="panel">
+  <h3>Lens</h3>
+  <button class="lens-btn active" data-lens="all">All nodes</button>
+  <button class="lens-btn" data-lens="tier">Tier (by type)</button>
+  <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
+  <button class="lens-btn" data-lens="live">Live only</button>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span> agent</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#f0883e"></span> tool</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span> logic</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#d2a8ff"></span> intake</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ff7b72"></span> router</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#a5d6ff"></span> database</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#f0c040"></span> ui</div>
+  </div>
+</div>
+<div id="info">Loading…</div>
+<div id="tooltip"></div>
+
+<script src="https://unpkg.com/force-graph@1.43.5/dist/force-graph.min.js"></script>
+<script>
+// ── Color map ──
+const COLORS = {
+  agent: '#58a6ff', tool: '#f0883e', logic: '#3fb950',
+  intake: '#d2a8ff', router: '#ff7b72', database: '#a5d6ff',
+  ui: '#f0c040', builder: '#ffa198', design: '#79c0ff',
+};
+
+// ── State → size ──
+const STATE_SIZE = { blank: 3, building: 5, built: 7, live: 10, error: 6 };
+
+// ── Load data ──
+let graphData, currentLens = 'all', lineageRoot = null;
+const info = document.getElementById('info');
+const tooltip = document.getElementById('tooltip');
+
+fetch('agent-graph-v2.json')
+  .then(r => r.json())
+  .then(data => {
+    graphData = data;
+    info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}`;
+    initGraph(data);
+  })
+  .catch(err => { info.textContent = 'Failed to load agent-graph-v2.json — ' + err.message; });
+
+// ── Lens logic ──
+function applyLens(lens) {
+  currentLens = lens;
+  lineageRoot = null;
+  document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-lens="${lens}"]`)?.classList.add('active');
+  renderLens();
+}
+
+function getVisibleData() {
+  if (currentLens === 'all') return graphData;
+
+  if (currentLens === 'live') {
+    const liveIds = new Set(graphData.nodes.filter(n => n.state === 'live').map(n => n.id));
+    return {
+      nodes: graphData.nodes.filter(n => n.state === 'live'),
+      links: graphData.links.filter(l => liveIds.has(l.source) && liveIds.has(l.target)),
+    };
+  }
+
+  if (currentLens === 'tier') {
+    // Re-group by type: same nodes, but force layout separates by tier
+    return graphData; // all nodes, layout handled by dag mode
+  }
+
+  if (currentLens === 'lineage' && lineageRoot) {
+    // BFS from lineageRoot: include root + all deps (1 hop)
+    const visited = new Set([lineageRoot]);
+    const queue = [lineageRoot];
+    while (queue.length) {
+      const id = queue.shift();
+      for (const l of graphData.links) {
+        if (l.source === id && !visited.has(l.target)) {
+          visited.add(l.target);
+          queue.push(l.target);
+        }
+        if (l.target === id && !visited.has(l.source)) {
+          visited.add(l.source);
+          queue.push(l.source);
+        }
+      }
+    }
+    return {
+      nodes: graphData.nodes.filter(n => visited.has(n.id)),
+      links: graphData.links.filter(l => visited.has(l.source) && visited.has(l.target)),
+    };
+  }
+
+  return graphData;
+}
+
+// ── Graph init ──
+let fg;
+function initGraph(data) {
+  const elem = document.getElementById('graph');
+  fg = ForceGraph()(elem)
+    .graphData(data)
+    .nodeId('id')
+    .nodeLabel(node => {
+      const g = node.gates || {};
+      const gateStr = `L0:${g.L0?'✓':'✗'} L1:${g.L1?'✓':'✗'} L2:${g.L2?'✓':'✗'} L3:${g.L3?'✓':'✗'}`;
+      return `${node.name} (${node.type}) · ${node.state} · ${gateStr}`;
+    })
+    .nodeColor(node => COLORS[node.type] || '#8b949e')
+    .nodeVal(node => STATE_SIZE[node.state] || 4)
+    .linkColor(() => '#30363d')
+    .linkDirectionalArrowLength(6)
+    .linkDirectionalArrowRelPos(0.95)
+    .linkLabel(l => l.kind)
+    .linkWidth(1)
+    .onNodeClick(node => {
+      if (currentLens === 'lineage' && node.type === 'agent') {
+        lineageRoot = node.id;
+        renderLens();
+      }
+    })
+    .onNodeHover(node => {
+      if (node) {
+        tooltip.style.display = 'block';
+        tooltip.innerHTML = `
+          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span><br>
+          state: <b>${node.state}</b> · role: ${node.role}<br>
+          artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
+          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}
+        `;
+        tooltip.style.left = (node.x + 20) + 'px';
+        tooltip.style.top = (node.y - 10) + 'px';
+      } else {
+        tooltip.style.display = 'none';
+      }
+    })
+    .dagMode('td')  // top-down for tier lens
+    .dagLevelDistance(80)
+    .cooldownTicks(100);
+}
+
+function renderLens() {
+  const vd = getVisibleData();
+  fg.graphData(vd);
+  if (currentLens === 'tier') {
+    fg.dagMode('td').dagLevelDistance(80);
+  } else {
+    fg.dagMode(null); // free-force for other lenses
+  }
+  fg.cooldownTicks(100);
+  info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}`;
+}
+
+// ── Lens buttons ──
+document.querySelectorAll('.lens-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyLens(btn.dataset.lens));
+});
+</script>
+</body>
+</html>
