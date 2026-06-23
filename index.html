@@ -26,6 +26,7 @@
   #panel .action-btn.spawn:hover { background: #2ea043; color: #fff; }
   #panel .action-btn.refresh { background: #1a2a3a; border-color: #1f6feb; color: #58a6ff; }
   #panel .action-btn.refresh:hover { background: #1f6feb; color: #fff; }
+  #panel .action-btn.deps.on { background: #0f3a3d; border-color: #56d4dd; color: #56d4dd; }
   #panel input {
     width: 100%; margin: 4px 0; padding: 5px 8px;
     background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
@@ -55,6 +56,8 @@
   <button class="lens-btn" data-lens="tier">Tier (by type)</button>
   <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
   <button class="lens-btn" data-lens="live">Live only</button>
+  <button class="lens-btn" data-lens="padi">PADI (swim lanes)</button>
+  <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies (rail)</button>
 
   <div class="sep"></div>
   <h3>Spawn Agent</h3>
@@ -75,6 +78,7 @@
     <div class="legend-item"><span class="legend-dot" style="background:#ff7b72"></span> router</div>
     <div class="legend-item"><span class="legend-dot" style="background:#a5d6ff"></span> database</div>
     <div class="legend-item"><span class="legend-dot" style="background:#f0c040"></span> ui</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#56d4dd"></span> capability (rail)</div>
   </div>
 </div>
 <div id="info">Loading…</div>
@@ -87,26 +91,57 @@ const COLORS = {
   agent: '#58a6ff', tool: '#f0883e', logic: '#3fb950',
   intake: '#d2a8ff', router: '#ff7b72', database: '#a5d6ff',
   ui: '#f0c040', builder: '#ffa198', design: '#79c0ff',
+  capability: '#56d4dd',
 };
 
 // ── State → size ──
 const STATE_SIZE = { blank: 3, building: 5, built: 7, live: 10, error: 6 };
 
-// ── Load data ──
-let graphData, currentLens = 'all', lineageRoot = null;
+// ── PADI swim-lane geometry ──
+// Top band: INTAKE + UI (coupled).  Then ROUTER.  Then AGENT.
+// Bottom band: TOOLS + LOGIC + DATA (grouped under "tools").
+const LANE_Y = {
+  intake: -210, ui: -210,
+  router: -70,
+  agent: 70,
+  tool: 210, logic: 210, database: 210,
+};
+const BANDS = [
+  { cy: -210, label: 'INTAKE · UI',          fill: 'rgba(210,168,255,0.07)' },
+  { cy: -70,  label: 'ROUTER',               fill: 'rgba(255,123,114,0.07)' },
+  { cy: 70,   label: 'AGENT',                fill: 'rgba(88,166,255,0.07)' },
+  { cy: 210,  label: 'TOOLS · LOGIC · DATA',  fill: 'rgba(240,136,62,0.07)' },
+];
+const RAIL_X = 900;          // left dependency rail x-position (graph coords)
+const BAND_X0 = -1800, BAND_X1 = 1800;
+
+// id extractor — force-graph mutates link.source/target from string to node obj
+const lid = x => (x && typeof x === 'object') ? x.id : x;
+
+// ── State ──
+let graphData, currentLens = 'all', lineageRoot = null, showDeps = false;
 const info = document.getElementById('info');
 const tooltip = document.getElementById('tooltip');
 const spawnMsg = document.getElementById('spawn-msg');
 
 function loadGraph() {
   info.textContent = 'Loading…';
-  fetch('agent-graph-v2.json')
-    .then(r => r.json())
-    .then(data => {
+  Promise.all([
+    fetch('agent-graph-v2.json').then(r => r.json()),
+    fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
+  ])
+    .then(([data, caps]) => {
+      // Merge the cross-cutting capability (rail) nodes from their single
+      // source of truth. Skip any id already present to stay idempotent.
+      const have = new Set(data.nodes.map(n => n.id));
+      (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
+      (caps.links || []).forEach(l => data.links.push(l));
+      data.node_count = data.nodes.length;
+      data.link_count = data.links.length;
       graphData = data;
       info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}`;
-      if (!fg) initGraph(data);
-      else renderLens();
+      if (!fg) initGraph(graphData);
+      renderLens();
     })
     .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
 }
@@ -114,44 +149,95 @@ function loadGraph() {
 // ── Lens logic ──
 function applyLens(lens) {
   currentLens = lens;
-  lineageRoot = null;
+  if (lens !== 'lineage') lineageRoot = null;
   document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`[data-lens="${lens}"]`)?.classList.add('active');
   renderLens();
 }
 
 function getVisibleData() {
-  if (currentLens === 'all') return graphData;
-
-  if (currentLens === 'live') {
+  let base;
+  if (currentLens === 'all' || currentLens === 'padi' || currentLens === 'tier') {
+    base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
+  } else if (currentLens === 'live') {
     const liveIds = new Set(graphData.nodes.filter(n => n.state === 'live').map(n => n.id));
-    return {
+    base = {
       nodes: graphData.nodes.filter(n => n.state === 'live'),
-      links: graphData.links.filter(l => liveIds.has(l.source) && liveIds.has(l.target)),
+      links: graphData.links.filter(l => liveIds.has(lid(l.source)) && liveIds.has(lid(l.target))),
     };
-  }
-
-  if (currentLens === 'tier') {
-    return graphData;
-  }
-
-  if (currentLens === 'lineage' && lineageRoot) {
+  } else if (currentLens === 'lineage' && lineageRoot) {
     const visited = new Set([lineageRoot]);
     const queue = [lineageRoot];
     while (queue.length) {
       const id = queue.shift();
       for (const l of graphData.links) {
-        if (l.source === id && !visited.has(l.target)) { visited.add(l.target); queue.push(l.target); }
-        if (l.target === id && !visited.has(l.source)) { visited.add(l.source); queue.push(l.source); }
+        const s = lid(l.source), t = lid(l.target);
+        if (s === id && !visited.has(t)) { visited.add(t); queue.push(t); }
+        if (t === id && !visited.has(s)) { visited.add(s); queue.push(s); }
       }
     }
-    return {
+    base = {
       nodes: graphData.nodes.filter(n => visited.has(n.id)),
-      links: graphData.links.filter(l => visited.has(l.source) && visited.has(l.target)),
+      links: graphData.links.filter(l => visited.has(lid(l.source)) && visited.has(lid(l.target))),
     };
+  } else {
+    base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
   }
 
-  return graphData;
+  // Dependency rail toggle: hide capability nodes (and their links) unless shown.
+  if (!showDeps) {
+    const capIds = new Set(base.nodes.filter(n => n.type === 'capability').map(n => n.id));
+    if (capIds.size) {
+      base = {
+        nodes: base.nodes.filter(n => !capIds.has(n.id)),
+        links: base.links.filter(l => !capIds.has(lid(l.source)) && !capIds.has(lid(l.target))),
+      };
+    }
+  }
+  return base;
+}
+
+// ── PADI layout: pin nodes into tier bands; anchor agents to X slots so each
+//    agent's vertical slice reads as a clean column. ──
+function applyLayout(vd) {
+  // Capabilities always pinned to the left rail, stacked in Y.
+  const caps = vd.nodes.filter(n => n.type === 'capability');
+  caps.forEach((n, i) => {
+    n.fx = -RAIL_X;
+    n.fy = (i - (caps.length - 1) / 2) * 84;
+  });
+
+  if (currentLens === 'padi') {
+    const ags = vd.nodes.filter(n => n.type === 'agent').sort((a, b) => a.id.localeCompare(b.id));
+    const gap = 200;
+    ags.forEach((n, i) => {
+      n.fx = (i - (ags.length - 1) / 2) * gap;  // even X slots
+      n.fy = LANE_Y.agent;
+    });
+    vd.nodes.forEach(n => {
+      if (n.type === 'agent' || n.type === 'capability') return;
+      n.fy = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;  // pin to band
+      n.fx = null;  // free in X — link force pulls toward connected agent's column
+    });
+  } else {
+    vd.nodes.forEach(n => {
+      if (n.type === 'capability') return;  // rail stays pinned in every lens
+      n.fx = null;
+      n.fy = null;
+    });
+  }
+}
+
+function applyForces() {
+  const charge = fg.d3Force('charge');
+  const link = fg.d3Force('link');
+  if (currentLens === 'padi') {
+    if (charge) charge.strength(-120);            // spread siblings within a lane
+    if (link) link.distance(48).strength(0.12);   // gentle pull toward parent column
+  } else {
+    if (charge) charge.strength(-30);
+    if (link) link.distance(30).strength(1);
+  }
 }
 
 // ── Graph init ──
@@ -173,10 +259,30 @@ function initGraph(data) {
     .linkDirectionalArrowRelPos(0.95)
     .linkLabel(l => l.kind)
     .linkWidth(1)
-    .linkDirectionalParticles(0)  // default off, pulse sets it
+    .linkDirectionalParticles(0)
     .linkDirectionalParticleSpeed(0.004)
     .linkDirectionalParticleWidth(1.5)
     .linkDirectionalParticleColor(() => '#3fb950')
+    .onRenderFramePre((ctx, scale) => {
+      // Swim-lane bands + dependency rail painted behind the nodes (PADI only).
+      if (currentLens !== 'padi') return;
+      for (const b of BANDS) {
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(BAND_X0, b.cy - 64, BAND_X1 - BAND_X0, 128);
+        ctx.fillStyle = 'rgba(139,148,158,0.65)';
+        ctx.font = `${13 / scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(b.label, BAND_X0 + 26, b.cy - 46);
+      }
+      if (showDeps) {
+        ctx.fillStyle = 'rgba(86,212,221,0.06)';
+        ctx.fillRect(-RAIL_X - 46, -360, 92, 720);
+        ctx.fillStyle = 'rgba(86,212,221,0.75)';
+        ctx.font = `${12 / scale}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('DEPENDENCIES', -RAIL_X, -384);
+      }
+    })
     .onNodeClick(node => {
       if (currentLens === 'lineage' && node.type === 'agent') {
         lineageRoot = node.id;
@@ -206,18 +312,28 @@ function initGraph(data) {
 function renderLens() {
   const vd = getVisibleData();
   fg.graphData(vd);
-  if (currentLens === 'tier') {
-    fg.dagMode('td').dagLevelDistance(80);
-  } else {
-    fg.dagMode(null);
-  }
-  fg.cooldownTicks(100);
-  info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}`;
+  if (currentLens === 'tier') fg.dagMode('td').dagLevelDistance(80);
+  else fg.dagMode(null);
+  applyLayout(vd);
+  applyForces();
+  fg.cooldownTicks(150);
+  fg.d3ReheatSimulation();
+  const tag = currentLens === 'padi' ? ' · swim lanes' : '';
+  info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}`;
 }
 
 // ── Lens buttons ──
 document.querySelectorAll('.lens-btn').forEach(btn => {
   btn.addEventListener('click', () => applyLens(btn.dataset.lens));
+});
+
+// ── Dependency rail toggle (slide in/out) ──
+document.getElementById('deps-btn').addEventListener('click', () => {
+  showDeps = !showDeps;
+  const b = document.getElementById('deps-btn');
+  b.textContent = (showDeps ? '▾' : '▸') + ' Dependencies (rail)';
+  b.classList.toggle('on', showDeps);
+  renderLens();
 });
 
 // ── Spawn ──
@@ -236,7 +352,7 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
         spawnMsg.className = 'msg ok'; spawnMsg.textContent = `✓ Spawned ${data.agent_id}`;
         document.getElementById('spawn-id').value = '';
         document.getElementById('spawn-desc').value = '';
-        setTimeout(loadGraph, 500); // reload after graph rebuild
+        setTimeout(loadGraph, 500);
       } else {
         spawnMsg.className = 'msg err'; spawnMsg.textContent = data.error || 'Spawn failed';
       }
@@ -255,13 +371,11 @@ function startPulse() {
       .then(r => r.json())
       .then(p => {
         if (fg && p.active_edges) {
-          // Set particles to the number of active edges
           fg.linkDirectionalParticles(p.active_edges.length);
-          // Color active edges green, inactive stay dark
           const activeSet = new Set(p.active_edges.map(e => `${e.source}→${e.target}`));
-          fg.linkColor(l => activeSet.has(`${l.source}→${l.target}`) ? '#2ea043' : '#30363d');
-          fg.linkWidth(l => activeSet.has(`${l.source}→${l.target}`) ? 2 : 1);
-          // Update info
+          const key = l => `${lid(l.source)}→${lid(l.target)}`;
+          fg.linkColor(l => activeSet.has(key(l)) ? '#2ea043' : '#30363d');
+          fg.linkWidth(l => activeSet.has(key(l)) ? 2 : 1);
           const pulseStr = p.bridge_alive ? '🌉' : '';
           const authStr = p.authsome_alive ? '🔐' : '';
           const llmStr = p.litellm_alive ? '🧠' : '';
@@ -269,7 +383,7 @@ function startPulse() {
           info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}`;
         }
       })
-      .catch(() => {}); // silent — server might be restarting
+      .catch(() => {});
   }, 3000);
 }
 

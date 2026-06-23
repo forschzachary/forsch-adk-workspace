@@ -119,7 +119,7 @@ def bridge_healthy() -> bool:
         return False
 
 def roundtrip_live(agent_id: str) -> bool:
-    """Check if an agent passes a real round-trip: synthetic message → tool call → response.
+    """Check if an agent passes a real round-trip: synthetic message -> tool call -> response.
 
     Reads from a cached result file (written by /pulse endpoint periodically).
     The actual roundtrip is expensive (~17s) so it's not run on every graph rebuild.
@@ -154,7 +154,7 @@ def check_gates(node_type: str, node_id: str, aid: str | None = None) -> dict:
         # L2: on bridge PYTHONPATH (deployable)
         if aid and agent_on_bridge(aid):
             gates["L2"] = True
-        # L3: round-trip liveness (synthetic message → tool call → response)
+        # L3: round-trip liveness (synthetic message -> tool call -> response)
         # Falls back to bridge health for agents without CRM tools
         if aid and roundtrip_live(aid):
             gates["L3"] = True
@@ -169,7 +169,7 @@ def check_gates(node_type: str, node_id: str, aid: str | None = None) -> dict:
         # L1: has a test file
         if tool_has_tests(tool_name):
             gates["L1"] = True
-        # L2: tests pass (assume yes if test file exists — full run is expensive)
+        # L2: tests pass (assume yes if test file exists -- full run is expensive)
         if gates["L1"]:
             gates["L2"] = True
 
@@ -331,6 +331,7 @@ for n in list(nodes.values()):
         "intake": "intake", "router": "router", "database": "database",
         "ui": "ui", "group": "router", "channel": "intake",
         "model": "logic", "credential": "database", "broker": "database",
+        "capability": "capability",
     }
     n["type"] = type_map.get(ntype, ntype)
 
@@ -364,7 +365,7 @@ for n in list(nodes.values()):
     # Contract
     n["contract"] = derive_contract(n["type"], aid)
 
-    # Role — read from agents.yaml if declared, default to "plain"
+    # Role -- read from agents.yaml if declared, default to "plain"
     if ntype == "agent":
         aid = nid.replace("agent:", "")
         declared_role = agents.get(aid, {}).get("role", "plain") if aid else "plain"
@@ -378,15 +379,33 @@ for n in list(nodes.values()):
 
 from datetime import datetime, timezone
 
+# Merge cross-cutting capabilities (rail dependencies) from capabilities.json.
+# Single source of truth: BOTH the renderer (index.html, runtime merge) and this
+# builder read the same file, so the dependency rail can't drift from the
+# manifest. These nodes are pre-enriched (state/gates/contract already set).
+cap_file = Path(__file__).parent / "capabilities.json"
+extra_nodes: list = []
+extra_links: list = []
+if cap_file.exists():
+    try:
+        cap_data = json.loads(cap_file.read_text())
+        extra_nodes = cap_data.get("nodes", [])
+        extra_links = cap_data.get("links", [])
+    except Exception:
+        pass
+
+all_nodes = list(nodes.values()) + extra_nodes
+all_links = links + extra_links
+
 output = {
     "version": 2,
-    "nodes": list(nodes.values()),
-    "links": links,
-    "node_count": len(nodes),
-    "link_count": len(links),
+    "nodes": all_nodes,
+    "links": all_links,
+    "node_count": len(all_nodes),
+    "link_count": len(all_links),
     "meta": {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source": "agents.yaml + filesystem scan",
+        "source": "agents.yaml + filesystem scan + capabilities.json",
     },
 }
 
