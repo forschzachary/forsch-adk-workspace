@@ -1,6 +1,6 @@
 # Spike: Live Agent Graph — force-graph control surface for the ADK bridge
 
-**Status:** D1 ✅ D2 ✅ D3 ✅ | D4 pending | D5 pending  
+**Status:** D1 ✅ D2 ✅ D3 ✅ | D4 ✅ D5 ✅  
 **Spike ID:** live-agent-graph  
 **Started:** 2026-06-23  
 **Repo:** https://github.com/forschzachary/live-agent-graph (private)
@@ -14,8 +14,8 @@ Every node, regardless of type:
 ```yaml
 node:
   id: string            # unique, e.g. "agent:stability"
-  type: string          # intake | router | agent | tool | design | logic | ui | database | builder
-  model: string         # LLM model code (for agent/logic nodes)
+  type: string          # intake | router | agent | tool | ui | database | capability
+  model: string         # LLM model code (embedded in agent nodes, not a separate node)
   state: string         # blank | building | built | live | error
   artifact: string      # file/dir this node OWNS on disk (truth pointer)
   contract:
@@ -38,11 +38,11 @@ node:
 | `router` | Routes messages to agents | hubert-team-lead group | L0+L1+L2+L3 |
 | `agent` | LLM-backed agent | stability, build, shelby | L0+L1+L2+L3 |
 | `tool` | Function an agent calls | get_crm_health_snapshot | L0+L1+L2 |
-| `design` | Spec/doc artifact | ARCHITECTURE.md | L0+L1 |
-| `logic` | LLM model backend | gpt-5.5, glm-5.2 | L0+L1+L2 |
 | `ui` | Visual surface | Chainlit chat, cockpit | L0+L1+L2 |
 | `database` | State store | authsome vault, Frappe DB | L0+L1+L2 |
-| `builder` | Agent that builds agents | adk_factory (future) | L0+L1+L2+L3 |
+| `capability` | Cross-cutting infrastructure dep | Ollama Cloud, Railway | pre-enriched in capabilities.json |
+
+Models are embedded in agent nodes (`model` field), not standalone `logic` nodes. The `builder` role is a promotion path (plain → builder → orchestrator), not a separate node type.
 
 ### State machine
 
@@ -85,8 +85,8 @@ blank → building → built → live
 ### Kill-criteria check (D2)
 
 - ✅ Code→graph sync stays honest (manifest generated from live scan, not hand-edited)
-- ✅ All 7 agents + their tools/models/channels render correctly (37 nodes, 37 links)
-- ✅ Lens switching works on one dataset (all / tier / lineage / live)
+- ✅ All 7 agents + their tools/channels render correctly (38 nodes, 29 links)
+- ✅ Lens switching works on one dataset (all / tier / lineage / live / padi)
 - ✅ State detection works: 17 building, 18 built, 2 blank
 
 ## D3: Write path — spawn blank agent, gate-check to live ✅
@@ -121,13 +121,25 @@ Tested end-to-end: spawned `test_spike`, added tool, wired to bridge, re-scanned
 - ✅ Gate checks are per-type and auto-evaluated
 - ✅ "Functional" gates (L3) require live traffic — honest threshold, not fakeable
 
-## D4: Directional particles on edges (pending)
+## D4: Directional particles on edges ✅
 
 Wire directional particles to one real message path — prove the graph can show live traffic.
 
-## D5: Writeup (pending)
+### Implementation
 
-Paperclip reborn vs Hermes team-lead/orchestrator front-end.
+`/pulse` endpoint polls bridge/authsome/LiteLLM health every 3 seconds. Active edges get green coloring + animated directional particles. 19 active edges, 20 live nodes. `reachable` (cheap heartbeat) and `live` (round-trip) are distinct signals with different visual treatments.
+
+## D5: Writeup ✅
+
+Paperclip reborn vs Hermes team-lead/orchestrator front-end. See `D5-WRITEUP.md` for the full architectural verdict. See `D5-CONFIDENCE.md` for the trust-gap closure analysis. See `GRADUATION.md` for the formalized promotion criteria.
+
+## PADI swim-lane lens ✅ (post-D5)
+
+Four horizontal bands (INTERFACES / ROUTER / AGENT·LOGIC / TOOLS·DATA) with agents anchored to evenly-spaced X slots. Vertical slices read as clean columns. Dependency rail (left edge) for cross-cutting infrastructure. Interface abstraction collapses per-channel intake nodes into channel-type interfaces.
+
+## Agent status visuals ✅ (post-D5)
+
+At-a-glance signals on agent nodes: size = connected node count, fill arc = gate completion (clockwise fill), center symbol = state (⚠ building, ✕ error, ◎ live pulse ring). No hover needed.
 
 ## Open questions (from spike brief)
 
