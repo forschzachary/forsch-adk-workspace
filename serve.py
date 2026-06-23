@@ -16,8 +16,51 @@ from urllib.parse import parse_qs, urlparse
 
 SPIKE_DIR = Path(__file__).resolve().parent
 WS = Path(os.environ.get("FORSCH_ADK_WORKSPACE", "/opt/data/workspace/adk"))
+CRM_URL = os.environ.get("CRM_URL", "https://frappe-web-production-7412.up.railway.app")
+CRM_API_KEY_FILE = Path("/opt/data/secrets/frappe-admin-api-key")
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+
+# ── CRM API client ──
+
+def _crm_headers() -> dict:
+    """Return auth headers for CRM API calls."""
+    if CRM_API_KEY_FILE.exists():
+        key = CRM_API_KEY_FILE.read_text().strip()
+        return {"Authorization": f"token {key}"}
+    return {}
+
+
+def _crm_get(endpoint: str, params: dict = None) -> dict | None:
+    """Call a CRM whitelisted API endpoint. Returns parsed JSON or None."""
+    import urllib.request
+    import urllib.parse
+    url = f"{CRM_URL}/api/method/{endpoint}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers=_crm_headers())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
+def fetch_clusters_from_crm() -> list:
+    """Fetch cluster list from CRM DocType (source of truth)."""
+    data = _crm_get("forsch_frontiers.sync.agent_graph.list_clusters")
+    if data and "message" in data:
+        return data["message"]
+    return []
+
+
+def fetch_manifest_from_crm(cluster_id: str) -> dict | None:
+    """Fetch agent graph manifest for a cluster from CRM."""
+    data = _crm_get("forsch_frontiers.sync.agent_graph.get_agent_graph_manifest",
+                     {"cluster_id": cluster_id})
+    if data and "message" in data:
+        return data["message"]
+    return None
 
 
 def promote_agent(agent_id: str, target_role: str) -> dict:
@@ -111,7 +154,16 @@ def get_pulse():
 
 
 def list_clusters() -> list:
-    """Return all cluster folders with their project.md front-matter."""
+    """Return all cluster folders with their project.md front-matter.
+
+    Tries CRM API first (source of truth), falls back to local YAML files.
+    """
+    # Try CRM API first
+    crm_clusters = fetch_clusters_from_crm()
+    if crm_clusters:
+        return crm_clusters
+
+    # Fallback to local YAML files
     clusters_dir = SPIKE_DIR / "clusters"
     if not clusters_dir.exists():
         return []
@@ -161,7 +213,16 @@ def yaml_safe_load(text: str) -> dict:
 
 
 def build_manifest(cluster_name: str) -> dict | None:
-    """Run build_live_graph.py --cluster <name> and return the manifest."""
+    """Build the agent graph manifest for a cluster.
+
+    Tries CRM API first (source of truth), falls back to local build_live_graph.py.
+    """
+    # Try CRM API first
+    crm_data = fetch_manifest_from_crm(cluster_name)
+    if crm_data:
+        return _transform_crm_manifest(cluster_name, crm_data)
+
+    # Fallback to local build
     result = subprocess.run(
         [BUILDER_PY, str(SPIKE_DIR / "build_live_graph.py"), "--cluster", cluster_name],
         capture_output=True, text=True, timeout=30,
@@ -172,6 +233,92 @@ def build_manifest(cluster_name: str) -> dict | None:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
         return None
+
+
+def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
+    """Transform CRM API data into graph manifest format (nodes + links)."""
+    agents = crm_data.get("agents", {})
+    shared = crm_data.get("shared", {})
+    config = crm_data.get("cluster_config", {})
+
+    nodes = []
+    links = []
+
+    # Shared tools
+    for t in shared.get("tools", []):
+        nodes.append({"id": f"tool:{t}", "name": t, "kind": "tool", "shared": True,
+                       "type": "tool", "state": "built", "gates": {},
+                       "contract": {"accepts": ["tool_call"], "emits": ["tool_result"]},
+                       "role": "plain", "reachable": False,
+                       "artifact": "components/src/forsch/adk_components/tools/*.py"})
+
+    # Shared models
+    for m in shared.get("models", []):
+        nodes.append({"id": f"model:{m}", "name": m, "kind": "logic", "shared": True,
+                       "type": "logic", "state": "built", "gates": {},
+                       "contract": {"accepts": [], "emits": []},
+                       "role": "plain", "reachable": False,
+                       "artifact": "LiteLLM config"})
+
+    # Authsome + connections
+    nodes.append({"id": "authsome", "name": "authsome (broker)", "kind": "database",
+                   "shared": True, "type": "database", "state": "live", "gates": {},
+                   "contract": {"accepts": ["query"], "emits": ["data"]},
+                   "role": "plain", "reachable": False, "artifact": "authsome vault"})
+    connections = shared.get("connections", {})
+    for cid, cname in connections.items():
+        nodes.append({"id": f"cred:{cid}", "name": cname, "kind": "database",
+                       "shared": True, "type": "database", "state": "built", "gates": {},
+                       "contract": {"accepts": ["query"], "emits": ["data"]},
+                       "role": "plain", "reachable": False, "artifact": "authsome vault"})
+        links.append({"source": "authsome", "target": f"cred:{cid}", "kind": "brokers"})
+
+    # Agents
+    for aid, a in agents.items():
+        nid = f"agent:{aid}"
+        model = a.get("model", "")
+        nodes.append({"id": nid, "name": aid, "kind": "agent",
+                       "type": "agent", "state": "built",
+                       "model": model,
+                       "gates": {"L0": True, "L1": True, "L2": True, "L3": True},
+                       "contract": {"accepts": ["instruction"], "emits": ["response", "tool_call"]},
+                       "role": a.get("role", "plain"), "reachable": False,
+                       "artifact": f"agents/{aid}/src/forsch/agent_{aid}/agent.py"})
+
+        # Link agent to tools
+        for t in a.get("tools", []):
+            if f"tool:{t}" in [n["id"] for n in nodes]:
+                links.append({"source": nid, "target": f"tool:{t}", "kind": "uses"})
+
+        # Link agent to model
+        if model and f"model:{model}" in [n["id"] for n in nodes]:
+            links.append({"source": nid, "target": f"model:{model}", "kind": "pinned-model"})
+
+        # Channels
+        for c in a.get("discord_channels", []):
+            cnid = f"chan:{c}"
+            if cnid not in [n["id"] for n in nodes]:
+                nodes.append({"id": cnid, "name": c, "kind": "intake",
+                               "type": "intake", "state": "built", "gates": {},
+                               "contract": {"accepts": ["external_message"],
+                                            "emits": ["routed_message"]},
+                               "role": "plain", "reachable": False,
+                               "artifact": "Discord channel config"})
+            links.append({"source": nid, "target": cnid, "kind": "listens"})
+
+    return {
+        "version": 2,
+        "cluster": cluster_name,
+        "nodes": nodes,
+        "links": links,
+        "node_count": len(nodes),
+        "link_count": len(links),
+        "meta": {
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "source": f"CRM API (forsch_frontiers.sync.agent_graph)",
+            "cluster": cluster_name,
+        },
+    }
 
 
 def new_cluster(name: str) -> dict:
