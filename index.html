@@ -11,19 +11,34 @@
   #panel {
     position: fixed; top: 16px; right: 16px; z-index: 10;
     background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-    padding: 12px 16px; min-width: 200px; font-size: 13px;
+    padding: 12px 16px; min-width: 220px; font-size: 13px; max-height: 90vh; overflow-y: auto;
   }
-  #panel h3 { margin-bottom: 8px; color: #58a6ff; font-size: 14px; }
-  #panel .lens-btn {
+  #panel h3 { margin: 12px 0 6px; color: #58a6ff; font-size: 14px; }
+  #panel h3:first-child { margin-top: 0; }
+  #panel .lens-btn, #panel .action-btn {
     display: block; width: 100%; margin: 4px 0; padding: 6px 10px;
     background: #21262d; border: 1px solid #30363d; border-radius: 4px;
     color: #c9d1d9; cursor: pointer; text-align: left; font-size: 12px;
   }
-  #panel .lens-btn:hover { background: #30363d; }
+  #panel .lens-btn:hover, #panel .action-btn:hover { background: #30363d; }
   #panel .lens-btn.active { background: #1f6feb; border-color: #1f6feb; }
+  #panel .action-btn.spawn { background: #1a3a1a; border-color: #2ea043; color: #3fb950; }
+  #panel .action-btn.spawn:hover { background: #2ea043; color: #fff; }
+  #panel .action-btn.refresh { background: #1a2a3a; border-color: #1f6feb; color: #58a6ff; }
+  #panel .action-btn.refresh:hover { background: #1f6feb; color: #fff; }
+  #panel input {
+    width: 100%; margin: 4px 0; padding: 5px 8px;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 12px;
+  }
+  #panel input:focus { outline: none; border-color: #58a6ff; }
   #panel .legend { margin-top: 12px; }
   #panel .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
   #panel .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  #panel .sep { border-top: 1px solid #30363d; margin: 10px 0; }
+  #panel .msg { font-size: 11px; margin-top: 4px; min-height: 16px; }
+  #panel .msg.ok { color: #3fb950; }
+  #panel .msg.err { color: #ff7b72; }
   #info { position: fixed; bottom: 16px; left: 16px; z-index: 10; font-size: 12px; color: #8b949e; }
   #tooltip {
     position: fixed; pointer-events: none; z-index: 20;
@@ -40,6 +55,18 @@
   <button class="lens-btn" data-lens="tier">Tier (by type)</button>
   <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
   <button class="lens-btn" data-lens="live">Live only</button>
+
+  <div class="sep"></div>
+  <h3>Spawn Agent</h3>
+  <input id="spawn-id" placeholder="agent_id (e.g. research)" maxlength="40">
+  <input id="spawn-desc" placeholder="description (optional)" maxlength="120">
+  <button class="action-btn spawn" id="spawn-btn">Spawn blank agent</button>
+  <div class="msg" id="spawn-msg"></div>
+
+  <div class="sep"></div>
+  <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
+
+  <div class="sep"></div>
   <div class="legend">
     <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span> agent</div>
     <div class="legend-item"><span class="legend-dot" style="background:#f0883e"></span> tool</div>
@@ -69,15 +96,20 @@ const STATE_SIZE = { blank: 3, building: 5, built: 7, live: 10, error: 6 };
 let graphData, currentLens = 'all', lineageRoot = null;
 const info = document.getElementById('info');
 const tooltip = document.getElementById('tooltip');
+const spawnMsg = document.getElementById('spawn-msg');
 
-fetch('agent-graph-v2.json')
-  .then(r => r.json())
-  .then(data => {
-    graphData = data;
-    info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}`;
-    initGraph(data);
-  })
-  .catch(err => { info.textContent = 'Failed to load agent-graph-v2.json — ' + err.message; });
+function loadGraph() {
+  info.textContent = 'Loading…';
+  fetch('agent-graph-v2.json')
+    .then(r => r.json())
+    .then(data => {
+      graphData = data;
+      info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}`;
+      if (!fg) initGraph(data);
+      else renderLens();
+    })
+    .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
+}
 
 // ── Lens logic ──
 function applyLens(lens) {
@@ -100,25 +132,17 @@ function getVisibleData() {
   }
 
   if (currentLens === 'tier') {
-    // Re-group by type: same nodes, but force layout separates by tier
-    return graphData; // all nodes, layout handled by dag mode
+    return graphData;
   }
 
   if (currentLens === 'lineage' && lineageRoot) {
-    // BFS from lineageRoot: include root + all deps (1 hop)
     const visited = new Set([lineageRoot]);
     const queue = [lineageRoot];
     while (queue.length) {
       const id = queue.shift();
       for (const l of graphData.links) {
-        if (l.source === id && !visited.has(l.target)) {
-          visited.add(l.target);
-          queue.push(l.target);
-        }
-        if (l.target === id && !visited.has(l.source)) {
-          visited.add(l.source);
-          queue.push(l.source);
-        }
+        if (l.source === id && !visited.has(l.target)) { visited.add(l.target); queue.push(l.target); }
+        if (l.target === id && !visited.has(l.source)) { visited.add(l.source); queue.push(l.source); }
       }
     }
     return {
@@ -170,7 +194,7 @@ function initGraph(data) {
         tooltip.style.display = 'none';
       }
     })
-    .dagMode('td')  // top-down for tier lens
+    .dagMode('td')
     .dagLevelDistance(80)
     .cooldownTicks(100);
 }
@@ -181,7 +205,7 @@ function renderLens() {
   if (currentLens === 'tier') {
     fg.dagMode('td').dagLevelDistance(80);
   } else {
-    fg.dagMode(null); // free-force for other lenses
+    fg.dagMode(null);
   }
   fg.cooldownTicks(100);
   info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}`;
@@ -191,6 +215,36 @@ function renderLens() {
 document.querySelectorAll('.lens-btn').forEach(btn => {
   btn.addEventListener('click', () => applyLens(btn.dataset.lens));
 });
+
+// ── Spawn ──
+document.getElementById('spawn-btn').addEventListener('click', () => {
+  const id = document.getElementById('spawn-id').value.trim();
+  const desc = document.getElementById('spawn-desc').value.trim();
+  if (!id) { spawnMsg.className = 'msg err'; spawnMsg.textContent = 'Enter an agent_id'; return; }
+  if (!/^[a-z][a-z0-9_]*$/.test(id)) { spawnMsg.className = 'msg err'; spawnMsg.textContent = 'Invalid id (a-z, 0-9, _)'; return; }
+
+  spawnMsg.className = 'msg'; spawnMsg.textContent = 'Spawning…';
+  const body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent(desc || id + ' agent')}`;
+  fetch('/spawn', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        spawnMsg.className = 'msg ok'; spawnMsg.textContent = `✓ Spawned ${data.agent_id}`;
+        document.getElementById('spawn-id').value = '';
+        document.getElementById('spawn-desc').value = '';
+        setTimeout(loadGraph, 500); // reload after graph rebuild
+      } else {
+        spawnMsg.className = 'msg err'; spawnMsg.textContent = data.error || 'Spawn failed';
+      }
+    })
+    .catch(err => { spawnMsg.className = 'msg err'; spawnMsg.textContent = 'Server error: ' + err.message; });
+});
+
+// ── Refresh ──
+document.getElementById('refresh-btn').addEventListener('click', loadGraph);
+
+// ── Init ──
+loadGraph();
 </script>
 </body>
 </html>

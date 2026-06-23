@@ -106,13 +106,14 @@ def authsome_healthy() -> bool:
         return False
 
 def bridge_healthy() -> bool:
-    """Check if bridge Chainlit surface responds."""
+    """Check if bridge Chainlit surface responds (any HTTP response = alive)."""
     try:
         r = subprocess.run(
-            ["curl", "-fsS", "-m", "3", "http://127.0.0.1:8800"],
+            ["curl", "-fsS", "-m", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:8800"],
             capture_output=True, text=True
         )
-        return r.returncode == 0
+        # Any HTTP status code means the server is running
+        return r.returncode == 0 and r.stdout.strip().isdigit()
     except Exception:
         return False
 
