@@ -82,3 +82,27 @@ agents:
     - get_grocery_log
     - add_reminder
     model: gpt-5.5
+  developer:
+    description: LinkedIn developer — builds posting tools, scheduling, and automation.
+    discord_channels:
+    - '#team-linkedin'
+    safety_level: read_only
+    purpose: 'Build and maintain LinkedIn posting tools, scheduling, and automation for the linkedin-ops cluster.'
+    tools: []
+    model: gpt-5.5
+  brand-specialist:
+    description: LinkedIn brand specialist — visual identity, voice, and content strategy.
+    discord_channels:
+    - '#team-linkedin'
+    safety_level: read_only
+    purpose: 'Own visual identity, brand voice, and content strategy for LinkedIn posts.'
+    tools: []
+    model: gpt-5.5
+  copywriter:
+    description: LinkedIn copywriter — post drafts, hooks, captions, and engagement copy.
+    discord_channels:
+    - '#team-linkedin'
+    safety_level: read_only
+    purpose: 'Write LinkedIn post drafts, hooks, captions, and engagement copy.'
+    tools: []
+    model: gpt-5.5

@@ -30,6 +30,12 @@ ADK_WS = Path("/opt/data/workspace/adk")  # real ADK workspace for filesystem ga
 # ── Validation schemas (disk-first, CRM-second — gatekeeper before builder) ──
 
 VALID_STATUSES = ("blank", "planning", "building", "stable", "archived")
+DEFAULT_MAX_DELEGATION_DEPTH = 3  # depth 0..3 (human → agent → agent → agent → escalate)
+
+
+class RoutingConfig(BaseModel):
+    """Cluster-level routing rules. Lives under cluster.yaml `routing:` block."""
+    max_delegation_depth: int = Field(default=DEFAULT_MAX_DELEGATION_DEPTH, ge=1, le=10)
 
 
 class ClusterConfig(BaseModel):
@@ -38,6 +44,7 @@ class ClusterConfig(BaseModel):
     description: str = ""
     members: list[str] = Field(default_factory=list, min_length=1)
     config: dict = Field(default_factory=dict)
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)
 
     @field_validator("members")
     @classmethod
@@ -79,6 +86,63 @@ class AgentRegistry(BaseModel):
     version: int = 1
     defaults: dict = Field(default_factory=dict)
     agents: dict[str, AgentDef] = Field(default_factory=dict)
+
+
+class TaskDef(BaseModel):
+    """Schema for a GP Task routed to an agent. Lives in clusters/<name>/tasks.yaml"""
+    id: str
+    title: str = ""
+    agent_id: str
+    cluster_id: str
+    parent: str | None = None
+    chain: list[str] = Field(default_factory=list)
+    depth: int = Field(default=0, ge=0)
+
+    @field_validator("chain")
+    @classmethod
+    def no_cycles(cls, v: list[str]) -> list[str]:
+        if len(v) != len(set(v)):
+            raise ValueError(f"cycle detected: duplicate agent in chain {v}")
+        return v
+
+    @field_validator("depth")
+    @classmethod
+    def matches_chain(cls, v: int, info) -> int:
+        chain = info.data.get("chain", [])
+        if chain and v != len(chain):
+            raise ValueError(f"depth {v} does not match chain length {len(chain)}")
+        return v
+
+
+def validate_task_chain(task: TaskDef, cluster_members: list[str], max_depth: int) -> list[str]:
+    """Validate a task's routing chain against cluster rules. Returns errors (empty = valid).
+
+    Checks:
+      1. agent_id is a member of the target cluster
+      2. every agent in chain is a member of the target cluster
+      3. depth does not exceed max_delegation_depth
+      4. no cycles in chain (already caught by TaskDef validator, double-checked here)
+    """
+    errors: list[str] = []
+
+    if task.agent_id not in cluster_members:
+        errors.append(f"agent '{task.agent_id}' not in cluster members: {cluster_members}")
+
+    for aid in task.chain:
+        if aid not in cluster_members:
+            errors.append(f"chain agent '{aid}' not in cluster members: {cluster_members}")
+
+    if task.depth > max_depth:
+        errors.append(
+            f"depth {task.depth} exceeds max_delegation_depth {max_depth} — "
+            f"only escalation to human allowed at this depth"
+        )
+
+    # Double-check no cycles (belt-and-suspenders with TaskDef validator)
+    if len(task.chain) != len(set(task.chain)):
+        errors.append(f"cycle detected in chain: {task.chain}")
+
+    return errors
 
 
 def validate_cluster(cluster_name: str) -> list[str]:
@@ -148,6 +212,30 @@ def validate_cluster(cluster_name: str) -> list[str]:
             errors.append(f"registry parse error ({registry_yaml}): {e}")
     else:
         errors.append(f"registry missing: {registry_yaml}")
+
+    # 4. task chain validation (if tasks.yaml exists)
+    tasks_yaml = SPIKE_DIR / "clusters" / cluster_name / "tasks.yaml"
+    if tasks_yaml.exists():
+        try:
+            tasks_raw = yaml.safe_load(tasks_yaml.read_text()) or {}
+            task_list = tasks_raw.get("tasks", [])
+            if cluster_yaml.exists():
+                try:
+                    cluster_raw = yaml.safe_load(cluster_yaml.read_text()) or {}
+                    member_ids = cluster_raw.get("members", [])
+                    routing = cluster_raw.get("routing", {})
+                    max_depth = routing.get("max_delegation_depth", DEFAULT_MAX_DELEGATION_DEPTH)
+                    for t in task_list:
+                        try:
+                            task = TaskDef.model_validate(t)
+                            chain_errors = validate_task_chain(task, member_ids, max_depth)
+                            errors.extend(chain_errors)
+                        except ValidationError as e:
+                            errors.append(f"task '{t.get('id', '?')}' invalid ({tasks_yaml}): {e}")
+                except yaml.YAMLError:
+                    pass  # already caught above
+        except yaml.YAMLError as e:
+            errors.append(f"tasks.yaml parse error ({tasks_yaml}): {e}")
 
     return errors
 
