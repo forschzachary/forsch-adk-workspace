@@ -112,7 +112,10 @@ def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
         return HTMLResponse(_TERM.read_text().replace("__TOKEN__", token or ""))
 
     async def term_ws(websocket):
-        if token and websocket.query_params.get("token") != token:
+        # /term/ws is a ROOT shell exposed over the public Tailscale Funnel. Fail
+        # CLOSED: refuse it whenever no token is configured (previously an unset
+        # COCKPIT_TOKEN left it wide open), as well as on any token mismatch.
+        if not token or websocket.query_params.get("token") != token:
             await websocket.close(code=1008)
             return
         await pty_bridge(websocket, workspace_root)
