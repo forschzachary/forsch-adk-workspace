@@ -40,9 +40,10 @@ def _tailscale_dnsname() -> str:
 
 def _required_workspace() -> str:
     root = os.environ.get("FORSCH_ADK_WORKSPACE")
-    if not root:
-        raise RuntimeError("FORSCH_ADK_WORKSPACE is not set; refusing to guess the workspace root")
-    return root
+    if root:
+        return root
+    from forsch.adk_components.workspace_resolver import workspace_root
+    return str(workspace_root() / "adk")
 
 _CANVAS = Path(__file__).resolve().parents[3] / "templates" / "canvas.html"
 _TERM = Path(__file__).resolve().parents[3] / "templates" / "term.html"
@@ -112,7 +113,10 @@ def create_app(*, workspace_root: str, token: str | None = None) -> Starlette:
         return HTMLResponse(_TERM.read_text().replace("__TOKEN__", token or ""))
 
     async def term_ws(websocket):
-        if token and websocket.query_params.get("token") != token:
+        # /term/ws is a ROOT shell exposed over the public Tailscale Funnel. Fail
+        # CLOSED: refuse it whenever no token is configured (previously an unset
+        # COCKPIT_TOKEN left it wide open), as well as on any token mismatch.
+        if not token or websocket.query_params.get("token") != token:
             await websocket.close(code=1008)
             return
         await pty_bridge(websocket, workspace_root)

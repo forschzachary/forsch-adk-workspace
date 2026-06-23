@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import parse_qs
 from fastapi import FastAPI
 from chainlit.utils import mount_chainlit
 
@@ -11,8 +12,8 @@ class TokenBridge:
     def __init__(self, app): self.app = app
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
-            qs = dict(p.split("=", 1) for p in scope.get("query_string", b"").decode().split("&") if "=" in p)
-            tok = qs.get("chat_token")
+            qs = parse_qs(scope.get("query_string", b"").decode())  # URL-decodes values
+            tok = qs.get("chat_token", [None])[0]
             if not tok:
                 for k, v in scope.get("headers", []):
                     if k == b"cookie" and b"chat_token=" in v:
