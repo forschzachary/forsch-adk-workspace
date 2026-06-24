@@ -204,6 +204,10 @@
   <input id="spawn-desc" placeholder="description (optional)" maxlength="120">
   <button class="action-btn spawn" id="spawn-btn">Spawn blank agent</button>
   <div class="msg" id="spawn-msg"></div>
+  <div class="field" id="spawn-workspace-field" style="display:none;margin-top:6px;">
+    <label>Workspace</label>
+    <div class="ro" id="spawn-workspace-path" style="word-break:break-all;font-size:11px;"></div>
+  </div>
 
   <div class="sep"></div>
   <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
@@ -842,6 +846,12 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
         spawnMsg.className = 'msg ok'; spawnMsg.textContent = `✓ Spawned ${data.agent_id}`;
         document.getElementById('spawn-id').value = '';
         document.getElementById('spawn-desc').value = '';
+        // Show workspace path if returned
+        if (data.workspace) {
+          const wsField = document.getElementById('spawn-workspace-field');
+          wsField.style.display = 'block';
+          document.getElementById('spawn-workspace-path').textContent = data.workspace;
+        }
         // Auto-add to current cluster
         if (currentCluster) {
           const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
@@ -937,6 +947,11 @@ function openInspect(node) {
         <option value="L2" ${(node.gates||{}).L2 ? 'selected' : ''}>L2</option>
         <option value="L3" ${(node.gates||{}).L3 ? 'selected' : ''}>L3</option>
       </select></div>`;
+
+    // Workspace (read-only, from CRM)
+    if (node.workspace) {
+      html += `<div class="field"><label>Workspace</label><div class="ro" style="word-break:break-all;font-size:11px;">${esc(node.workspace)}</div></div>`;
+    }
   }
 
   // Artifact

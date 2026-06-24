@@ -374,6 +374,7 @@ def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
                        "gates": {"L0": True, "L1": True, "L2": True, "L3": True},
                        "contract": {"accepts": ["instruction"], "emits": ["response", "tool_call"]},
                        "role": a.get("role", "plain"), "reachable": False,
+                       "workspace": a.get("workspace") or "",
                        "artifact": f"agents/{aid}/src/forsch/agent_{aid}/agent.py"})
 
         # Link agent to tools
@@ -586,7 +587,16 @@ class Handler(SimpleHTTPRequestHandler):
                 capture_output=True, text=True, cwd=str(WS),
             )
             if result.returncode == 0:
-                self._json_response(200, {"ok": True, "agent_id": agent_id, "output": result.stdout})
+                # Extract workspace path from spawn output
+                workspace_path = None
+                for line in result.stdout.splitlines():
+                    if line.strip().startswith("profile:"):
+                        workspace_path = line.split("profile:")[-1].strip().split()[0]
+                        break
+                resp = {"ok": True, "agent_id": agent_id, "output": result.stdout}
+                if workspace_path:
+                    resp["workspace"] = workspace_path
+                self._json_response(200, resp)
             else:
                 self._json_response(500, {"ok": False, "error": result.stderr[:500]})
 
