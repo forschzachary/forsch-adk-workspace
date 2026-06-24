@@ -290,7 +290,7 @@ def main():
     # ── Record workspace on FF Agent in CRM ──
     try:
         import urllib.request
-        crm_api_key = Path("/opt/data/secrets/frappe-admin-api-key").read_text().strip()
+        crm_api_key = (Path(os.environ.get("HERMES_HOME", "/opt/data")) / "secrets" / "frappe-admin-api-key").read_text().strip()
         payload = json.dumps({
             "agent_id": agent_id,
             "workspace": str(profile_home),
