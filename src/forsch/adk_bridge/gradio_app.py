@@ -118,7 +118,7 @@ def build_gradio_app() -> gr.Blocks:
 
         chat = gr.ChatInterface(
             fn=chat_fn,
-            chatbot=gr.Chatbot(height=500, type="messages"),
+            chatbot=gr.Chatbot(height=500),
             additional_inputs=[agent_dd],
             title="",
             description="",
