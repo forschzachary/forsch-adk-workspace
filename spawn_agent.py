@@ -24,9 +24,9 @@ from workspace_resolver import workspace_root
 
 WS = workspace_root() / "adk"
 
-# Profile homes live outside the filebrowser-served workspace tree
-# (HERMES_HOME/profiles, not workspace_root/profiles) since they hold per-agent creds.
-PROFILES_ROOT = Path(os.environ.get("HERMES_HOME", "/opt/data")) / "profiles"
+# Profile homes live at /root/.hermes/profiles (Docker-visible path).
+# Inside the bridge container, AGENT_PROFILES_ROOT=/profiles maps to this.
+PROFILES_ROOT = Path("/root/.hermes/profiles")
 
 AGENT_PY_TEMPLATE = '''"""agent_{id}_agent — blank agent (spawned from Live Agent Graph).
 
