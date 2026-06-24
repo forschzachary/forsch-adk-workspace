@@ -20,13 +20,9 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
-from workspace_resolver import workspace_root
+from workspace_resolver import workspace_root, profile_home
 
 WS = workspace_root() / "adk"
-
-# Profile homes live at /root/.hermes/profiles (Docker-visible path).
-# Inside the bridge container, AGENT_PROFILES_ROOT=/profiles maps to this.
-PROFILES_ROOT = Path("/root/.hermes/profiles")
 
 AGENT_PY_TEMPLATE = '''"""agent_{id}_agent — blank agent (spawned from Live Agent Graph).
 
@@ -266,26 +262,30 @@ def main():
         f.write(entry)
 
     # ── Create per-agent profile home ──
-    profile_home = PROFILES_ROOT / agent_id
-    if not profile_home.exists():
-        profile_home.mkdir(parents=True, exist_ok=True)
-        (profile_home / "home").mkdir(exist_ok=True)
-        (profile_home / "memory").mkdir(exist_ok=True)
-        (profile_home / "README").write_text(
+    # Single source of truth: workspace_resolver.profile_home() (reads
+    # AGENT_PROFILES_ROOT, else HERMES_HOME/profiles). Do NOT hardcode the path —
+    # a literal is namespace-fragile (host vs container) and was the lost-work bug.
+    phome = profile_home(agent_id)
+    if not phome.exists():
+        phome.mkdir(parents=True, exist_ok=True)
+        (phome / "home").mkdir(exist_ok=True)
+        (phome / "memory").mkdir(exist_ok=True)
+        (phome / "README").write_text(
             f"# {agent_id} profile home\n\n"
             f"Per-agent runtime home for the {agent_id} agent.\n"
             f"Created: {__import__('datetime').datetime.now().isoformat()}\n\n"
             f"## Structure\n\n"
-            f"- `home/` — agent's $HOME at runtime (creds, config, state)\n"
+            f"- `home/` — intended as the agent's $HOME (creds, config, state)\n"
             f"- `memory/` — persistent memory store\n\n"
             f"## Runtime binding\n\n"
-            f"The agent process should launch with HOME={profile_home}\n"
-            f"(or HERMES_HOME={profile_home}) so cred/CLI resolution\n"
-            f"points here, not the shared workspace.\n"
+            f"Resolve this path via `workspace_resolver.profile_home('{agent_id}')`.\n"
+            f"NOTE: the Discord bridge currently runs agents in-process, so $HOME\n"
+            f"is NOT auto-bound per agent — code must use the resolver explicitly.\n"
+            f"Per-agent HOME isolation requires running agents as subprocesses.\n"
         )
-        print(f"  profile:  {profile_home} (new)")
+        print(f"  profile:  {phome} (new)")
     else:
-        print(f"  profile:  {profile_home} (exists — not clobbered)")
+        print(f"  profile:  {phome} (exists — not clobbered)")
 
     # ── Record workspace on FF Agent in CRM ──
     try:
