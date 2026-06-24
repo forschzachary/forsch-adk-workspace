@@ -32,6 +32,15 @@ FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 
 GRAPH_SECRET = os.environ.get("GRAPH_SERVER_SECRET", "")
+# Durability: if the env var wasn't injected at launch, read the secret from the
+# persistent file (/opt/data/graph-server-secret). This makes the secret survive
+# ANY restart — manual, supervised, or container reboot — without depending on the
+# launch env. The file is the durable store; if it's also absent, GRAPH_SECRET
+# stays empty and _check_secret fails closed (refuses every mutating request).
+if not GRAPH_SECRET:
+    _secret_file = Path("/opt/data/graph-server-secret")
+    if _secret_file.exists():
+        GRAPH_SECRET = _secret_file.read_text().strip()
 CRM_ORIGIN = os.environ.get("CRM_ORIGIN", "https://crm.forschfrontiers.com")
 CRM_API_KEY_FILE = Path("/opt/data/secrets/frappe-admin-api-key")
 CRM_BASE = os.environ.get("CRM_BASE_URL", "https://crm.forschfrontiers.com")
