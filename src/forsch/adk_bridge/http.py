@@ -1,8 +1,13 @@
 import re
 import os
+import json
 from pathlib import Path
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from chainlit.utils import mount_chainlit
+
+import gradio as gr
+from forsch.adk_bridge.gradio_app import build_gradio_app
 
 app = FastAPI()
 
@@ -27,6 +32,11 @@ async def _teamrooms_startup():
 _TARGET = str(Path(__file__).with_name("cl_app.py"))
 mount_chainlit(app=app, target=_TARGET, path="/chat")   # MUST be after the routes above
 
+# ── Gradio mount ────────────────────────────────────────────────────────────
+# Mounted on the same FastAPI app, sharing the token gate below.
+_gradio_demo = build_gradio_app()
+gr.mount_gradio_app(app, _gradio_demo, path="/gradio")
+
 
 # ── token bridge ────────────────────────────────────────────────────────────
 # Chainlit's header_auth_callback only reads real HTTP headers — a plain <iframe
@@ -43,6 +53,7 @@ class _TokenBridge:
         if scope["type"] not in ("http", "websocket") or not _CHAT_TOKEN:
             return await self.app(scope, receive, send)
 
+        path = scope.get("path", "")
         headers = dict(scope.get("headers") or [])
         # Already authenticated header present? pass through.
         if headers.get(b"x-chat-token", b"").decode() == _CHAT_TOKEN:
@@ -85,6 +96,20 @@ class _TokenBridge:
                 await send(message)
 
             return await self.app(scope, receive, send_wrapper)
+
+        # Gate /gradio/ routes — Gradio has no header_auth_callback, so we
+        # must block at the ASGI level (same pattern as the spike's _TokenGate).
+        if path.startswith("/gradio/"):
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [(b"content-type", b"application/json")],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": json.dumps({"error": "unauthorized"}).encode(),
+            })
+            return
 
         return await self.app(scope, receive, send)
 
