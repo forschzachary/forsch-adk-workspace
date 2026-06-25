@@ -540,43 +540,52 @@ def _derive_agent_status(agent_id: str) -> str:
 
 
 def _get_agent_config(agent_id: str) -> dict:
-    """Read real agent config from agents.yaml + derive status."""
-    import yaml
+    """Read real agent config from agents.yaml + derive status.
+
+    Uses the factory venv's Python (which has pyyaml) via subprocess to avoid
+    depending on system-level pyyaml.
+    """
     manifest_path = WS / "agent_specs" / "agents.yaml"
     if not manifest_path.exists():
         return {"ok": False, "error": "agents.yaml not found"}
-    raw = yaml.safe_load(manifest_path.read_text()) or {}
-    defaults = raw.get("defaults") or {}
-    agents_raw = raw.get("agents") or {}
-    if agent_id not in agents_raw:
-        return {"ok": False, "error": f"unknown agent: {agent_id}"}
-    spec = {**defaults, **(agents_raw[agent_id] or {})}
-    # Extract leaf tool names
-    tools_raw = spec.get("tools") or []
-    tools = [t.rsplit(".", 1)[-1] for t in tools_raw]
-    # Check if package exists for status
-    pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
-    status = "built" if pkg.exists() else "blank"
-    return {
-        "ok": True,
-        "agent": {
-            "id": agent_id,
-            "adk_name": spec.get("adk_name", f"{agent_id}_agent"),
-            "description": spec.get("description", ""),
-            "model": spec.get("model", ""),
-            "model_code": spec.get("model_code", ""),
-            "instruction": (spec.get("instruction", "") or "").strip(),
-            "tools": tools,
-            "safety_level": spec.get("safety_level", "read_only"),
-            "purpose": spec.get("purpose", ""),
-            "group": spec.get("group", ""),
-            "smoke_prompts": spec.get("smoke_prompts") or [],
-            "package": spec.get("package", ""),
-            "web_entrypoint": spec.get("web_entrypoint", ""),
-            "discord_channels": spec.get("discord_channels") or [],
-            "status": status,
-        },
-    }
+    py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+    pkg_path = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
+    script = f"""import json, yaml, pathlib
+raw = yaml.safe_load(open({str(manifest_path)!r})) or {{}}
+defaults = raw.get('defaults') or {{}}
+agents_raw = raw.get('agents') or {{}}
+agent_id = {agent_id!r}
+if agent_id not in agents_raw:
+    print(json.dumps({{'ok': False, 'error': f'unknown agent: {{agent_id}}'}}))
+    raise SystemExit(0)
+spec = {{**defaults, **(agents_raw[agent_id] or {{}})}}
+tools_raw = spec.get('tools') or []
+tools = [t.rsplit('.', 1)[-1] for t in tools_raw]
+status = 'built' if pathlib.Path({str(pkg_path)!r}).exists() else 'blank'
+print(json.dumps({{'ok': True, 'agent': {{
+    'id': agent_id,
+    'adk_name': spec.get('adk_name', f'{{agent_id}}_agent'),
+    'description': spec.get('description', ''),
+    'model': spec.get('model', ''),
+    'model_code': spec.get('model_code', ''),
+    'instruction': (spec.get('instruction', '') or '').strip(),
+    'tools': tools,
+    'safety_level': spec.get('safety_level', 'read_only'),
+    'purpose': spec.get('purpose', ''),
+    'group': spec.get('group', ''),
+    'smoke_prompts': spec.get('smoke_prompts') or [],
+    'package': spec.get('package', ''),
+    'web_entrypoint': spec.get('web_entrypoint', ''),
+    'discord_channels': spec.get('discord_channels') or [],
+    'status': status,
+}}}}))"""
+    try:
+        r = subprocess.run([py, "-c", script], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout.strip())
+        return {"ok": False, "error": f"config read failed: {r.stderr[:300]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 def _save_agent_config(params: dict) -> dict:
@@ -798,14 +807,23 @@ def _verify_agent(agent_id: str) -> dict:
         verify_error = str(e)
     # Determine status
     if import_ok:
-        # Check if name matches adk_name from manifest
-        import yaml
-        manifest_path = WS / "agent_specs" / "agents.yaml"
+        # Check if name matches adk_name from manifest (via factory venv for pyyaml)
         expected_name = f"{agent_id}_agent"
+        manifest_path = WS / "agent_specs" / "agents.yaml"
         if manifest_path.exists():
-            raw = yaml.safe_load(manifest_path.read_text()) or {}
-            spec = (raw.get("agents") or {}).get(agent_id) or {}
-            expected_name = spec.get("adk_name", f"{agent_id}_agent")
+            py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+            script = (
+                "import json, yaml;"
+                f"raw = yaml.safe_load(open({str(manifest_path)!r})) or {{}};"
+                f"spec = (raw.get('agents') or {{}}).get({agent_id!r}) or {{}};"
+                "print(spec.get('adk_name', ''))"
+            )
+            try:
+                r = subprocess.run([py, "-c", script], capture_output=True, text=True, timeout=10)
+                if r.returncode == 0 and r.stdout.strip():
+                    expected_name = r.stdout.strip()
+            except Exception:
+                pass
         status = "built" if agent_name == expected_name else "error"
         if status == "error":
             verify_error = f"name mismatch: expected '{expected_name}', got '{agent_name}'"
