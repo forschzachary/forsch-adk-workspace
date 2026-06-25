@@ -44,6 +44,12 @@ agents:
     profile_home: /profiles/build
     channels:
       - "#team-build"
+  wow-guild:
+    agent_package: forsch.agent_wow_guild.agent
+    agent_attr: root_agent
+    profile_home: /profiles/wow-guild
+    channels:
+      - "#guild-wow"
 
   # Any DM (no guild/channel) routes here
   dm_fallback: assistant
