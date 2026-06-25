@@ -701,13 +701,19 @@ def _generate_agent(agent_id: str) -> dict:
         return {"ok": False, "error": "missing agent_id"}
     py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
     manifest = str(WS / "agent_specs" / "agents.yaml")
+    env = os.environ.copy()
+    components_src = str(WS / "components" / "src")
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = components_src + ":" + env["PYTHONPATH"]
+    else:
+        env["PYTHONPATH"] = components_src
     # Step 1: Run factory apply (validates + writes package)
     apply_output = ""
     try:
         r = subprocess.run(
             [py, "-m", "forsch.adk_factory.cli", "apply",
              "--agent", agent_id, "--manifest", manifest, "--workspace", str(WS)],
-            capture_output=True, text=True, cwd=str(WS), timeout=60,
+            capture_output=True, text=True, cwd=str(WS), timeout=60, env=env,
         )
         apply_output = r.stdout + r.stderr
         if r.returncode != 0:
