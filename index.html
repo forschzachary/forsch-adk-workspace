@@ -387,6 +387,17 @@ function apiUrl(path){
   return path;
 }
 
+// CSRF token for CRM proxy POST requests.
+// When loaded through graph_embed, the page inherits window.frappe.csrf_token
+// from the parent Frappe frame. All POSTs through the proxy need this header.
+function csrfHeaders() {
+  const h = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (window.frappe?.csrf_token) {
+    h['X-Frappe-CSRF-Token'] = window.frappe.csrf_token;
+  }
+  return h;
+}
+
 // ── State ──
 let graphData, currentLens = 'padi', lineageRoot = null, showDeps = false, showShared = true;
 let currentCluster = null;
@@ -411,52 +422,11 @@ function loadClusters() {
     .catch(err => { info.textContent = 'Failed to load clusters — ' + err.message; });
 }
 
-function renderTabs() {
-  const bar = document.getElementById('tab-bar');
-  // Clear existing tabs (keep the + button)
-  bar.querySelectorAll('.tab').forEach(t => t.remove());
-  clusters.forEach(c => {
-    const btn = document.createElement('button');
-    btn.className = 'tab' + (c.name === currentCluster ? ' active' : '');
-    btn.dataset.cluster = c.name;
-    const pct = c.handoff_pct ? `<span class="pct">${c.handoff_pct}%</span>` : '';
-    btn.innerHTML = `${c.name}${pct}`;
-    btn.title = c.goal || c.name;
-    btn.addEventListener('click', () => selectCluster(c.name));
-    bar.insertBefore(btn, document.getElementById('new-tab-btn'));
-  });
-}
+function rende
 
-function selectCluster(name) {
-  currentCluster = name;
-  renderTabs();
-  // Update panel indicator
-  const ci = document.getElementById('cluster-indicator');
-  const c = clusters.find(x => x.name === name);
-  const pct = c && c.handoff_pct ? ` · ${c.handoff_pct}%` : '';
-  ci.textContent = c ? `📋 ${c.name}${pct}` : '— no cluster —';
-  ci.style.color = c ? '#58a6ff' : '#8b949e';
-  loadGraph(name);
-}
+... [OUTPUT TRUNCATED - 1925 chars omitted out of 51925 total] ...
 
-function loadGraph(clusterName) {
-  info.textContent = 'Loading…';
-  const url = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
-  Promise.all([
-    fetch(url).then(r => r.json()),
-    fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
-  ])
-    .then(([data, caps]) => {
-      const have = new Set(data.nodes.map(n => n.id));
-      (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
-      (caps.links || []).forEach(l => data.links.push(l));
-      const hosted = data.nodes.find(n => n.id === 'ui:bridge');
-      if (hosted) hosted.name = 'Hosted Chat';
-      collapseIntake(data);
-      graphData = data;
-      nodeMetrics = computeNodeMetrics(data);
-      const clusterTag = data.cluster ? ` · ${data.cluster}` : '';
-      info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
+ = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
       if (!fg) initGraph(graphData);
       renderLens();
     })
@@ -784,7 +754,7 @@ document.getElementById('new-tab-btn').addEventListener('click', () => {
   const name = prompt('New cluster name (a-z, 0-9, -, _):');
   if (!name) return;
   const body = `name=${encodeURIComponent(name)}`;
-  fetch(apiUrl('/new-cluster'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+  fetch(apiUrl('/new-cluster'), { method: 'POST', headers: csrfHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (data.ok) {
@@ -826,7 +796,7 @@ document.getElementById('add-agent-btn').addEventListener('click', () => {
   if (!agentId) { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'Select an agent'; return; }
   addAgentMsg.className = 'msg'; addAgentMsg.textContent = 'Adding…';
   const body = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(agentId)}`;
-  fetch(apiUrl('/add-agent'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+  fetch(apiUrl('/add-agent'), { method: 'POST', headers: csrfHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (data.ok) {
@@ -849,7 +819,7 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
 
   spawnMsg.className = 'msg'; spawnMsg.textContent = 'Spawning…';
   const body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent(desc || id + ' agent')}`;
-  fetch(apiUrl('/spawn'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+  fetch(apiUrl('/spawn'), { method: 'POST', headers: csrfHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (data.ok) {
@@ -865,7 +835,7 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
         // Auto-add to current cluster
         if (currentCluster) {
           const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
-          fetch(apiUrl('/add-agent'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: addBody })
+          fetch(apiUrl('/add-agent'), { method: 'POST', headers: csrfHeaders(), body: addBody })
             .then(r => r.json())
             .then(addData => {
               if (addData.ok) spawnMsg.textContent += ` → added to ${currentCluster}`;
@@ -1038,7 +1008,7 @@ document.getElementById('inspect-save').addEventListener('click', () => {
   let saved = 0, total = Object.keys(fields).length;
   for (const [field, value] of Object.entries(fields)) {
     const body = `agent_id=${encodeURIComponent(agentId)}&field=${encodeURIComponent(field)}&value=${encodeURIComponent(value)}`;
-    fetch(apiUrl('/save-agent'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+    fetch(apiUrl('/save-agent'), { method: 'POST', headers: csrfHeaders(), body })
       .then(r => r.json())
       .then(data => {
         saved++;
@@ -1089,7 +1059,7 @@ function handleWireClick(node) {
   saveMsg.className = 'save-msg'; saveMsg.textContent = `Checking contract: ${source} → ${target}...`;
 
   const body = `source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`;
-  fetch(apiUrl('/wire'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+  fetch(apiUrl('/wire'), { method: 'POST', headers: csrfHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (data.valid) {
@@ -1154,7 +1124,7 @@ function sendAiMessage() {
   addAiMessage('thinking...', 'system');
 
   const body = `message=${encodeURIComponent(context + text)}${aiSessionId ? '&session_id=' + encodeURIComponent(aiSessionId) : ''}`;
-  fetch(apiUrl('/chat'), { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+  fetch(apiUrl('/chat'), { method: 'POST', headers: csrfHeaders(), body })
     .then(r => r.json())
     .then(data => {
       // Remove "thinking..." message
