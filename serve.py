@@ -916,7 +916,17 @@ class Handler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length).decode() if content_length else ""
-        params = parse_qs(body)
+        content_type = self.headers.get("Content-Type", "")
+        if "application/json" in content_type:
+            try:
+                raw = json.loads(body) if body else {}
+                # Normalize to parse_qs shape: {key: [value]}
+                params = {k: [v] if not isinstance(v, list) else v for k, v in raw.items()}
+            except json.JSONDecodeError:
+                self._json_response(400, {"error": "invalid JSON"})
+                return
+        else:
+            params = parse_qs(body)
 
         if parsed.path == "/spawn":
             if not self._check_secret():
