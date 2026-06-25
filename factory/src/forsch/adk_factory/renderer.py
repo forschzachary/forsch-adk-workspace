@@ -102,5 +102,5 @@ def render_agent_package(spec: AgentSpec) -> dict[str, str]:
         instruction_repr=repr(spec.instruction.rstrip("\n")),
         model_expr=model_expr,
     )
-    rel = f"agents/{spec.id}/src/forsch/agent_{spec.id}/agent.py"
+    rel = f"agents/{spec.id}/src/forsch/agent_{spec.id.replace('-', '_')}/agent.py"
     return {rel: content}

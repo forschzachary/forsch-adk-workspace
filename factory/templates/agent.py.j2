@@ -21,7 +21,7 @@ _LITELLM_API_KEY = (
 # Model: a per-agent pin hard-wins; unpinned agents fall to FORSCH_ADK_MODEL. LiteLLM owns routing + fallback.
 _LITELLM_MODEL = {{ model_expr }}
 
-{{ a.id }}_model = LiteLlm(
+{{ a.id|replace('-', '_') }}_model = LiteLlm(
     model=_LITELLM_MODEL,
     api_base=_LITELLM_BASE_URL,
     api_key=_LITELLM_API_KEY,
@@ -29,7 +29,7 @@ _LITELLM_MODEL = {{ model_expr }}
 
 root_agent = Agent(
     name={{ name_repr }},
-    model={{ a.id }}_model,
+    model={{ a.id|replace('-', '_') }}_model,
     description={{ description_repr }},
     instruction={{ instruction_repr }},
     tools=[
