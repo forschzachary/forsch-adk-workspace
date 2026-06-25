@@ -15,7 +15,6 @@ RUN pip install --no-cache-dir \
       "pyyaml>=6" \
       "pydantic>=2" \
       "httpx>=0.27" \
-      "chainlit>=1.3" \
       "fastapi>=0.110" \
       "uvicorn[standard]>=0.30" \
       "gradio>=5"

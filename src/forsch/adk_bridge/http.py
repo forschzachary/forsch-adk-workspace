@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from chainlit.utils import mount_chainlit
 
 import gradio as gr
 from forsch.adk_bridge.gradio_app import build_gradio_app
@@ -29,13 +28,9 @@ async def _teamrooms_startup():
     from forsch.adk_bridge.teamrooms.wiring import maybe_start_poller
     maybe_start_poller()
 
-_TARGET = str(Path(__file__).with_name("cl_app.py"))
-mount_chainlit(app=app, target=_TARGET, path="/chat")   # MUST be after the routes above
-
-# ── Gradio mount ────────────────────────────────────────────────────────────
-# Mounted on the same FastAPI app, sharing the token gate below.
+# ── Gradio mount (replaces Chainlit) ────────────────────────────────────────
 _gradio_demo = build_gradio_app()
-gr.mount_gradio_app(app, _gradio_demo, path="/gradio")
+gr.mount_gradio_app(app, _gradio_demo, path="/chat")
 
 
 # ── token bridge ────────────────────────────────────────────────────────────
@@ -97,9 +92,9 @@ class _TokenBridge:
 
             return await self.app(scope, receive, send_wrapper)
 
-        # Gate /gradio/ routes — Gradio has no header_auth_callback, so we
+        # Gate /chat/ routes — Gradio has no header_auth_callback, so we
         # must block at the ASGI level (same pattern as the spike's _TokenGate).
-        if path.startswith("/gradio/"):
+        if path.startswith("/chat/"):
             await send({
                 "type": "http.response.start",
                 "status": 401,
