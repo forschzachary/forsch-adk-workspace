@@ -441,7 +441,7 @@ function selectCluster(name) {
 
 function loadGraph(clusterName) {
   info.textContent = 'Loading…';
-  const url = clusterName ? `/manifest?cluster=${encodeURIComponent(clusterName)}` : 'agent-graph-v2.json';
+  const url = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
   Promise.all([
     fetch(url).then(r => r.json()),
     fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
