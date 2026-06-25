@@ -898,6 +898,8 @@ class Handler(SimpleHTTPRequestHandler):
                     "gemini-3-pro-preview", "gemini-3-flash-preview",
                     "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
                 ]})
+        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify") and not self._check_secret():
+            self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
         elif path == "/agent-config":
             qs = parse_qs(parsed.query)
             agent_id = qs.get("agent_id", [None])[0]
