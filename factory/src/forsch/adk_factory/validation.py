@@ -203,11 +203,8 @@ class StructuralValidator:
         try:
             sig = inspect.signature(fn)
             params = list(sig.parameters.keys())
-            # Static methods and class methods may have zero params — that's fine.
-            # Only flag zero-param regular functions.
-            is_static_or_class = isinstance(fn, (staticmethod, classmethod))
-            if not params and not is_static_or_class:
-                errors.append("function has no parameters (tools must accept at least context)")
+            # Zero-param tools are valid ADK tools (e.g. health checks, status queries).
+            # Static methods and class methods may also have zero params.
             result.signature_ok = True
         except (ValueError, TypeError) as e:
             errors.append(f"signature inspection failed: {e}")
