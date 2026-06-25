@@ -529,7 +529,7 @@ def _derive_agent_status(agent_id: str) -> str:
     try:
         r = subprocess.run(
             ["docker", "exec", "adk-bridge", "python3", "-c",
-             f"from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
+             f"import sys; sys.path.insert(0, '/workspace/agents/{agent_id}/src'); from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
             capture_output=True, text=True, timeout=10,
         )
         if r.returncode == 0 and r.stdout.strip():
@@ -741,7 +741,7 @@ def _generate_agent(agent_id: str) -> dict:
     try:
         r2 = subprocess.run(
             ["docker", "exec", "adk-bridge", "python3", "-c",
-             f"from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
+             f"import sys; sys.path.insert(0, '/workspace/agents/{agent_id}/src'); from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
             capture_output=True, text=True, timeout=10,
         )
         if r2.returncode == 0:
@@ -795,7 +795,7 @@ def _verify_agent(agent_id: str) -> dict:
     try:
         r = subprocess.run(
             ["docker", "exec", "adk-bridge", "python3", "-c",
-             f"from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
+             f"import sys; sys.path.insert(0, '/workspace/agents/{agent_id}/src'); from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
             capture_output=True, text=True, timeout=10,
         )
         if r.returncode == 0:
