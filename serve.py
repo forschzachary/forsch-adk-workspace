@@ -710,17 +710,8 @@ def _generate_agent(agent_id: str) -> dict:
             capture_output=True, text=True, cwd=str(WS), timeout=60,
         )
         apply_output = r.stdout + r.stderr
-        if r.returncode != 0 and "BLOCKED" in apply_output:
-            # Deploy gate blocked — retry with --force
-            r2 = subprocess.run(
-                [py, "-m", "forsch.adk_factory.cli", "apply",
-                 "--agent", agent_id, "--manifest", manifest, "--workspace", str(WS),
-                 "--force"],
-                capture_output=True, text=True, cwd=str(WS), timeout=60,
-            )
-            apply_output = r2.stdout + r2.stderr
-            if r2.returncode != 0:
-                return {"ok": False, "error": f"factory apply failed: {apply_output[:500]}"}
+        if r.returncode != 0:
+            return {"ok": False, "error": f"factory apply failed: {apply_output[:500]}"}
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "factory apply timed out (60s)"}
     except Exception as e:
