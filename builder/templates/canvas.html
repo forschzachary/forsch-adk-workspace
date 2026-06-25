@@ -330,7 +330,7 @@ function toolInfo(name){
 
 function apiUrl(path){
   const loc = window.location;
-  if (loc.pathname.includes('cockpit.embed') || loc.search.includes('path='))
+  if (loc.pathname.includes('cockpit.embed') || loc.pathname.includes('graph_embed') || loc.search.includes('path='))
     return loc.pathname + '?path=' + encodeURIComponent(path);
   const t = new URLSearchParams(loc.search).get('token');
   return path + (t ? (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t) : '');
