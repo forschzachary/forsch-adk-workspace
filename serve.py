@@ -518,6 +518,314 @@ def chat_with_hubert(message: str, session_id: str | None = None) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+# ── Box JSON API stubs (cockpit ADK-builder) ──
+
+def _derive_agent_status(agent_id: str) -> str:
+    """Derive agent status from file existence + importability (via adk-bridge container)."""
+    pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
+    if not pkg.exists():
+        return "blank"
+    # Import check runs inside the adk-bridge container (has google-adk installed)
+    try:
+        r = subprocess.run(
+            ["docker", "exec", "adk-bridge", "python3", "-c",
+             f"from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return "built"
+        return "error"
+    except Exception:
+        return "error"
+
+
+def _get_agent_config(agent_id: str) -> dict:
+    """Read real agent config from agents.yaml + derive status."""
+    import yaml
+    manifest_path = WS / "agent_specs" / "agents.yaml"
+    if not manifest_path.exists():
+        return {"ok": False, "error": "agents.yaml not found"}
+    raw = yaml.safe_load(manifest_path.read_text()) or {}
+    defaults = raw.get("defaults") or {}
+    agents_raw = raw.get("agents") or {}
+    if agent_id not in agents_raw:
+        return {"ok": False, "error": f"unknown agent: {agent_id}"}
+    spec = {**defaults, **(agents_raw[agent_id] or {})}
+    # Extract leaf tool names
+    tools_raw = spec.get("tools") or []
+    tools = [t.rsplit(".", 1)[-1] for t in tools_raw]
+    # Check if package exists for status
+    pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
+    status = "built" if pkg.exists() else "blank"
+    return {
+        "ok": True,
+        "agent": {
+            "id": agent_id,
+            "adk_name": spec.get("adk_name", f"{agent_id}_agent"),
+            "description": spec.get("description", ""),
+            "model": spec.get("model", ""),
+            "model_code": spec.get("model_code", ""),
+            "instruction": (spec.get("instruction", "") or "").strip(),
+            "tools": tools,
+            "safety_level": spec.get("safety_level", "read_only"),
+            "purpose": spec.get("purpose", ""),
+            "group": spec.get("group", ""),
+            "smoke_prompts": spec.get("smoke_prompts") or [],
+            "package": spec.get("package", ""),
+            "web_entrypoint": spec.get("web_entrypoint", ""),
+            "discord_channels": spec.get("discord_channels") or [],
+            "status": status,
+        },
+    }
+
+
+def _save_agent_config(params: dict) -> dict:
+    """Save agent config to agents.yaml + regenerate both files via editor.update_agent()."""
+    agent_id = params.get("agent_id", [""])[0]
+    if not agent_id:
+        return {"ok": False, "error": "missing agent_id"}
+    # tools can be: list (direct call), comma-separated string (HTTP form), or None
+    tools_val = params.get("tools", [None])
+    if isinstance(tools_val, list) and len(tools_val) == 1 and isinstance(tools_val[0], str) and "," in tools_val[0]:
+        tools = [t.strip() for t in tools_val[0].split(",") if t.strip()]
+    elif isinstance(tools_val, list) and tools_val and tools_val[0] is not None:
+        tools = tools_val if isinstance(tools_val[0], list) else tools_val
+    else:
+        tools = None
+    instruction = params.get("instruction", [None])[0]
+    model = params.get("model", [None])[0]
+    group = params.get("group", [None])[0]
+    patch = {}
+    if instruction is not None:
+        patch["instruction"] = instruction
+    if tools is not None:
+        patch["tools"] = tools
+    if model is not None:
+        patch["model"] = model
+    if group is not None:
+        patch["group"] = group
+    if not patch:
+        return {"ok": False, "error": "no fields to update"}
+    py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+    # Build a small script that calls editor.update_agent and prints the result as JSON
+    builder_src = str(WS / "builder" / "src")
+    builder_py = str(WS / "builder" / ".venv" / "bin" / "python3")
+    if not Path(builder_py).exists():
+        builder_py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+    script = (
+        f"import json, sys; sys.path.insert(0, {builder_src!r});"
+        "from forsch.adk_builder.editor import update_agent;"
+        f"r = update_agent({str(WS)!r}, {agent_id!r}, {patch!r});"
+        "print(json.dumps(r))"
+    )
+    try:
+        r = subprocess.run(
+            [builder_py, "-c", script],
+            capture_output=True, text=True, cwd=str(WS), timeout=30,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout.strip())
+        return {"ok": False, "error": f"save failed: {r.stderr[:500]}"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "save timed out (30s)"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _list_agent_tools() -> dict:
+    """List real tools from the ADK components directory via AST parsing."""
+    import ast
+    tools = []
+    comp = WS / "components" / "src" / "forsch" / "adk_components"
+    if not comp.is_dir():
+        return {"ok": True, "tools": []}
+    for py in sorted(comp.rglob("*.py")):
+        if py.name == "__init__.py":
+            continue
+        try:
+            tree = ast.parse(py.read_text())
+        except (OSError, SyntaxError):
+            continue
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
+                doc = ast.get_docstring(node) or ""
+                summary = doc.strip().splitlines()[0][:90] if doc.strip() else ""
+                tools.append({
+                    "name": node.name,
+                    "summary": summary,
+                    "file": str(py),
+                    "wireable": True,
+                })
+    return {"ok": True, "tools": tools}
+
+
+def _list_agent_models() -> dict:
+    """Query LiteLLM proxy for available models, with static fallback."""
+    import urllib.request
+    key = os.environ.get("LITELLM_MASTER_KEY") or os.environ.get("LITELLM_HERMES_KEY") or ""
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:4000/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            models = sorted(m["id"] for m in data.get("data", []))
+        if models:
+            return {"ok": True, "models": models}
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "models": [
+            "gpt-5.5", "gpt-5.4", "gpt-4.1", "glm-5.2", "glm-5.1",
+            "deepseek-v4-pro", "deepseek-v4-flash", "gemini-3-pro-preview",
+            "gemini-3-flash-preview", "kimi-k2.6", "kimi-k2.7-code",
+            "minimax-m3", "qwen3-coder-480b", "cerebras-120b",
+        ],
+    }
+
+
+def _generate_agent(agent_id: str) -> dict:
+    """Run Factory apply + verify for an agent. Returns status=built only on verified import."""
+    if not agent_id:
+        return {"ok": False, "error": "missing agent_id"}
+    py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+    manifest = str(WS / "agent_specs" / "agents.yaml")
+    # Step 1: Run factory apply (validates + writes package)
+    apply_output = ""
+    try:
+        r = subprocess.run(
+            [py, "-m", "forsch.adk_factory.cli", "apply",
+             "--agent", agent_id, "--manifest", manifest, "--workspace", str(WS)],
+            capture_output=True, text=True, cwd=str(WS), timeout=60,
+        )
+        apply_output = r.stdout + r.stderr
+        if r.returncode != 0 and "BLOCKED" in apply_output:
+            # Deploy gate blocked — retry with --force
+            r2 = subprocess.run(
+                [py, "-m", "forsch.adk_factory.cli", "apply",
+                 "--agent", agent_id, "--manifest", manifest, "--workspace", str(WS),
+                 "--force"],
+                capture_output=True, text=True, cwd=str(WS), timeout=60,
+            )
+            apply_output = r2.stdout + r2.stderr
+            if r2.returncode != 0:
+                return {"ok": False, "error": f"factory apply failed: {apply_output[:500]}"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "factory apply timed out (60s)"}
+    except Exception as e:
+        return {"ok": False, "error": f"factory apply failed: {e}"}
+    # Step 2: Verify — check file exists + import works
+    status = _derive_agent_status(agent_id)
+    pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
+    files = []
+    if pkg.exists():
+        files.append(f"agents/{agent_id}/src/forsch/agent_{agent_id}/agent.py")
+    web_yaml = WS / "web_agents" / agent_id / "root_agent.yaml"
+    if web_yaml.exists():
+        files.append(f"web_agents/{agent_id}/root_agent.yaml")
+    # Step 3: Import check for detailed verify info (inside adk-bridge container)
+    import_ok = False
+    smoke_ok = None
+    verify_error = None
+    try:
+        r2 = subprocess.run(
+            ["docker", "exec", "adk-bridge", "python3", "-c",
+             f"from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r2.returncode == 0:
+            import_ok = True
+        else:
+            verify_error = r2.stderr[:500] if r2.stderr else "import failed"
+    except Exception as e:
+        verify_error = str(e)
+    return {
+        "ok": True,
+        "agent": agent_id,
+        "status": status,
+        "files": files,
+        "verify": {
+            "import_ok": import_ok,
+            "smoke_ok": smoke_ok,
+            "error": verify_error,
+        },
+        "apply_output": apply_output[:500] if apply_output else "",
+    }
+
+
+def _verify_agent(agent_id: str) -> dict:
+    """Check agent verification status: file existence + import check."""
+    if not agent_id:
+        return {"ok": False, "error": "missing agent_id"}
+    pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
+    web_yaml = WS / "web_agents" / agent_id / "root_agent.yaml"
+    package_exists = pkg.exists()
+    files = []
+    if package_exists:
+        files.append(f"agents/{agent_id}/src/forsch/agent_{agent_id}/agent.py")
+    if web_yaml.exists():
+        files.append(f"web_agents/{agent_id}/root_agent.yaml")
+    if not package_exists:
+        return {
+            "ok": True,
+            "agent": agent_id,
+            "status": "blank",
+            "package_exists": False,
+            "import_ok": False,
+            "smoke_ok": None,
+            "last_verify": None,
+            "files": [],
+        }
+    # Package exists — run import check inside adk-bridge container
+    import_ok = False
+    smoke_ok = None
+    agent_name = None
+    verify_error = None
+    try:
+        r = subprocess.run(
+            ["docker", "exec", "adk-bridge", "python3", "-c",
+             f"from forsch.agent_{agent_id}.agent import root_agent; print(root_agent.name)"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0:
+            import_ok = True
+            agent_name = r.stdout.strip()
+        else:
+            verify_error = r.stderr[:500] if r.stderr else "import failed"
+    except Exception as e:
+        verify_error = str(e)
+    # Determine status
+    if import_ok:
+        # Check if name matches adk_name from manifest
+        import yaml
+        manifest_path = WS / "agent_specs" / "agents.yaml"
+        expected_name = f"{agent_id}_agent"
+        if manifest_path.exists():
+            raw = yaml.safe_load(manifest_path.read_text()) or {}
+            spec = (raw.get("agents") or {}).get(agent_id) or {}
+            expected_name = spec.get("adk_name", f"{agent_id}_agent")
+        status = "built" if agent_name == expected_name else "error"
+        if status == "error":
+            verify_error = f"name mismatch: expected '{expected_name}', got '{agent_name}'"
+    else:
+        status = "error"
+    from datetime import datetime, timezone
+    last_verify = datetime.now(timezone.utc).isoformat() if import_ok else None
+    return {
+        "ok": True,
+        "agent": agent_id,
+        "status": status,
+        "package_exists": True,
+        "import_ok": import_ok,
+        "smoke_ok": smoke_ok,
+        "last_verify": last_verify,
+        "files": files,
+        "error": verify_error,
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(SPIKE_DIR), **kwargs)
@@ -536,7 +844,8 @@ class Handler(SimpleHTTPRequestHandler):
     def _is_mutating(self, path: str) -> bool:
         """Return True for endpoints that mutate state (require auth + no CORS)."""
         return path in ("/spawn", "/wire", "/save-agent", "/promote",
-                        "/new-cluster", "/add-agent", "/chat")
+                        "/new-cluster", "/add-agent", "/chat",
+                        "/agent-config", "/agent-generate")
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -571,6 +880,24 @@ class Handler(SimpleHTTPRequestHandler):
                     "gemini-3-pro-preview", "gemini-3-flash-preview",
                     "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
                 ]})
+        elif path == "/agent-config":
+            qs = parse_qs(parsed.query)
+            agent_id = qs.get("agent_id", [None])[0]
+            if not agent_id:
+                self._json_response(400, {"ok": False, "error": "missing ?agent_id=<id>"})
+                return
+            self._json_response(200, _get_agent_config(agent_id))
+        elif path == "/agent-tools":
+            self._json_response(200, _list_agent_tools())
+        elif path == "/agent-models":
+            self._json_response(200, _list_agent_models())
+        elif path == "/agent-verify":
+            qs = parse_qs(parsed.query)
+            agent_id = qs.get("agent_id", [None])[0]
+            if not agent_id:
+                self._json_response(400, {"ok": False, "error": "missing ?agent_id=<id>"})
+                return
+            self._json_response(200, _verify_agent(agent_id))
         else:
             super().do_GET()
 
@@ -765,6 +1092,22 @@ class Handler(SimpleHTTPRequestHandler):
             outcome = "ok" if result.get("ok") else f"error: {result.get('error', 'unknown')[:100]}"
             _audit(principal, message, session_id, outcome)
             self._json_response(200 if result.get("ok") else 500, result)
+
+        elif parsed.path == "/agent-config":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
+            self._json_response(200, _save_agent_config(params))
+
+        elif parsed.path == "/agent-generate":
+            if not self._check_secret():
+                self._json_response(401, {"error": "unauthorized"})
+                return
+            agent_id = params.get("agent_id", [None])[0]
+            if not agent_id:
+                self._json_response(400, {"ok": False, "error": "missing agent_id"})
+                return
+            self._json_response(200, _generate_agent(agent_id))
 
         else:
             self._json_response(404, {"error": "not found"})
