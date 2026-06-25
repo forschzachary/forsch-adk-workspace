@@ -589,7 +589,11 @@ print(json.dumps({{'ok': True, 'agent': {{
 
 
 def _save_agent_config(params: dict) -> dict:
-    """Save agent config to agents.yaml + regenerate both files via editor.update_agent()."""
+    """Save agent config to agents.yaml + regenerate both files via editor.update_agent().
+
+    If the agent doesn't exist yet, auto-spawns it first (so the CRM UI's first
+    "Save" is also the create step — no separate spawn endpoint needed).
+    """
     agent_id = params.get("agent_id", [""])[0]
     if not agent_id:
         return {"ok": False, "error": "missing agent_id"}
@@ -604,6 +608,7 @@ def _save_agent_config(params: dict) -> dict:
     instruction = params.get("instruction", [None])[0]
     model = params.get("model", [None])[0]
     group = params.get("group", [None])[0]
+    description = params.get("description", [None])[0]
     patch = {}
     if instruction is not None:
         patch["instruction"] = instruction
@@ -615,8 +620,33 @@ def _save_agent_config(params: dict) -> dict:
         patch["group"] = group
     if not patch:
         return {"ok": False, "error": "no fields to update"}
-    py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
-    # Build a small script that calls editor.update_agent and prints the result as JSON
+
+    # Auto-spawn if the agent doesn't exist yet (first save = create)
+    mpath = WS / "agent_specs" / "agents.yaml"
+    agent_exists = False
+    if mpath.exists():
+        # Check via builder venv (has ruamel.yaml) — system Python doesn't
+        builder_py = str(WS / "builder" / ".venv" / "bin" / "python3")
+        if not Path(builder_py).exists():
+            builder_py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+        check = subprocess.run(
+            [builder_py, "-c",
+             f"from ruamel.yaml import YAML; d=YAML().load(open({str(mpath)!r})); "
+             f"print('yes' if {agent_id!r} in (d.get('agents') or {{}}) else 'no')"],
+            capture_output=True, text=True, cwd=str(WS), timeout=10,
+        )
+        agent_exists = (check.stdout.strip() == "yes")
+    if not agent_exists:
+        py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+        spawn_result = subprocess.run(
+            [py, str(SPIKE_DIR / "spawn_agent.py"), agent_id,
+             "--model", model or "gpt-5.5",
+             "--description", description or f"{agent_id} agent"],
+            capture_output=True, text=True, cwd=str(WS), timeout=30,
+        )
+        if spawn_result.returncode != 0:
+            return {"ok": False, "error": f"spawn failed: {spawn_result.stderr[:500]}"}
+
     builder_src = str(WS / "builder" / "src")
     builder_py = str(WS / "builder" / ".venv" / "bin" / "python3")
     if not Path(builder_py).exists():
