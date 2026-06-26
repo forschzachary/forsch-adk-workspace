@@ -203,6 +203,77 @@
   .eval-status.pass { background: #1a3a1a; border: 1px solid #3fb950; color: #3fb950; }
   .eval-status.fail { background: #3a1a1a; border: 1px solid #ff7b72; color: #ff7b72; }
   .eval-status.unknown { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+
+  /* ── Unified sidecar widget ── */
+  #sidecar-widget {
+    position: fixed; right: 20px; bottom: 20px;
+    width: 440px; height: 560px; z-index: 100;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+    transform: translateY(calc(100% + 40px)); opacity: 0;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    pointer-events: none; overflow: hidden;
+  }
+  #sidecar-widget.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  #sidecar-header {
+    height: 42px; display: flex; align-items: center;
+    padding: 0 10px 0 6px; border-bottom: 1px solid #30363d;
+    background: #161b22; border-radius: 12px 12px 0 0;
+    flex-shrink: 0; gap: 2px;
+  }
+  .sidecar-tab {
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+    color: #8b949e; background: none; border: 1px solid transparent;
+    border-radius: 6px; cursor: pointer; transition: all 0.15s;
+  }
+  .sidecar-tab:hover { color: #c9d1d9; }
+  .sidecar-tab.active { color: #e6edf3; background: #21262d; border-color: #30363d; }
+  #sidecar-agent-label {
+    font-size: 11px; color: #8b949e; margin-left: 6px;
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #sidecar-close {
+    background: none; border: 0; color: #8b949e;
+    font-size: 18px; cursor: pointer; padding: 0 4px;
+  }
+  #sidecar-close:hover { color: #c9d1d9; }
+  .sidecar-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+  .sidecar-panel.active { display: flex; }
+  #sidecar-agent-frame { flex: 1; border: 0; background: #f7f3ea; }
+  #hubert-messages {
+    flex: 1; overflow-y: auto; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .hubert-msg {
+    max-width: 85%; padding: 8px 12px; border-radius: 12px;
+    font-size: 13px; line-height: 1.5; word-wrap: break-word;
+  }
+  .hubert-msg.user { align-self: flex-end; background: #21262d; color: #e6edf3; }
+  .hubert-msg.assistant {
+    align-self: flex-start; background: #161b22; color: #c9d1d9;
+    border: 1px solid #30363d;
+  }
+  .hubert-msg.system {
+    align-self: center; color: #8b949e; font-size: 11px; font-style: italic;
+  }
+  #hubert-input-row {
+    display: flex; gap: 8px; padding: 10px 12px;
+    border-top: 1px solid #30363d; background: #0d1117;
+  }
+  #hubert-input {
+    flex: 1; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 8px; color: #e6edf3; font-size: 13px;
+    padding: 8px 10px; resize: none; min-height: 20px;
+    max-height: 100px; font-family: inherit;
+  }
+  #hubert-input:focus { border-color: #58a6ff; outline: none; }
+  #hubert-send {
+    background: #238636; border: 1px solid #2ea043; border-radius: 8px;
+    color: #fff; padding: 0 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #hubert-send:hover { background: #2ea043; }
+  #hubert-send:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -281,16 +352,24 @@
     <button class="wire-btn" id="inspect-wire">Wire to...</button>
   </div>
 </div>
-<div id="ai-sidecar">
-  <div id="ai-sidecar-header">
-    <div class="avatar">🐱</div>
-    <span>Hubert</span>
-    <button class="close-btn" id="ai-close">&times;</button>
+<div id="sidecar-widget">
+  <div id="sidecar-header">
+    <button class="sidecar-tab active" data-tab="agent">Agent</button>
+    <button class="sidecar-tab" data-tab="hubert">Hubert</button>
+    <span id="sidecar-agent-label"></span>
+    <button id="sidecar-close">&times;</button>
   </div>
-  <div id="ai-messages"></div>
-  <div id="ai-input-row">
-    <input id="ai-input" placeholder="Ask about this graph..." maxlength="500">
-    <button id="ai-send">Send</button>
+  <div id="sidecar-panel-agent" class="sidecar-panel active">
+    <iframe id="sidecar-agent-frame" title="Agent Chat"></iframe>
+  </div>
+  <div id="sidecar-panel-hubert" class="sidecar-panel">
+    <div id="hubert-messages">
+      <div class="hubert-msg system">Connected to Hubert. Ask anything about the graph, agents, or what to build next.</div>
+    </div>
+    <div id="hubert-input-row">
+      <textarea id="hubert-input" placeholder="Describe what you want..." rows="1"></textarea>
+      <button id="hubert-send">Send</button>
+    </div>
   </div>
 </div>
 <div id="wire-status">Select target node... <button class="cancel" id="wire-cancel">Cancel</button></div>
@@ -941,6 +1020,11 @@ function initGraph(data) {
     .onNodeClick(node => {
       // Wire mode: handle wire target click
       if (wireMode) { handleWireClick(node); return; }
+      // Chat synthetic node → open sidecar on Agent tab
+      if (node?.artifact?.startsWith('agent-chat:')) {
+        openSidecar(node.artifact.replace('agent-chat:', ''), 'agent');
+        return;
+      }
       // Focus mode: synthetic node → switch workbench tab
       if (node.synthetic && node.id.startsWith('focus:') && focusedAgentId) {
         const suffix = node.id.split(':').pop();
@@ -1278,6 +1362,7 @@ function openAgentWorkbench(agentId, section = 'config') {
       <button data-section="evals" class="focus-tab ${section === 'evals' ? 'active' : ''}">Evals</button>
       <button data-section="runtime" class="focus-tab ${section === 'runtime' ? 'active' : ''}">Runtime</button>
       <button data-section="run" class="focus-tab ${section === 'run' ? 'active' : ''}">Run</button>
+      <button id="run-sidecar-btn" class="focus-tab" style="margin-left:auto;border-color:#2ea043;color:#3fb950;">▶ Sidecar</button>
     </div>
     <div id="focus-section"></div>
   `;
@@ -1289,6 +1374,10 @@ function openAgentWorkbench(agentId, section = 'config') {
       btn.classList.add('active');
       renderFocusSection(agentId, btn.dataset.section);
     });
+  });
+  // Wire "Run in Sidecar" button
+  document.getElementById('run-sidecar-btn')?.addEventListener('click', () => {
+    openSidecar(focusedAgentId, 'agent');
   });
   renderFocusSection(agentId, section);
 }
@@ -1534,75 +1623,120 @@ function handleWireClick(node) {
     .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; wireSource = null; });
 }
 
-// ── AI Sidecar (feature B: context-aware chat) ──
-let aiSessionId = null;
-const aiMessages = document.getElementById('ai-messages');
-const aiInput = document.getElementById('ai-input');
-const aiSend = document.getElementById('ai-send');
+// ── Unified sidecar widget (Agent + Hubert tabs) ──
+const ADK_CHAT_BASE = window.ADK_CHAT_BASE || 'http://127.0.0.1:8800/chat/';
+let sidecarOpen = false;
+let sidecarTab = 'agent';
+let sidecarAgentId = null;
+let hubertSessionId = null;
+let hubertMessages = [];
+let hubertSending = false;
 
-function toggleSidecar() {
-  document.getElementById('ai-sidecar').classList.toggle('open');
-}
-
-document.getElementById('ai-close').addEventListener('click', () => {
-  document.getElementById('ai-sidecar').classList.remove('open');
+// Tab switching
+document.querySelectorAll('.sidecar-tab').forEach(btn => {
+  btn.addEventListener('click', () => switchSidecarTab(btn.dataset.tab));
 });
 
-function addAiMessage(text, role) {
-  const div = document.createElement('div');
-  div.className = `msg ${role}`;
-  if (role === 'user') {
-    div.innerHTML = `<div class="sender">You</div>${esc(text)}`;
-  } else if (role === 'hubert') {
-    div.innerHTML = `<div class="sender">Hubert</div>${text}`;
-  } else {
-    div.textContent = text;
+function switchSidecarTab(tab) {
+  sidecarTab = tab;
+  document.querySelectorAll('.sidecar-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('sidecar-panel-agent').classList.toggle('active', tab === 'agent');
+  document.getElementById('sidecar-panel-hubert').classList.toggle('active', tab === 'hubert');
+  if (tab === 'hubert') {
+    setTimeout(() => document.getElementById('hubert-input')?.focus(), 100);
   }
-  aiMessages.appendChild(div);
-  aiMessages.scrollTop = aiMessages.scrollHeight;
 }
 
-function sendAiMessage() {
-  const text = aiInput.value.trim();
-  if (!text) return;
+function openSidecar(agentId, defaultTab) {
+  const clean = (agentId || '').replace(/^agent:/, '');
+  sidecarAgentId = clean;
+  document.getElementById('sidecar-agent-label').textContent = clean || '';
+  if (clean) {
+    const url = new URL(ADK_CHAT_BASE, window.location.href);
+    url.searchParams.set('agent', clean);
+    document.getElementById('sidecar-agent-frame').src = url.toString();
+  }
+  document.getElementById('sidecar-widget').classList.add('open');
+  sidecarOpen = true;
+  switchSidecarTab(defaultTab || sidecarTab);
+}
+
+function closeSidecar() {
+  document.getElementById('sidecar-widget').classList.remove('open');
+  sidecarOpen = false;
+}
+
+document.getElementById('sidecar-close').addEventListener('click', closeSidecar);
+
+// Wire old chat-toggle button to open sidecar on Hubert tab
+function toggleSidecar() {
+  if (sidecarOpen && sidecarTab === 'hubert') {
+    closeSidecar();
+  } else {
+    openSidecar(sidecarAgentId || '', 'hubert');
+  }
+}
+
+// Hubert chat tab
+function renderHubertMessages() {
+  const el = document.getElementById('hubert-messages');
+  el.innerHTML = hubertMessages.map(m =>
+    '<div class="hubert-msg ' + m.role + '">' + esc(m.text) + '</div>'
+  ).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendHubertMessage() {
+  const input = document.getElementById('hubert-input');
+  const text = input.value.trim();
+  if (!text || hubertSending) return;
+  hubertSending = true;
+  hubertMessages.push({ role: 'user', text });
+  renderHubertMessages();
+  input.value = '';
+  document.getElementById('hubert-send').disabled = true;
 
   // Build context
   let context = '';
-  if (currentCluster) context += `[cluster: ${currentCluster}] `;
-  if (inspectedNode) context += `[selected: ${inspectedNode.name} (${inspectedNode.type})] `;
-  if (graphData) context += `[graph: ${graphData.node_count} nodes, ${graphData.link_count} links] `;
+  if (currentCluster) context += '[cluster: ' + currentCluster + '] ';
+  if (inspectedNode) context += '[selected: ' + inspectedNode.name + ' (' + inspectedNode.type + ')] ';
+  if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
 
-  addAiMessage(text, 'user');
-  aiInput.value = '';
-  aiSend.disabled = true;
-  addAiMessage('thinking...', 'system');
-
-  const body = `message=${encodeURIComponent(context + text)}${aiSessionId ? '&session_id=' + encodeURIComponent(aiSessionId) : ''}`;
-  fetch(apiUrl('/chat'), { method: 'POST', headers: csrfHeaders(), body })
-    .then(r => r.json())
-    .then(data => {
-      // Remove "thinking..." message
-      const systemMsgs = aiMessages.querySelectorAll('.msg.system');
-      if (systemMsgs.length) systemMsgs[systemMsgs.length - 1].remove();
-
-      if (data.ok) {
-        addAiMessage(data.response || '(empty response)', 'hubert');
-        if (data.session_id) aiSessionId = data.session_id;
-      } else {
-        addAiMessage(`Error: ${data.error}`, 'system');
-      }
-      aiSend.disabled = false;
-    })
-    .catch(err => {
-      const systemMsgs = aiMessages.querySelectorAll('.msg.system');
-      if (systemMsgs.length) systemMsgs[systemMsgs.length - 1].remove();
-      addAiMessage(`Error: ${err.message}`, 'system');
-      aiSend.disabled = false;
+  try {
+    const hdrs = { ...graphSecretHeaders(), 'Content-Type': 'application/json' };
+    const body = JSON.stringify({
+      message: context + text,
+      session_id: hubertSessionId,
+      principal: 'graph-ui'
     });
+    const r = await fetch(apiUrl('/chat'), { method: 'POST', headers: hdrs, body });
+    const data = await r.json();
+    if (data.ok) {
+      hubertMessages.push({ role: 'assistant', text: data.response || '(no response)' });
+      hubertSessionId = data.session_id || hubertSessionId;
+    } else {
+      hubertMessages.push({ role: 'system', text: 'Error: ' + (data.error || 'unknown') });
+    }
+  } catch (e) {
+    hubertMessages.push({ role: 'system', text: 'Network error: ' + e.message });
+  }
+  hubertSending = false;
+  document.getElementById('hubert-send').disabled = false;
+  renderHubertMessages();
 }
 
-aiSend.addEventListener('click', sendAiMessage);
-aiInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendAiMessage(); });
+document.getElementById('hubert-send').addEventListener('click', sendHubertMessage);
+document.getElementById('hubert-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendHubertMessage();
+  }
+});
+document.getElementById('hubert-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
 
 // ── Fetch focused agent data ──
 function loadFocusedAgentData(agentId) {
@@ -1781,6 +1915,7 @@ function writeHashState() {
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Escape') {
+    if (sidecarOpen) { closeSidecar(); return; }
     if (wireMode) { document.getElementById('wire-cancel').click(); return; }
     if (viewMode === 'agent') { exitAgentFocus(); return; }
     if (document.getElementById('inspect').classList.contains('open')) {
