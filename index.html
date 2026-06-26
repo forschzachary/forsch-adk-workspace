@@ -1324,8 +1324,12 @@ function renderLens() {
     layoutPadi();
     fg.cooldownTicks(Infinity);   // keep the sheet alive (floaty)…
     fg.cooldownTime(Infinity);    // …the engine also stops after cooldownTime (15s default)
+    // PADI is a control surface, not a pannable canvas — lock the camera so the
+    // graph can't drift off the static sheet. Node drag + click stay enabled.
+    fg.enableZoomInteraction(false).enablePanInteraction(false);
   } else {
     document.getElementById('swimlane-overlay').classList.remove('on');  // sheet is PADI-only
+    fg.enableZoomInteraction(true).enablePanInteraction(true);
     fg.cooldownTicks(150);
     fg.cooldownTime(15000);
   }
