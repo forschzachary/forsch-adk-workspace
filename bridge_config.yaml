@@ -51,6 +51,12 @@ agents:
     channels:
       - "#guild-wow"
 
+  shelby:
+    agent_package: forsch.agent_shelby.agent
+    agent_attr: root_agent
+    profile_home: /profiles/shelby
+    channels: []
+
   # Any DM (no guild/channel) routes here
   dm_fallback: assistant
 
