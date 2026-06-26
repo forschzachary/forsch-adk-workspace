@@ -7,7 +7,16 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
-  #graph { width: 100vw; height: 100vh; }
+  #graph-wrap { width: 100vw; height: 100vh; position: relative; }
+  #graph { width: 100%; height: 100%; }
+  /* ── Band labels (screen-pinned) ── */
+  .band-label {
+    position: absolute; left: 12px; z-index: 5;
+    font-size: 15px; font-weight: 700; letter-spacing: 0.08em;
+    color: rgba(210,215,225,0.9); pointer-events: none;
+    text-transform: uppercase; white-space: nowrap;
+    display: none;
+  }
   /* ── Tab bar ── */
   #tab-bar {
     position: fixed; top: 0; left: 0; right: 0; z-index: 15;
@@ -281,7 +290,13 @@
   <!-- Populated by loadClusters() -->
   <button class="tab-new" id="new-tab-btn" title="New cluster">+</button>
 </div>
-<div id="graph"></div>
+<div id="graph-wrap">
+  <div id="graph"></div>
+  <div class="band-label" data-band-cy="-240">Interfaces</div>
+  <div class="band-label" data-band-cy="-80">Router</div>
+  <div class="band-label" data-band-cy="80">Agent · Logic</div>
+  <div class="band-label" data-band-cy="240">Tools · Data</div>
+</div>
 <div id="panel">
   <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
   <h3>Lens</h3>
@@ -1015,15 +1030,28 @@ function initGraph(data) {
     .linkDirectionalParticleWidth(1.5)
     .linkDirectionalParticleColor(() => '#3fb950')
     .onRenderFramePre((ctx, scale) => {
-      if (currentLens !== 'padi') return;
+      if (currentLens !== 'padi') {
+        document.querySelectorAll('.band-label').forEach(el => el.style.display = 'none');
+        return;
+      }
       for (const b of BANDS) {
         ctx.fillStyle = b.fill;
         ctx.fillRect(BAND_X0, b.cy - 64, BAND_X1 - BAND_X0, 128);
-        ctx.fillStyle = 'rgba(139,148,158,0.65)';
-        ctx.font = `${13 / scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.fillText(b.label, BAND_X0 + 26, b.cy - 46);
       }
+      // Position HTML band labels using camera transform (clamp to viewport)
+      const t = ctx.getTransform();
+      const viewH = document.getElementById('graph').clientHeight;
+      document.querySelectorAll('.band-label').forEach(el => {
+        const worldY = parseFloat(el.dataset.bandCy);
+        const screenY = worldY * t.d + t.f;
+        if (screenY < -20 || screenY > viewH + 20) {
+          el.style.display = 'none';
+        } else {
+          el.style.display = 'block';
+          el.style.top = (screenY - 8) + 'px';
+        }
+      });
+      // Rail labels stay in world coords (they sit on the rail columns)
       if (showDepRail) {
         ctx.fillStyle = 'rgba(86,212,221,0.06)';
         ctx.fillRect(-RAIL_X - 46, -360, 92, 720);
@@ -1103,6 +1131,15 @@ function renderLens() {
   applyForces();
   fg.cooldownTicks(150);
   fg.d3ReheatSimulation();
+  // In PADI mode, cap zoom so all bands stay visible
+  if (currentLens === 'padi') {
+    const viewH = document.getElementById('graph').clientHeight;
+    const bandExtent = 304 * 2; // bands span y=-304 to y=304
+    const maxZoom = (viewH - 60) / bandExtent; // 60px padding
+    setTimeout(() => {
+      if (fg.zoom() > maxZoom) fg.zoom(maxZoom, 300);
+    }, 180);
+  }
   const tag = currentLens === 'padi' ? ' · swim lanes' : '';
   const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
   if (viewMode === 'agent' && focusedAgentId) {
