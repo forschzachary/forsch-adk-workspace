@@ -231,14 +231,18 @@ async def _send_message(
         text=text,
     ):
         if kind == "text":
-            assert isinstance(data, str)
+            if not isinstance(data, str):
+                yield history, "", f"skipped malformed text event: {type(data).__name__}"
+                continue
             full_text += data
             assistant_msg["content"] = full_text
             if tools:
                 assistant_msg["metadata"] = _metadata(tools)
             yield history, "", _status(agent_name, tools, running=True)
         elif kind == "tool_call":
-            assert isinstance(data, dict)
+            if not isinstance(data, dict):
+                yield history, "", f"skipped malformed tool call: {type(data).__name__}"
+                continue
             tools.append(
                 {
                     "name": data.get("name", "tool"),
@@ -252,7 +256,9 @@ async def _send_message(
             assistant_msg["metadata"] = _metadata(tools)
             yield history, "", _status(agent_name, tools, running=True)
         elif kind == "tool_result":
-            assert isinstance(data, dict)
+            if not isinstance(data, dict):
+                yield history, "", f"skipped malformed tool result: {type(data).__name__}"
+                continue
             for tool in reversed(tools):
                 if tool["status"] == "pending":
                     tool["status"] = "done"
