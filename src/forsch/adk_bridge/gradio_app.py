@@ -243,7 +243,6 @@ def build_gradio_app() -> gr.Blocks:
     initial_session_id = _new_session_id(default_agent)
 
     with gr.Blocks(title=BRAND["title"], elem_id="ff-sidecar") as demo:
-        demo.js = ENTER_TO_SEND_JS
         gr.HTML(f"<style>{build_css()}</style>", visible=False)
 
         with gr.Column(elem_id="ff-hero"):

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 import gradio as gr
 from forsch.adk_bridge.gradio_app import build_gradio_app
+from forsch.adk_bridge.sidecar_config import ENTER_TO_SEND_JS
 
 app = FastAPI()
 
@@ -30,7 +31,7 @@ async def _teamrooms_startup():
 
 # ── Gradio mount (replaces Chainlit) ────────────────────────────────────────
 _gradio_demo = build_gradio_app()
-gr.mount_gradio_app(app, _gradio_demo, path="/chat")
+gr.mount_gradio_app(app, _gradio_demo, path="/chat", js=ENTER_TO_SEND_JS)
 
 
 # ── token bridge ────────────────────────────────────────────────────────────
