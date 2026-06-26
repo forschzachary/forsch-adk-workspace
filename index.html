@@ -1189,12 +1189,18 @@ function layoutPadiControlShelf(laneIndex, controls) {
     place(spawn, shelfLeft + labelW + padiControlLayoutUnits(PADI_CONTROL_GAP) + spawnW / 2, headerY);
   }
 
+  let cursorX = shelfLeft;
+  let cursorRow = 0;
   sorted.filter(n => n.padiControlKind === 'library').forEach((node, index) => {
-    const col = index % PADI_LIBRARY_COLS;
-    const row = Math.floor(index / PADI_LIBRARY_COLS);
-    const x = shelfLeft + padiControlLayoutUnits(PADI_LIBRARY_COL_STEP * col + (node.padiWidth || 80) / 2);
-    const y = libraryY + padiControlLayoutUnits(PADI_LIBRARY_ROW_STEP * row);
+    const w = padiControlLayoutUnits(node.padiWidth || 46);
+    if (index > 0 && index % PADI_LIBRARY_COLS === 0) {
+      cursorRow++;
+      cursorX = shelfLeft;
+    }
+    const x = cursorX + w / 2;
+    const y = libraryY + padiControlLayoutUnits(PADI_LIBRARY_ROW_STEP * cursorRow);
     place(node, x, y);
+    cursorX += w + padiControlLayoutUnits(PADI_CONTROL_GAP);
   });
 }
 
@@ -1693,8 +1699,8 @@ function initGraph(data) {
     .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
     .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
     .linkDirectionalParticles(0)
-    .linkDirectionalParticleSpeed(0.004)
-    .linkDirectionalParticleWidth(1.5)
+    .linkDirectionalParticleSpeed(0.008)
+    .linkDirectionalParticleWidth(3)
     .linkDirectionalParticleColor(() => '#3fb950')
     .onRenderFramePre((ctx, scale) => {
       // PADI lanes and optional rail columns are graph-space surfaces, so they
