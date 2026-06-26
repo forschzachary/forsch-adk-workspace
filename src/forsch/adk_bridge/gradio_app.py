@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from typing import Any
 
 import gradio as gr
@@ -191,10 +192,15 @@ def _apply_prompt(label: str) -> str:
     return PROMPTS.get(label, "")
 
 
+def _select_agent(agent_name: str):
+    return _runtime_summary(agent_name), [], "ready · new agent session", _new_session_id(agent_name)
+
+
 async def _send_message(
     message: str,
     agent_name: str,
     history: list[dict[str, Any]] | None,
+    session_id: str,
 ):
     """Stream one operator message through an ADK agent.
 
@@ -214,7 +220,7 @@ async def _send_message(
         yield history, message, "Agent unavailable."
         return
 
-    session_id = f"gradio:{agent_name}:{int(time.time())}"
+    session_id = _normalize_session_id(agent_name, session_id)
     history.append({"role": "user", "content": text})
     assistant_msg: dict[str, Any] = {"role": "assistant", "content": ""}
     history.append(assistant_msg)
@@ -309,17 +315,29 @@ def _status(agent_name: str, tools: list[dict[str, Any]], running: bool) -> str:
     state = "running" if running else "ready"
     pending = sum(1 for tool in tools if tool.get("status") == "pending")
     done = sum(1 for tool in tools if tool.get("status") == "done")
-    return f"{state} · agent {agent_name} · tools {done} done / {pending} pending"
+    return f"{state} · agent {agent_name} · persistent chat · tools {done} done / {pending} pending"
 
 
-def _clear_chat():
-    return [], "", "ready"
+def _new_session_id(agent_name: str) -> str:
+    safe_agent = (agent_name or "agent").replace(":", "-")
+    return f"gradio:{safe_agent}:{uuid.uuid4().hex}"
+
+
+def _normalize_session_id(agent_name: str, session_id: str | None) -> str:
+    if session_id and session_id.startswith("gradio:"):
+        return session_id
+    return _new_session_id(agent_name)
+
+
+def _clear_chat(agent_name: str):
+    return [], "", "ready · new session", _new_session_id(agent_name)
 
 
 def build_gradio_app() -> gr.Blocks:
     """Create the Gradio Blocks app for the ADK sidecar."""
     choices = _agent_choices()
     default_agent = _default_agent(choices)
+    initial_session_id = _new_session_id(default_agent)
 
     with gr.Blocks(title="ADK Sidecar", elem_id="ff-sidecar") as demo:
         # Gradio 6 moved Blocks(css=...) to launch(); this app is mounted, not
@@ -329,6 +347,8 @@ def build_gradio_app() -> gr.Blocks:
             gr.Markdown("# ADK Sidecar")
             gr.Markdown("Focused operator chat for the agent graph. Pick an agent, run a task, inspect the tool trace.")
             runtime_html = gr.HTML(_runtime_summary(default_agent))
+
+        session_state = gr.State(initial_session_id)
 
         with gr.Row(elem_id="ff-workspace"):
             with gr.Column(scale=1, min_width=260, elem_id="ff-rail"):
@@ -376,9 +396,21 @@ def build_gradio_app() -> gr.Blocks:
                         clear = gr.Button("Clear", elem_id="ff-clear-btn")
 
         quick.change(_apply_prompt, inputs=quick, outputs=prompt)
-        agent_dd.change(_runtime_summary, inputs=agent_dd, outputs=runtime_html)
-        send.click(_send_message, inputs=[prompt, agent_dd, chatbot], outputs=[chatbot, prompt, status])
-        prompt.submit(_send_message, inputs=[prompt, agent_dd, chatbot], outputs=[chatbot, prompt, status])
-        clear.click(_clear_chat, outputs=[chatbot, prompt, status])
+        agent_dd.change(
+            _select_agent,
+            inputs=agent_dd,
+            outputs=[runtime_html, chatbot, status, session_state],
+        )
+        send.click(
+            _send_message,
+            inputs=[prompt, agent_dd, chatbot, session_state],
+            outputs=[chatbot, prompt, status],
+        )
+        prompt.submit(
+            _send_message,
+            inputs=[prompt, agent_dd, chatbot, session_state],
+            outputs=[chatbot, prompt, status],
+        )
+        clear.click(_clear_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state])
 
     return demo
