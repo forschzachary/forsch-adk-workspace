@@ -386,6 +386,9 @@ const COLORS = {
   intake: '#d2a8ff', router: '#ff7b72', database: '#a5d6ff',
   ui: '#f0c040', builder: '#ffa198', design: '#79c0ff',
   capability: '#56d4dd',
+  // Infra rail colors
+  service: '#c8a0ff', host: '#8b949e', container: '#79c0ff',
+  network: '#56d4dd', tunnel: '#ffa198',
 };
 
 // ── Helpers ──
@@ -427,6 +430,7 @@ function computeNodeMetrics(data) {
 let nodeMetrics = { cc: {}, gc: {} };
 
 function nodeRadius(node) {
+  if (node.rail) return 3; // Rail nodes are small
   const count = nodeMetrics.cc[node.id] || 0;
   return Math.max(4, Math.min(16, 4 + count * 1.3));
 }
@@ -819,10 +823,17 @@ function applyLayout(vd) {
     return;
   }
 
-  const caps = vd.nodes.filter(n => n.type === 'capability');
-  caps.forEach((n, i) => {
+  // Pin rail nodes in a column on the left edge
+  const depNodes = vd.nodes.filter(n => n.rail === 'dependency');
+  const infraNodes = vd.nodes.filter(n => n.rail === 'infrastructure');
+  const railOffset = 80; // vertical spacing between rail nodes
+  depNodes.forEach((n, i) => {
     n.fx = -RAIL_X;
-    n.fy = (i - (caps.length - 1) / 2) * 84;
+    n.fy = (i - (depNodes.length - 1) / 2) * railOffset;
+  });
+  infraNodes.forEach((n, i) => {
+    n.fx = -RAIL_X - 100;
+    n.fy = (i - (infraNodes.length - 1) / 2) * railOffset;
   });
 
   if (currentLens === 'padi') {
@@ -833,7 +844,7 @@ function applyLayout(vd) {
       n.fy = LANE_Y.agent;
     });
     vd.nodes.forEach(n => {
-      if (n.type === 'agent' || n.type === 'capability') return;
+      if (n.type === 'agent' || n.rail) return; // skip agents (pinned above) and rail nodes
       const baseY = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
       // Spread vertically within lane to reduce label overlap
       const hash = n.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -842,7 +853,7 @@ function applyLayout(vd) {
     });
   } else {
     vd.nodes.forEach(n => {
-      if (n.type === 'capability') return;
+      if (n.rail) return; // rail nodes stay pinned
       n.fx = null;
       n.fy = null;
     });
@@ -922,6 +933,7 @@ function initGraph(data) {
       else if (state === 'error') alpha = 0.75;
       if (node.shared) alpha *= 0.5;
       if (isSynthetic) alpha *= 0.85;
+      if (node.rail) alpha *= 0.7; // Rail nodes are muted
 
       // ── Outer circle ──
       ctx.beginPath();
@@ -932,6 +944,7 @@ function initGraph(data) {
       ctx.lineWidth = 1.5 / globalScale;
       if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
       if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
+      if (node.rail) ctx.setLineDash([2 / globalScale, 2 / globalScale]);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -976,7 +989,11 @@ function initGraph(data) {
       ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
       ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
     })
-    .linkColor(() => '#30363d')
+    .linkColor(l => {
+      if (l.kind === 'depends-on') return 'rgba(165,214,255,0.4)'; // dependency rail
+      if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.4)'; // infra rail
+      return '#30363d';
+    })
     .linkDirectionalArrowLength(6)
     .linkDirectionalArrowRelPos(0.95)
     .linkLabel(l => l.kind)
