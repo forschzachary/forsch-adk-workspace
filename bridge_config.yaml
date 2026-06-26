@@ -60,6 +60,17 @@ agents:
   # Any DM (no guild/channel) routes here
   dm_fallback: assistant
 
+# Spectrum iMessage integration. The adk-sms-shelby TS service runs the
+# Spectrum SDK, receives iMessages via Photon Cloud, and POSTs each message
+# to /spectrum/webhook on this bridge. Auth via SPECTRUM_SECRET env var.
+spectrum:
+  # Per-sender routing: iMessage sender (phone/email) → agent name
+  routing:
+    # Add Shelby's number here once confirmed
+    # "+15551234567": shelby
+  # Default agent for unmatched iMessage senders
+  default_agent: shelby
+
 session:
   # SQLite session store — survives restarts
   db_path: data/adk_sessions.db

@@ -2,19 +2,27 @@ import re
 import os
 import json
 import hmac
+import asyncio
 import urllib.parse
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 import gradio as gr
 from forsch.adk_bridge.gradio_app import build_gradio_app
 from forsch.adk_bridge.sidecar_config import ENTER_TO_SEND_JS
+from forsch.adk_bridge.gateway.sources_spectrum import spectrum_to_canonical
+from forsch.adk_bridge.gateway.router import resolve_agent, build_source_defaults
+from forsch.adk_bridge.run import stream_agent
+from forsch.adk_bridge.runtime import get_runtime
 
 app = FastAPI()
 
 _CHAT_TOKEN = os.environ.get("CHAT_TOKEN", "")
 _COOKIE = "chat_token"
+
+# Spectrum webhook auth: shared secret for the TS bridge service
+_SPECTRUM_SECRET = os.environ.get("SPECTRUM_SECRET", "")
 
 
 @app.get("/healthz")
@@ -152,6 +160,63 @@ class _SameSiteNoneMiddleware:
 
 app.add_middleware(_SameSiteNoneMiddleware)
 
+
+# ── Spectrum iMessage webhook ──────────────────────────────────────────────
+# Receives POST from the adk-sms-shelby TS service when an iMessage arrives.
+# Authenticates with a shared secret (SPECTRUM_SECRET env var, checked via
+# constant-time comparison). Routes the message through the gateway to the
+# configured agent and returns the response text inline.
+
+@app.post("/spectrum/webhook")
+async def spectrum_webhook(request: Request):
+    # Auth: shared secret in Authorization header
+    if _SPECTRUM_SECRET:
+        auth = request.headers.get("authorization", "")
+        expected = f"Bearer {_SPECTRUM_SECRET}"
+        if not hmac.compare_digest(auth, expected):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    body = await request.json()
+    runtime = get_runtime()
+    config = runtime.config
+
+    # Build routing map from config (spectrum section)
+    spectrum_cfg = (config.get("spectrum") or {})
+    routing_map = spectrum_cfg.get("routing", {})
+
+    msg = spectrum_to_canonical(body, routing_map=routing_map)
+
+    # Route: explicit target > source default
+    source_defaults = build_source_defaults(config)
+    agent_name = resolve_agent(msg, runtime.agents.keys(), {
+        "source_defaults": {**source_defaults, "spectrum": spectrum_cfg.get("default_agent", "shelby")},
+        "mention_routing": False,
+    })
+
+    if not agent_name or agent_name not in runtime.agents:
+        return JSONResponse({"error": f"no agent resolved for {msg.sender}"}, status_code=404)
+
+    agent = runtime.agents[agent_name]
+
+    # Run the agent and collect the full response
+    response_parts = []
+    async for token in stream_agent(
+        agent=agent,
+        agent_name=agent_name,
+        session_service=runtime.session_service,
+        user_id=msg.sender,
+        session_id=msg.session_id,
+        text=msg.text,
+    ):
+        response_parts.append(token)
+
+    response_text = "".join(response_parts)
+
+    return JSONResponse({
+        "agent": agent_name,
+        "response": response_text,
+        "session_id": msg.session_id,
+    })
 
 
 def main():
