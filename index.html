@@ -940,7 +940,7 @@ function buildAgentFocusData() {
 function padiControlWidth(kind, label) {
   if (kind === 'label') return Math.max(120, label.length * 9 + 28);
   if (kind === 'spawn') return Math.max(88, label.length * 7 + 26);
-  return Math.max(46, label.length * 7 + 16);
+  return Math.max(40, label.length * 5 + 12);
 }
 
 function buildPadiControlNodes() {
@@ -1692,8 +1692,8 @@ function initGraph(data) {
     .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
     .linkDirectionalParticles(0)
     .linkDirectionalParticleSpeed(0.008)
-    .linkDirectionalParticleWidth(3)
-    .linkDirectionalParticleColor(() => '#3fb950')
+    .linkDirectionalParticleWidth(4)
+    .linkDirectionalParticleColor(() => '#4ade80')
     .onRenderFramePre((ctx, scale) => {
       // PADI lanes and optional rail columns are graph-space surfaces, so they
       // zoom and pan with the live graph instead of fighting the camera.
@@ -2150,7 +2150,7 @@ function startPulse() {
       .then(r => r.json())
       .then(p => {
         if (fg && p.active_edges) {
-          fg.linkDirectionalParticles(p.active_edges.length);
+          fg.linkDirectionalParticles(Math.max(3, p.active_edges.length));
           const activeSet = new Set(p.active_edges.map(e => `${e.source}→${e.target}`));
           const key = l => `${lid(l.source)}→${lid(l.target)}`;
           fg.linkColor(l => activeSet.has(key(l)) ? '#2ea043' : '#30363d');
