@@ -313,6 +313,16 @@ const COLORS = {
 const hexAlpha = a => Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
 const lid = x => (x && typeof x === 'object') ? x.id : x;
 
+// ── Double-click detector (fallback for libraries without onNodeDoubleClick) ──
+let _lastClick = { id: null, ts: 0 };
+function _maybeDoubleClick(node) {
+  const now = Date.now();
+  const same = _lastClick.id === node.id;
+  const fast = now - _lastClick.ts < 350;
+  _lastClick = { id: node.id, ts: now };
+  return same && fast;
+}
+
 // ── Node metrics ──
 function computeNodeMetrics(data) {
   const cc = {};
@@ -518,9 +528,6 @@ function loadGraph(clusterName) {
       renderLens();
     })
     .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
-}
-
-// ── Lens logic ──
 }
 
 // ── Lens logic ──
@@ -892,6 +899,11 @@ function initGraph(data) {
         openAgentWorkbench(focusedAgentId, section);
         return;
       }
+      // Double-click detector for agent focus
+      if (node.type === 'agent' && _maybeDoubleClick(node)) {
+        enterAgentFocus(node.id);
+        return;
+      }
       // Lineage lens: click agent to set root
       if (currentLens === 'lineage' && node.type === 'agent') {
         lineageRoot = node.id;
@@ -899,9 +911,6 @@ function initGraph(data) {
       }
       // Always open inspect panel on click
       openInspect(node);
-    })
-    .onNodeDoubleClick(node => {
-      if (node?.type === 'agent') enterAgentFocus(node.id);
     })
     .onNodeHover(node => {
       if (node) {
