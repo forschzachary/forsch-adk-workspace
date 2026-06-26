@@ -940,7 +940,7 @@ function buildAgentFocusData() {
 function padiControlWidth(kind, label) {
   if (kind === 'label') return Math.max(120, label.length * 9 + 28);
   if (kind === 'spawn') return Math.max(88, label.length * 7 + 26);
-  return Math.max(40, label.length * 5 + 12);
+  return 90;
 }
 
 function buildPadiControlNodes() {
@@ -1528,13 +1528,17 @@ function drawPadiControlNode(node, ctx, scale) {
   roundRectPath(ctx, x, y, w, h, h / 2);
   ctx.fillStyle = disabled ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.035)';
   ctx.fill();
+  ctx.save();
+  roundRectPath(ctx, x, y, w, h, h / 2);
+  ctx.clip();
+  ctx.fillStyle = disabled ? 'rgba(139,148,158,0.52)' : '#c9d1d9';
+  ctx.fillText(node.name, node.x, node.y + 0.5 / scale);
+  ctx.restore();
   if (disabled) ctx.setLineDash([4 / scale, 3 / scale]);
   ctx.strokeStyle = disabled ? `rgba(${hue},0.34)` : `rgb(${hue})`;
   ctx.lineWidth = 1.25 / scale;
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = disabled ? 'rgba(139,148,158,0.52)' : '#c9d1d9';
-  ctx.fillText(node.name, node.x, node.y + 0.5 / scale);
   ctx.restore();
 }
 
@@ -1561,6 +1565,89 @@ function handlePadiControlClick(node) {
       inspectGraphNode(node.padiSpawner, node.padiAgentId);
     }
   }
+}
+
+// ── Custom live particles along visible link segments ──
+let liveEdgeKeys = new Set();
+let particlePhase = 0;
+
+function drawLiveParticles(ctx, scale) {
+  if (!liveEdgeKeys.size || currentLens !== 'padi') return;
+  const gLinks = fg.graphData().links || [];
+  const now = Date.now();
+  particlePhase = (now % 4000) / 4000;
+  gLinks.forEach(link => {
+    const s = link.source, t = link.target;
+    if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
+    const key = `${s.id || s}→${t.id || t}`;
+    const revKey = `${t.id || t}→${s.id || s}`;
+    if (!liveEdgeKeys.has(key) && !liveEdgeKeys.has(revKey)) return;
+    const pts = padiLinkPath(s, t);
+    if (pts.length < 2) return;
+    const totalLen = pathLength(pts);
+    if (totalLen < 1) return;
+    const count = Math.max(2, Math.ceil(totalLen / 120));
+    for (let i = 0; i < count; i++) {
+      const frac = ((particlePhase + i / count) % 1) * totalLen;
+      const pos = pointAtDist(pts, frac);
+      const r = 3.5 / scale;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = '#4ade80';
+      ctx.fill();
+    }
+  });
+}
+
+function padiLinkPath(s, t) {
+  if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
+    return [s, t];
+  }
+  const upper = s.__lane < t.__lane ? s : t;
+  const lower = s.__lane < t.__lane ? t : s;
+  const boundY = padiLaneBound[upper.__lane];
+  const px = lower.__tx;
+  if (!Number.isFinite(boundY) || !Number.isFinite(px)) return [s, t];
+  const rS = nodeVisualRadius(s, 1) + 2;
+  const rT = nodeVisualRadius(t, 1) + 2;
+  const pin = { x: px, y: boundY };
+  const seg1 = clipSegment(lower, pin, rS, 0);
+  const seg2 = clipSegment(pin, upper, 0, rT);
+  return [seg1[0], seg1[1], seg2[1]];
+}
+
+function clipSegment(a, b, rA, rB) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < rA + rB) return [a, b];
+  const ux = dx / len, uy = dy / len;
+  return [
+    { x: a.x + ux * rA, y: a.y + uy * rA },
+    { x: b.x - ux * rB, y: b.y - uy * rB },
+  ];
+}
+
+function pathLength(pts) {
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    len += Math.sqrt(dx * dx + dy * dy);
+  }
+  return len;
+}
+
+function pointAtDist(pts, dist) {
+  let rem = dist;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+    if (rem <= segLen) {
+      const t = segLen > 0 ? rem / segLen : 0;
+      return { x: pts[i-1].x + dx * t, y: pts[i-1].y + dy * t };
+    }
+    rem -= segLen;
+  }
+  return pts[pts.length - 1];
 }
 
 // ── Graph init ──
@@ -1691,14 +1778,12 @@ function initGraph(data) {
     .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
     .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
     .linkDirectionalParticles(0)
-    .linkDirectionalParticleSpeed(0.008)
-    .linkDirectionalParticleWidth(4)
-    .linkDirectionalParticleColor(() => '#4ade80')
     .onRenderFramePre((ctx, scale) => {
       // PADI lanes and optional rail columns are graph-space surfaces, so they
       // zoom and pan with the live graph instead of fighting the camera.
       try {
         drawPadiLaneSheet(ctx, scale);
+        drawLiveParticles(ctx, scale);
         const gNodes = fg.graphData().nodes;
         if (showDepRail) {
           const dn = gNodes.filter(n => n.rail === 'dependency');
@@ -2150,8 +2235,8 @@ function startPulse() {
       .then(r => r.json())
       .then(p => {
         if (fg && p.active_edges) {
-          fg.linkDirectionalParticles(Math.max(3, p.active_edges.length));
-          const activeSet = new Set(p.active_edges.map(e => `${e.source}→${e.target}`));
+          liveEdgeKeys = new Set(p.active_edges.map(e => `${e.source}→${e.target}`));
+          const activeSet = liveEdgeKeys;
           const key = l => `${lid(l.source)}→${lid(l.target)}`;
           fg.linkColor(l => activeSet.has(key(l)) ? '#2ea043' : '#30363d');
           fg.linkWidth(l => activeSet.has(key(l)) ? 2 : 1);
