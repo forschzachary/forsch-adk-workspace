@@ -1554,20 +1554,12 @@ function handlePadiControlClick(node) {
     spawnBlankAgent(id, desc, null);
     return;
   }
-  if (node.padiControlKind === 'library' && node.padiSpawner === 'agent' && node.padiAgentId) {
-    addAgentToCluster(node.padiAgentId, null);
-  }
-  if (node.padiControlKind === 'library' && node.padiSpawner === 'tool' && node.padiAgentId) {
-    const graphNode = findGraphNode('tool:' + node.padiAgentId);
-    if (graphNode) openInspect(graphNode);
-  }
-  if (node.padiControlKind === 'library' && node.padiSpawner === 'interface' && node.padiAgentId) {
-    const graphNode = findGraphNode('iface:' + node.padiAgentId);
-    if (graphNode) openInspect(graphNode);
-  }
-  if (node.padiControlKind === 'library' && node.padiSpawner === 'router' && node.padiAgentId) {
-    const graphNode = findGraphNode('router:' + node.padiAgentId);
-    if (graphNode) openInspect(graphNode);
+  if (node.padiControlKind === 'library' && node.padiAgentId) {
+    if (node.padiSpawner === 'agent') {
+      addAgentToCluster(node.padiAgentId, null);
+    } else {
+      inspectGraphNode(node.padiSpawner, node.padiAgentId);
+    }
   }
 }
 
@@ -1942,6 +1934,27 @@ function findGraphNode(nodeId) {
   return (graphData?.nodes || []).find(n => n.id === nodeId);
 }
 
+const NODE_PREFIX = { tool: 'tool', interface: 'iface', router: 'router' };
+
+function graphNodeLibrary(nodeType) {
+  let nodes = graphData?.nodes || [];
+  if (nodeType === 'intake') {
+    nodes = collapseIntake({ nodes, links: [] }).nodes;
+  }
+  return nodes
+    .filter(n => n.type === nodeType)
+    .map(n => ({
+      id: n.id.replace(NODE_PREFIX[nodeType] + ':', ''),
+      name: n.name || n.id.replace(NODE_PREFIX[nodeType] + ':', ''),
+      inCluster: clusterHasNode(n.id),
+    }));
+}
+
+function inspectGraphNode(spawnerKey, itemId) {
+  const node = findGraphNode(NODE_PREFIX[spawnerKey] + ':' + itemId);
+  if (node) openInspect(node);
+}
+
 // Shared actions, reused by both the spawn form and drag/click-to-add.
 async function spawnBlankAgent(id, desc, msgEl) {
   id = (id || '').trim();
@@ -1993,54 +2006,20 @@ const LANE_SPAWNERS = {
   tool: {
     blankLabel: 'New tool',
     disabled: true,
-    library() {
-      return (graphData?.nodes || [])
-        .filter(n => n.type === 'tool')
-        .map(n => ({
-          id: n.id.replace('tool:', ''),
-          name: n.name || n.id.replace('tool:', ''),
-          inCluster: clusterHasNode(n.id),
-        }));
-    },
-    onDrop(item, msg) {
-      const node = findGraphNode('tool:' + item.id);
-      if (node) openInspect(node);
-    },
+    library() { return graphNodeLibrary('tool'); },
+    onDrop(item, msg) { inspectGraphNode('tool', item.id); },
   },
   interface: {
     blankLabel: 'New interface',
     disabled: true,
-    library() {
-      const collapsed = collapseIntake({ nodes: graphData?.nodes || [], links: [] });
-      return collapsed.nodes
-        .filter(n => n.type === 'intake')
-        .map(n => ({
-          id: n.id.replace('iface:', ''),
-          name: n.name || n.id.replace('iface:', ''),
-          inCluster: clusterHasNode(n.id),
-        }));
-    },
-    onDrop(item, msg) {
-      const node = findGraphNode('iface:' + item.id);
-      if (node) openInspect(node);
-    },
+    library() { return graphNodeLibrary('intake'); },
+    onDrop(item, msg) { inspectGraphNode('interface', item.id); },
   },
   router: {
     blankLabel: 'New router',
     disabled: true,
-    library() {
-      return (graphData?.nodes || [])
-        .filter(n => n.type === 'router')
-        .map(n => ({
-          id: n.id.replace('router:', ''),
-          name: n.name || n.id.replace('router:', ''),
-          inCluster: clusterHasNode(n.id),
-        }));
-    },
-    onDrop(item, msg) {
-      const node = findGraphNode('router:' + item.id);
-      if (node) openInspect(node);
-    },
+    library() { return graphNodeLibrary('router'); },
+    onDrop(item, msg) { inspectGraphNode('router', item.id); },
   },
 };
 const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', router: 'router', agent: 'agent', tools: 'tool' };
