@@ -20,7 +20,7 @@ import subprocess
 import sys
 import threading
 import time
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -35,6 +35,7 @@ BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/opt/data"))
 
 GRAPH_SECRET = os.environ.get("GRAPH_SERVER_SECRET", "")
+GRAPH_EXPOSE_SECRET = os.environ.get("GRAPH_EXPOSE_SECRET", "").lower() in ("1", "true", "yes")
 # Durability: if the env var wasn't injected at launch, read the secret from the
 # persistent file ($HERMES_HOME/graph-server-secret). This makes the secret survive
 # ANY restart — manual, supervised, or container reboot — without depending on the
@@ -1218,21 +1219,24 @@ class Handler(SimpleHTTPRequestHandler):
         elif path in ("/clusters", "/clusters/"):
             self._json_response(200, list_clusters())
         elif path == "/graph-secret":
-            # Serve the secret to the browser for same-origin API calls.
-            # In CRM embed the proxy already injects X-Graph-Secret server-side,
-            # so if the request already carries a valid secret, return empty —
-            # the browser doesn't need it (the proxy handles auth).
+            # Never expose the write secret in production. Local dev can opt in
+            # with GRAPH_EXPOSE_SECRET=1; otherwise the operator unlocks edits
+            # in the browser by entering the secret manually.
             hdr_secret = self.headers.get("X-Graph-Secret", "")
             if GRAPH_SECRET and hdr_secret == GRAPH_SECRET:
-                # CRM proxy mode — secret already injected, don't leak it.
                 self._json_response(200, {"secret": ""})
-            else:
-                # Standalone mode — browser needs it for direct API calls.
+            elif GRAPH_EXPOSE_SECRET:
                 self._json_response(200, {"secret": GRAPH_SECRET or ""})
+            else:
+                self._json_response(403, {"error": "forbidden: enter graph edit secret in the UI"})
         elif path == "/chat-token":
-            # Serve the bridge CHAT_TOKEN so the browser can authenticate the Gradio iframe.
-            # In CRM embed the proxy injects it server-side; here the browser needs it.
-            self._json_response(200, {"token": _chat_token(), "base": CHAT_BASE_URL})
+            # The bridge token can drive agent chat, so keep it behind the same
+            # operator unlock as graph mutations. Local dev can opt in with
+            # GRAPH_EXPOSE_SECRET=1.
+            if self._check_secret() or GRAPH_EXPOSE_SECRET:
+                self._json_response(200, {"token": _chat_token(), "base": CHAT_BASE_URL})
+            else:
+                self._json_response(403, {"error": "forbidden: X-Graph-Secret required"})
         elif path == "/manifest":
             qs = parse_qs(parsed.query)
             cluster = qs.get("cluster", [None])[0]
@@ -1356,7 +1360,18 @@ class Handler(SimpleHTTPRequestHandler):
                 [sys.executable, str(SPIKE_DIR / "contract_check.py"), source, target],
                 capture_output=True, text=True,
             )
-            check = json.loads(result.stdout) if result.returncode in (0, 1) else {"valid": False, "error": result.stderr}
+            if result.returncode in (0, 1):
+                try:
+                    check = json.loads(result.stdout)
+                except json.JSONDecodeError:
+                    check = {
+                        "valid": False,
+                        "error": "contract check returned invalid JSON",
+                        "stdout": result.stdout[:300],
+                        "stderr": result.stderr[:300],
+                    }
+            else:
+                check = {"valid": False, "error": result.stderr[:300] or f"exit {result.returncode}"}
             self._json_response(200, check)
 
         elif parsed.path == "/save-agent":
@@ -1554,6 +1569,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8888
-    server = HTTPServer(("127.0.0.1", port), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"Live Agent Graph server on http://127.0.0.1:{port} (localhost only)")
     server.serve_forever()

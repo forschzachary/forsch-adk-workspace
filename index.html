@@ -9,7 +9,7 @@
   body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
   #graph-wrap { width: 100vw; height: 100vh; position: relative; }
   #graph { width: 100%; height: 100%; position: relative; z-index: 2; }
-  /* ── Swim-lane overlay: a static screen-aligned sheet the graph is drawn over ── */
+  /* ── Swim-lane overlay: operator controls above the graph-space lane sheet ── */
   #swimlane-overlay {
     position: absolute; left: 0; top: 36px; right: 300px; bottom: 0;
     pointer-events: none; z-index: 1;
@@ -23,18 +23,24 @@
   .swimlane-row:first-child { border-top: none; }
   /* ── Interactive controls layer (above the canvas) ── */
   #swimlane-controls {
-    position: absolute; left: 0; top: 36px; right: 300px; bottom: 0;
+    position: absolute; left: 0; top: 0; right: 300px; bottom: 0;
     z-index: 3; pointer-events: none;
-    display: none; flex-direction: column;
+    display: none; overflow: visible;
   }
-  #swimlane-controls.on { display: flex; }
-  .swimlane-ctrl-row { position: relative; flex: 1 1 0; pointer-events: none; transition: box-shadow 0.12s; }
-  body.dragging .swimlane-ctrl-row { pointer-events: auto; }   /* drop targets only while dragging a chip */
+  #swimlane-controls.on { display: none; }
+  .swimlane-ctrl-row {
+    position: absolute; left: 0; top: 0; width: 0; height: 0;
+    pointer-events: none; transition: box-shadow 0.12s;
+  }
+  body.dragging .swimlane-ctrl-row { pointer-events: auto; }   /* graph-space drop targets only while dragging a chip */
   .swimlane-ctrl-row.drop-ok { box-shadow: inset 0 0 0 1px var(--lane-hue); background: rgba(255,255,255,0.02); }
   .swimlane-header {
-    position: absolute; top: 0; left: 0; right: 0;
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 9px 16px 0 18px; pointer-events: none;
+    position: absolute; top: 14px; left: 18px;
+    display: grid;
+    grid-template-columns: max-content max-content max-content 1fr;
+    align-items: center; column-gap: 12px; row-gap: 8px;
+    width: min(760px, calc(100vw - 380px));
+    pointer-events: none;
   }
   .swimlane-header > * { pointer-events: auto; }
   .swimlane-header.disabled { opacity: 0.4; }
@@ -66,7 +72,11 @@
     font-size: 11px; background: #1a3a1a; border: 1px solid #2ea043; color: #3fb950;
     border-radius: 4px; padding: 3px 10px; cursor: pointer;
   }
-  .lane-lib { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .lane-lib {
+    grid-column: 1 / -1;
+    display: flex; gap: 7px; flex-wrap: wrap; align-items: center;
+    min-height: 22px;
+  }
   .lane-chip {
     font-size: 10px; font-family: ui-monospace, 'SF Mono', monospace; color: #c9d1d9;
     background: rgba(255,255,255,0.03); border: 1px solid var(--lane-hue);
@@ -344,6 +354,37 @@
   }
   #hubert-send:hover { background: #2ea043; }
   #hubert-send:disabled { opacity: 0.5; cursor: not-allowed; }
+  #edit-auth-status {
+    margin-top: 6px;
+    font-size: 10px;
+    color: #8b949e;
+    text-align: center;
+  }
+  #edit-auth-status.unlocked { color: #3fb950; }
+  @media (max-width: 720px) {
+    #swimlane-overlay, #swimlane-controls { right: 0; }
+    .swimlane-header { padding-right: 12px; gap: 8px; }
+    .swimlane-label { font-size: 9px; letter-spacing: 2px; }
+    .lane-lib { max-width: calc(100vw - 48px); overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .lane-chip { flex-shrink: 0; }
+    #panel {
+      left: 12px; right: 12px; top: auto; bottom: 44px;
+      min-width: 0; max-height: 34vh; padding: 10px 12px;
+      border-radius: 8px;
+    }
+    #panel h3 { font-size: 12px; margin: 8px 0 5px; }
+    #panel .lens-btn, #panel .action-btn { padding: 7px 9px; font-size: 12px; }
+    #panel .legend { display: none; }
+    #info {
+      left: 12px; right: 12px; bottom: 10px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #inspect { width: min(100vw, 360px); }
+    #sidecar-widget {
+      left: 12px; right: 12px; bottom: 12px;
+      width: auto; height: min(70vh, 560px);
+    }
+  }
 </style>
 </head>
 <body>
@@ -371,6 +412,8 @@
 
   <div class="sep"></div>
   <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
+  <button class="action-btn" id="unlock-edits" style="margin-top:4px;">Unlock edits</button>
+  <div id="edit-auth-status">Edits locked</div>
   <button class="action-btn" id="chat-toggle" style="margin-top:4px;background:#1a1a2e;border-color:#d29922;color:#d29922;">💬 Hubert chat</button>
 
   <div class="sep"></div>
@@ -489,7 +532,17 @@ let nodeMetrics = { cc: {}, gc: {} };
 function nodeRadius(node) {
   if (node.rail) return 5; // Rail nodes are medium dots
   const count = nodeMetrics.cc[node.id] || 0;
+  if (node.type === 'agent') return Math.max(7, Math.min(18, 6 + count * 1.45));
   return Math.max(4, Math.min(16, 4 + count * 1.3));
+}
+
+function padiScreenStableNodes() {
+  return currentLens === 'padi' && viewMode !== 'agent';
+}
+
+function nodeVisualRadius(node, scale) {
+  const r = nodeRadius(node);
+  return padiScreenStableNodes() && !node.rail ? r / scale : r;
 }
 
 // ── PADI swim-lane geometry ──
@@ -499,8 +552,9 @@ const LANE_Y = {
   agent: 80, logic: 80,
   tool: 240, database: 240,
 };
-// Swim-lane sheet rows, top → bottom. The graph is drawn over these as a
-// static screen-aligned backdrop; node lane assignment reuses LANE_Y above.
+// Swim-lane sheet rows, top → bottom. The colored sheet is drawn in graph
+// coordinates so it scales and pans with the live graph; the DOM layer above it
+// is only the operator control surface.
 const PADI_LANES = [
   { key: 'interfaces', label: 'Interfaces',    hue: '210,168,255' },
   { key: 'router',     label: 'Router',        hue: '255,123,114' },
@@ -510,6 +564,56 @@ const PADI_LANES = [
 // LANE_Y value → swim-lane row index
 const LANE_INDEX = { '-240': 0, '-80': 1, '80': 2, '240': 3 };
 const RAIL_X = 900;
+const PADI_LANE_HEIGHT = 220;
+const PADI_LANE_STEP = 220;
+const PADI_WORLD_X_SHIFT = -80;
+const PADI_CONTROL_GAP = 6;
+const PADI_CONTROL_LEFT_PAD = 18;
+const PADI_CONTROL_TOP_PAD = 28;
+const PADI_CONTROL_ROW_GAP = 28;
+const PADI_LIBRARY_GAP = 6;
+const PADI_LIBRARY_ROW_GAP = 7;
+const PADI_LIBRARY_SHELF_WIDTH = 230;
+const PADI_NODE_Y_OFFSET = 42;
+
+function padiLaneCenter(laneIndex) {
+  return (laneIndex - (PADI_LANES.length - 1) / 2) * PADI_LANE_STEP;
+}
+
+function padiControlScale() {
+  if (!fg || typeof fg.zoom !== 'function') return 1;
+  const z = fg.zoom();
+  return Number.isFinite(z) && z > 0 ? Math.max(0.2, z) : 1;
+}
+
+function padiControlLayoutUnits(px) {
+  return px / padiControlScale();
+}
+
+function padiScreenToGraph(x, y) {
+  if (!fg || typeof fg.screen2GraphCoords !== 'function') return null;
+  const p = fg.screen2GraphCoords(x, y);
+  return Number.isFinite(p?.x) && Number.isFinite(p?.y) ? p : null;
+}
+
+function capturePadiShelfAnchors() {
+  if (!fg || typeof fg.graph2ScreenCoords !== 'function' || !padiLaneY.length) return;
+  padiShelfAnchors = PADI_LANES.map((_, laneIndex) => {
+    const y = padiLaneY[laneIndex];
+    if (!Number.isFinite(y)) return null;
+    const laneTop = y - PADI_LANE_HEIGHT / 2;
+    const topLeft = fg.graph2ScreenCoords(padiWorld.xLeft, laneTop);
+    if (!Number.isFinite(topLeft?.x) || !Number.isFinite(topLeft?.y)) return null;
+    return {
+      x: topLeft.x + PADI_CONTROL_LEFT_PAD,
+      y: topLeft.y + PADI_CONTROL_TOP_PAD,
+    };
+  });
+}
+
+function invalidatePadiShelfAnchors() {
+  padiShelfAnchors = [];
+}
 
 // ── Interface abstraction ──
 const CHANNEL_LABEL = {
@@ -587,19 +691,63 @@ function csrfHeaders() {
 }
 
 // ── Graph secret for workbench API calls ──
-// In standalone mode, fetches the secret from /graph-secret so the browser
-// can hit gated endpoints. In CRM embed, the proxy injects X-Graph-Secret
-// server-side and this stays empty.
+// Mutating graph calls require an operator secret. Production never exposes it;
+// local dev may opt in via GRAPH_EXPOSE_SECRET=1, otherwise the user unlocks
+// edits manually and the secret stays in sessionStorage only.
 let __graphSecret = '';
+const GRAPH_SECRET_STORAGE_KEY = 'live-agent-graph:graph-secret';
 function graphSecretHeaders() {
   const h = {};
   if (__graphSecret) h['X-Graph-Secret'] = __graphSecret;
   return h;
 }
+function mutationHeaders(extra = {}) {
+  return { ...csrfHeaders(), ...graphSecretHeaders(), ...extra };
+}
+function updateEditAuthStatus() {
+  const status = document.getElementById('edit-auth-status');
+  const btn = document.getElementById('unlock-edits');
+  if (!status || !btn) return;
+  status.textContent = __graphSecret ? 'Edits unlocked for this browser session' : 'Edits locked';
+  status.classList.toggle('unlocked', !!__graphSecret);
+  btn.textContent = __graphSecret ? 'Lock edits' : 'Unlock edits';
+}
+function setGraphSecret(secret) {
+  __graphSecret = (secret || '').trim();
+  try {
+    if (__graphSecret) sessionStorage.setItem(GRAPH_SECRET_STORAGE_KEY, __graphSecret);
+    else sessionStorage.removeItem(GRAPH_SECRET_STORAGE_KEY);
+  } catch(_) {}
+  updateEditAuthStatus();
+  if (__graphSecret) fetchChatToken();
+}
+function initGraphSecretFromStorage() {
+  try { setGraphSecret(sessionStorage.getItem(GRAPH_SECRET_STORAGE_KEY) || ''); }
+  catch(_) { updateEditAuthStatus(); }
+}
+async function unlockGraphEdits() {
+  if (__graphSecret) {
+    setGraphSecret('');
+    return false;
+  }
+  const secret = prompt('Graph edit secret');
+  if (!secret) return false;
+  setGraphSecret(secret);
+  return true;
+}
+async function ensureGraphSecret() {
+  if (__graphSecret) return true;
+  await fetchGraphSecret();
+  if (__graphSecret) return true;
+  return unlockGraphEdits();
+}
 async function fetchGraphSecret() {
   try {
     const r = await fetch(apiUrl('/graph-secret'));
-    if (r.ok) { const d = await r.json(); __graphSecret = d.secret || ''; }
+    if (r.ok) {
+      const d = await r.json();
+      if (d.secret) setGraphSecret(d.secret);
+    }
   } catch(_) {}
 }
 
@@ -609,7 +757,14 @@ let currentCluster = null;
 let clusters = [];
 // PADI swim-lane geometry (world coords), shared between layout, forces, and
 // link routing. Lanes are held by gentle forces — nothing is hard-pinned.
-let padiLaneY = [], padiLaneBound = [], padiTick = 0;
+let padiLaneY = [], padiLaneBound = [], padiTick = 0, padiFitPending = true;
+let padiShelfAnchors = [];
+let padiWorld = {
+  xLeft: -560,
+  xRight: 400,
+  yTop: padiLaneCenter(0) - PADI_LANE_HEIGHT / 2,
+  yBottom: padiLaneCenter(PADI_LANES.length - 1) + PADI_LANE_HEIGHT / 2
+};
 // ── Focus mode state ──
 let viewMode = 'project'; // 'project' | 'agent'
 let focusedAgentId = null;
@@ -682,6 +837,8 @@ function loadGraph(clusterName) {
       const clusterTag = data.cluster ? ` · ${data.cluster}` : '';
       info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
       if (!fg) initGraph(graphData);
+      padiFitPending = true;
+      invalidatePadiShelfAnchors();
       renderLens();
     })
     .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
@@ -690,6 +847,10 @@ function loadGraph(clusterName) {
 // ── Lens logic ──
 function applyLens(lens) {
   currentLens = lens;
+  if (lens === 'padi') {
+    padiFitPending = true;
+    invalidatePadiShelfAnchors();
+  }
   if (lens !== 'lineage') lineageRoot = null;
   document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`[data-lens="${lens}"]`)?.classList.add('active');
@@ -733,9 +894,10 @@ function exitAgentFocus() {
     });
   }
   updateViewCrumb();
+  padiFitPending = true;
+  invalidatePadiShelfAnchors();
   renderLens();
   document.getElementById('inspect').classList.remove('open');
-  fg.zoomToFit(650, 80);
   writeHashState();
 }
 
@@ -802,6 +964,74 @@ function buildAgentFocusData() {
   };
 }
 
+function padiControlWidth(kind, label) {
+  if (kind === 'label') return Math.max(120, label.length * 9 + 28);
+  if (kind === 'spawn') return Math.max(88, label.length * 7 + 26);
+  return Math.max(46, label.length * 7 + 16);
+}
+
+function buildPadiControlNodes() {
+  if (currentLens !== 'padi' || viewMode === 'agent') return [];
+  const nodes = [];
+  PADI_LANES.forEach((lane, laneIndex) => {
+    const sk = LANE_KEY_TO_SPAWNER[lane.key];
+    const sp = LANE_SPAWNERS[sk] || {};
+    nodes.push({
+      id: `padi:label:${lane.key}`,
+      name: lane.label,
+      type: 'capability',
+      state: 'built',
+      synthetic: true,
+      padiControl: true,
+      padiControlKind: 'label',
+      padiLaneKey: lane.key,
+      padiLaneIndex: laneIndex,
+      padiHue: lane.hue,
+      padiWidth: padiControlWidth('label', lane.label),
+      padiHeight: 22,
+    });
+    nodes.push({
+      id: `padi:spawn:${lane.key}`,
+      name: `+ ${sp.blankLabel || ('New ' + sk)}`,
+      type: 'capability',
+      state: sp.disabled ? 'blank' : 'built',
+      synthetic: true,
+      padiControl: true,
+      padiControlKind: 'spawn',
+      padiDisabled: !!sp.disabled,
+      padiSpawner: sk,
+      padiLaneKey: lane.key,
+      padiLaneIndex: laneIndex,
+      padiHue: lane.hue,
+      padiWidth: padiControlWidth('spawn', sp.blankLabel || ('New ' + sk)),
+      padiHeight: 24,
+    });
+    if (!sp.disabled && sp.library) {
+      sp.library().forEach((agent, order) => {
+        nodes.push({
+          id: `padi:library:${sk}:${agent.id}`,
+          name: agent.name,
+          type: 'agent',
+          state: agent.inCluster ? 'blank' : 'built',
+          synthetic: true,
+          padiControl: true,
+          padiControlKind: 'library',
+          padiDisabled: !!agent.inCluster,
+          padiSpawner: sk,
+          padiAgentId: agent.id,
+          padiOrder: order,
+          padiLaneKey: lane.key,
+          padiLaneIndex: laneIndex,
+          padiHue: lane.hue,
+          padiWidth: padiControlWidth('library', agent.name),
+          padiHeight: 18,
+        });
+      });
+    }
+  });
+  return nodes;
+}
+
 function getVisibleData() {
   // ── Focus mode: agent-specific subgraph ──
   if (viewMode === 'agent' && focusedAgentId) {
@@ -854,6 +1084,10 @@ function getVisibleData() {
         links: base.links.filter(l => !infraIds.has(lid(l.source)) && !infraIds.has(lid(l.target))),
       };
     }
+  }
+
+  if (currentLens === 'padi') {
+    base = { nodes: base.nodes.concat(buildPadiControlNodes()), links: base.links };
   }
 
   return base;
@@ -917,8 +1151,8 @@ function applyLayout(vd) {
     n.fy = railMidpoint + (i - (infraNodes.length - 1) / 2) * railOffset;
   });
 
-  // PADI swim-lane positions are computed screen-aligned in layoutPadi()
-  // (called from renderLens) so the graph lands on the static overlay sheet.
+  // PADI swim-lane positions are computed in layoutPadi() so the graph lands
+  // on a graph-space factory floor that can zoom and pan.
   if (currentLens !== 'padi') {
     vd.nodes.forEach(n => {
       if (n.rail) return; // rail nodes stay pinned
@@ -928,8 +1162,8 @@ function applyLayout(vd) {
   }
 }
 
-// ── Swim-lane sheet: build the overlay rows once, then keep the graph
-// pinned onto them every render (screen-aligned, deterministic). ──
+// ── Swim-lane controls: build the operator layer once; the colored sheet
+// itself is drawn in canvas graph-space by drawPadiLaneSheet(). ──
 function buildSwimlaneOverlay() {
   const overlay = document.getElementById('swimlane-overlay');
   if (!overlay || overlay.childElementCount) return;
@@ -945,9 +1179,60 @@ function buildSwimlaneOverlay() {
   });
 }
 
+function layoutPadiControlShelf(laneIndex, controls) {
+  const y = padiLaneY[laneIndex];
+  if (!Number.isFinite(y)) return;
+
+  const laneTop = y - PADI_LANE_HEIGHT / 2;
+  const order = { label: 0, spawn: 1, library: 2 };
+  const sorted = controls.slice().sort((a, b) => {
+    return (order[a.padiControlKind] ?? 9) - (order[b.padiControlKind] ?? 9)
+      || (a.padiOrder ?? 0) - (b.padiOrder ?? 0)
+      || a.name.localeCompare(b.name);
+  });
+
+  const anchor = padiShelfAnchors[laneIndex];
+  const useScreenAnchor = !!anchor;
+  const shelfLeft = useScreenAnchor ? anchor.x : padiWorld.xLeft + padiControlLayoutUnits(PADI_CONTROL_LEFT_PAD);
+  const headerY = useScreenAnchor ? anchor.y : laneTop + padiControlLayoutUnits(PADI_CONTROL_TOP_PAD);
+  const libraryY = headerY + (useScreenAnchor ? PADI_CONTROL_ROW_GAP : padiControlLayoutUnits(PADI_CONTROL_ROW_GAP));
+  const shelfRight = shelfLeft + (useScreenAnchor ? PADI_LIBRARY_SHELF_WIDTH : padiControlLayoutUnits(PADI_LIBRARY_SHELF_WIDTH));
+
+  function place(node, centerX, centerY) {
+    const p = useScreenAnchor ? padiScreenToGraph(centerX, centerY) : { x: centerX, y: centerY };
+    if (!p) return;
+    node.__tx = p.x;
+    node.__ty = p.y;
+    node.x = p.x;
+    node.y = p.y;
+    node.fx = p.x;
+    node.fy = p.y;
+  }
+
+  let cursor = shelfLeft;
+  sorted.filter(n => n.padiControlKind === 'label' || n.padiControlKind === 'spawn').forEach(node => {
+    const w = useScreenAnchor ? (node.padiWidth || 80) : padiControlLayoutUnits(node.padiWidth || 80);
+    place(node, cursor + w / 2, headerY);
+    cursor += w + (useScreenAnchor ? PADI_CONTROL_GAP : padiControlLayoutUnits(PADI_CONTROL_GAP));
+  });
+
+  cursor = shelfLeft;
+  let rowY = libraryY;
+  sorted.filter(n => n.padiControlKind === 'library').forEach(node => {
+    const w = useScreenAnchor ? (node.padiWidth || 80) : padiControlLayoutUnits(node.padiWidth || 80);
+    const h = useScreenAnchor ? (node.padiHeight || 18) : padiControlLayoutUnits(node.padiHeight || 18);
+    if (cursor > shelfLeft && cursor + w > shelfRight) {
+      cursor = shelfLeft;
+      rowY += h + (useScreenAnchor ? PADI_LIBRARY_ROW_GAP : padiControlLayoutUnits(PADI_LIBRARY_ROW_GAP));
+    }
+    place(node, cursor + w / 2, rowY);
+    cursor += w + (useScreenAnchor ? PADI_LIBRARY_GAP : padiControlLayoutUnits(PADI_LIBRARY_GAP));
+  });
+}
+
 // Pin every visible node onto its swim-lane row, spread evenly across the
-// usable width. Camera is 1:1 (centerAt 0,0, zoom 1) so world coords == screen
-// offset from centre — the nodes land exactly on the static overlay rows.
+// graph-space factory floor. The first render fits the whole floor to the
+// viewport; after that users can zoom/pan and the lanes move with the graph.
 function layoutPadi() {
   const overlay = document.getElementById('swimlane-overlay');
   const wrap = document.getElementById('graph-wrap');
@@ -958,47 +1243,41 @@ function layoutPadi() {
     if (controls) controls.classList.remove('on');
     return;
   }
-  overlay.classList.add('on');
+  overlay.classList.remove('on');
   if (controls) controls.classList.add('on');
-  const W = wrap.clientWidth, H = wrap.clientHeight;
-  fg.centerAt(0, 0, 0);
-  fg.zoom(1, 0);
 
-  // Lane geometry (graph-wrap-relative px → world Y, centre at 0).
-  const wrapTop = wrap.getBoundingClientRect().top;
-  const rows = overlay.querySelectorAll('.swimlane-row');
-  const HEADER_PAD = 46;            // header band at each lane's top — keep nodes below it
-  const laneY = [], bounds = [];
-  rows.forEach((r, i) => {
-    const b = r.getBoundingClientRect();
-    const top = b.top - wrapTop, bottom = b.bottom - wrapTop;
-    laneY.push((top + HEADER_PAD + bottom) / 2 - H / 2);   // node target = centre below the header
-    if (i < rows.length - 1) bounds.push(bottom - H / 2);  // actual lane divider (for link pins)
-  });
+  const laneY = PADI_LANES.map((_, laneIndex) => padiLaneCenter(laneIndex));
+  const bounds = laneY.slice(0, -1).map((y, i) => (y + laneY[i + 1]) / 2);
   padiLaneY = laneY;
   padiLaneBound = bounds;
-
-  // Usable horizontal span: left margin → left edge of the control panel.
-  const panel = document.getElementById('panel');
-  const panelLeft = panel ? panel.getBoundingClientRect().left : W - 300;
-  const xLeft = 70, xRight = Math.max(xLeft + 200, panelLeft - 48);
 
   // Bucket visible non-rail nodes by lane, then give each a floaty *target*
   // (forces pull toward it — nothing is hard-pinned, so the sheet stays alive).
   const buckets = [[], [], [], []];
   fg.graphData().nodes.forEach(n => {
+    if (n.padiControl) { n.__lane = n.padiLaneIndex; return; }
     if (n.rail) { n.__lane = undefined; return; }
     const li = LANE_INDEX[String(LANE_Y[n.type])] ?? 2;
     n.__lane = li;
     buckets[li].push(n);
   });
+  const maxBucket = Math.max(1, ...buckets.map(arr => arr.length));
+  const laneWidth = Math.max(960, Math.min(1900, maxBucket * 190));
+  const xLeft = PADI_WORLD_X_SHIFT - laneWidth / 2;
+  const xRight = PADI_WORLD_X_SHIFT + laneWidth / 2;
+  padiWorld = {
+    xLeft,
+    xRight,
+    yTop: Math.min(...laneY) - PADI_LANE_HEIGHT / 2,
+    yBottom: Math.max(...laneY) + PADI_LANE_HEIGHT / 2
+  };
   buckets.forEach((arr, li) => {
     arr.sort((a, b) => a.id.localeCompare(b.id));
     const n = arr.length;
     arr.forEach((node, k) => {
       const t = n === 1 ? 0.5 : (k + 0.5) / n;
-      node.__tx = (xLeft + (xRight - xLeft) * t) - W / 2;
-      node.__ty = laneY[li];
+      node.__tx = xLeft + (xRight - xLeft) * t;
+      node.__ty = laneY[li] + PADI_NODE_Y_OFFSET;
       if (node.__phase === undefined) {
         const h = node.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
         node.__phase = (h % 100) / 100 * Math.PI * 2;
@@ -1010,7 +1289,88 @@ function layoutPadi() {
     });
   });
 
+  PADI_LANES.forEach((lane, li) => {
+    const controls = fg.graphData().nodes
+      .filter(n => n.padiControl && n.padiLaneIndex === li);
+    layoutPadiControlShelf(li, controls);
+  });
+
   renderLaneLibraries();   // keep chip in-cluster state in sync with the graph
+  positionSwimlaneControls();
+}
+
+function fitPadiToViewport(ms = 650) {
+  if (!fg || currentLens !== 'padi' || viewMode === 'agent') return;
+  const wrap = document.getElementById('graph-wrap');
+  const panel = document.getElementById('panel');
+  if (!wrap) return;
+
+  const W = wrap.clientWidth || window.innerWidth;
+  const H = wrap.clientHeight || window.innerHeight;
+  const panelLeft = panel ? panel.getBoundingClientRect().left : W - 300;
+  const usableW = Math.max(320, panelLeft - 24);
+  const usableH = Math.max(320, H - 72);
+
+  const xMin = padiWorld.xLeft - 56;
+  const xMax = padiWorld.xRight + 56;
+  const yMin = padiWorld.yTop - 18;
+  const yMax = padiWorld.yBottom + 18;
+  const boundsW = Math.max(1, xMax - xMin);
+  const boundsH = Math.max(1, yMax - yMin);
+  const zoom = Math.max(0.55, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
+  const cx = (xMin + xMax) / 2;
+  const cy = (yMin + yMax) / 2;
+
+  const panelOffset = Math.max(0, W - usableW) / 2;
+  fg.centerAt(cx + panelOffset / zoom, cy - 18 / zoom, ms);
+  fg.zoom(zoom, ms);
+  window.setTimeout(() => {
+    capturePadiShelfAnchors();
+    layoutPadi();
+    positionSwimlaneControls();
+  }, ms ? ms + 40 : 0);
+}
+
+function drawPadiLaneSheet(ctx, scale) {
+  if (currentLens !== 'padi' || viewMode === 'agent') return;
+  const x = padiWorld.xLeft;
+  const w = padiWorld.xRight - padiWorld.xLeft;
+  PADI_LANES.forEach((lane, i) => {
+    const y = padiLaneY[i];
+    if (!Number.isFinite(y)) return;
+    const top = y - PADI_LANE_HEIGHT / 2;
+    const grad = ctx.createLinearGradient(x, 0, padiWorld.xRight, 0);
+    grad.addColorStop(0, `rgba(${lane.hue},0.12)`);
+    grad.addColorStop(0.35, `rgba(${lane.hue},0.055)`);
+    grad.addColorStop(1, `rgba(${lane.hue},0.022)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, top, w, PADI_LANE_HEIGHT);
+    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+    ctx.lineWidth = 1 / scale;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(padiWorld.xRight, top);
+    ctx.stroke();
+  });
+}
+
+function positionSwimlaneControls() {
+  const layer = document.getElementById('swimlane-controls');
+  if (!fg || !layer || currentLens !== 'padi' || viewMode === 'agent') return;
+  if (typeof fg.graph2ScreenCoords !== 'function') return;
+  const rows = layer.querySelectorAll('.swimlane-ctrl-row');
+  rows.forEach(row => {
+    const laneIndex = Number(row.dataset.laneIndex);
+    const y = padiLaneY[laneIndex];
+    if (!Number.isFinite(y)) return;
+    const topLeft = fg.graph2ScreenCoords(padiWorld.xLeft, y - PADI_LANE_HEIGHT / 2);
+    const bottomRight = fg.graph2ScreenCoords(padiWorld.xRight, y + PADI_LANE_HEIGHT / 2);
+    const w = Math.max(0, bottomRight.x - topLeft.x);
+    const h = Math.max(0, bottomRight.y - topLeft.y);
+    row.style.transform = `translate(${topLeft.x}px, ${topLeft.y}px)`;
+    row.style.width = `${w}px`;
+    row.style.height = `${h}px`;
+  });
 }
 
 // Custom force: spring each node toward its lane target plus a small perpetual
@@ -1022,9 +1382,12 @@ function padiLaneForce() {
   const nodes = padiLaneForce._nodes || [];
   for (const n of nodes) {
     if (n.rail || n.__tx === undefined) continue;
-    n.vx += (n.__tx - n.x) * 0.12;   // tight horizontal → clean columns
-    n.vy += (n.__ty - n.y) * 0.06;   // looser vertical → gentle bob within lane
-    n.vy += Math.sin(padiTick * 0.013 + n.__phase) * 0.07;
+    if (n.padiControl) continue;
+    const sx = n.padiControl ? 0.35 : 0.12;
+    const sy = n.padiControl ? 0.35 : 0.06;
+    n.vx += (n.__tx - n.x) * sx;   // tight horizontal → clean columns
+    n.vy += (n.__ty - n.y) * sy;   // controls stay crisp; agents gently float
+    if (!n.padiControl) n.vy += Math.sin(padiTick * 0.013 + n.__phase) * 0.07;
   }
 }
 padiLaneForce.initialize = nodes => { padiLaneForce._nodes = nodes; };
@@ -1123,6 +1486,97 @@ function drawX(ctx, x, y, size, scale) {
   ctx.stroke();
 }
 
+function roundRectPath(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+}
+
+function padiControlRect(node, scale) {
+  const w = (node.padiWidth || 80) / scale;
+  const h = (node.padiHeight || 22) / scale;
+  return { x: node.x - w / 2, y: node.y - h / 2, w, h };
+}
+
+function drawPadiControlNode(node, ctx, scale) {
+  const { x, y, w, h } = padiControlRect(node, scale);
+  const disabled = !!node.padiDisabled;
+  const hue = node.padiHue || '88,166,255';
+  ctx.save();
+  const controlFontSize = node.padiControlKind === 'library' ? 10 : 11;
+  ctx.font = `${node.padiControlKind === 'label' ? '600 ' : ''}${controlFontSize / scale}px ${node.padiControlKind === 'library' ? "ui-monospace, 'SF Mono', monospace" : "-apple-system, BlinkMacSystemFont, sans-serif"}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (node.padiControlKind === 'label') {
+    ctx.fillStyle = `rgba(${hue},0.78)`;
+    roundRectPath(ctx, x, y + 2 / scale, 3 / scale, h - 4 / scale, 2 / scale);
+    ctx.fill();
+    ctx.fillStyle = disabled ? 'rgba(139,148,158,0.32)' : 'rgba(150,170,190,0.62)';
+    ctx.letterSpacing = `${2.5 / scale}px`;
+    ctx.fillText(node.name.toUpperCase(), node.x + 8 / scale, node.y);
+    ctx.restore();
+    return;
+  }
+
+  if (node.padiControlKind === 'spawn') {
+    roundRectPath(ctx, x, y, w, h, 5 / scale);
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    ctx.fill();
+    ctx.setLineDash([4 / scale, 3 / scale]);
+    ctx.strokeStyle = disabled ? 'rgba(140,160,180,0.18)' : `rgba(${hue},0.55)`;
+    ctx.lineWidth = 1 / scale;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = disabled ? `rgba(${hue},0.26)` : `rgb(${hue})`;
+    ctx.fillText(node.name, node.x, node.y);
+    ctx.restore();
+    return;
+  }
+
+  roundRectPath(ctx, x, y, w, h, h / 2);
+  ctx.fillStyle = disabled ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.035)';
+  ctx.fill();
+  if (disabled) ctx.setLineDash([4 / scale, 3 / scale]);
+  ctx.strokeStyle = disabled ? `rgba(${hue},0.34)` : `rgb(${hue})`;
+  ctx.lineWidth = 1.25 / scale;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = disabled ? 'rgba(139,148,158,0.52)' : '#c9d1d9';
+  ctx.fillText(node.name, node.x, node.y + 0.5 / scale);
+  ctx.restore();
+}
+
+function paintPadiControlHitArea(node, color, ctx, scale) {
+  const { x, y, w, h } = padiControlRect(node, scale);
+  ctx.fillStyle = color;
+  roundRectPath(ctx, x, y, w, h, h / 2);
+  ctx.fill();
+}
+
+function handlePadiControlClick(node) {
+  if (!node || node.padiDisabled) return;
+  if (node.padiControlKind === 'spawn' && node.padiSpawner === 'agent') {
+    const id = prompt('New agent id (a-z, 0-9, _)');
+    if (!id) return;
+    const desc = prompt('Description (optional)') || '';
+    spawnBlankAgent(id, desc, null);
+    return;
+  }
+  if (node.padiControlKind === 'library' && node.padiSpawner === 'agent' && node.padiAgentId) {
+    addAgentToCluster(node.padiAgentId, null);
+  }
+}
+
 // ── Graph init ──
 let fg;
 function initGraph(data) {
@@ -1131,6 +1585,7 @@ function initGraph(data) {
     .graphData(data)
     .nodeId('id')
     .nodeLabel(node => {
+      if (node.padiControl) return node.name;
       const g = node.gates || {};
       const gateStr = `L0:${g.L0?'✓':'✗'} L1:${g.L1?'✓':'✗'} L2:${g.L2?'✓':'✗'} L3:${g.L3?'✓':'✗'}`;
       const sharedTag = node.shared ? ' [shared]' : '';
@@ -1139,8 +1594,13 @@ function initGraph(data) {
     .nodeCanvasObjectMode(() => 'replace')
     .nodeCanvasObject((node, ctx, globalScale) => {
       if (isNaN(node.x) || isNaN(node.y)) return;
+      if (node.padiControl) {
+        drawPadiControlNode(node, ctx, globalScale);
+        return;
+      }
 
-      const r = nodeRadius(node);
+      const baseR = nodeRadius(node);
+      const r = nodeVisualRadius(node, globalScale);
       const color = COLORS[node.type] || '#8b949e';
       const isAgent = node.type === 'agent';
       const state = node.state;
@@ -1182,7 +1642,7 @@ function initGraph(data) {
 
       // ── Status symbol (agents only) ──
       if (isAgent) {
-        const symSize = r * 0.55;
+        const symSize = (padiScreenStableNodes() ? baseR : r) * 0.55;
         if (state === 'blank') {
           ctx.beginPath();
           ctx.arc(node.x, node.y, 1.2 / globalScale, 0, 2 * Math.PI);
@@ -1203,7 +1663,9 @@ function initGraph(data) {
 
       // ── Label ──
       const label = node.name;
-      const fontSize = node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale);
+      const fontSize = padiScreenStableNodes() && !node.rail
+        ? 11 / globalScale
+        : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale));
       ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
       if (node.rail) {
         // Rail nodes: label to the right, vertically centered
@@ -1219,6 +1681,17 @@ function initGraph(data) {
         ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
         ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
       }
+    })
+    .nodePointerAreaPaint((node, color, ctx, globalScale) => {
+      if (node.padiControl) {
+        paintPadiControlHitArea(node, color, ctx, globalScale);
+        return;
+      }
+      const r = nodeVisualRadius(node, globalScale);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 4 / globalScale, 0, 2 * Math.PI);
+      ctx.fill();
     })
     .linkColor(l => {
       if (l.kind === 'depends-on') return 'rgba(165,214,255,0.4)'; // dependency rail
@@ -1236,10 +1709,10 @@ function initGraph(data) {
     .linkDirectionalParticleWidth(1.5)
     .linkDirectionalParticleColor(() => '#3fb950')
     .onRenderFramePre((ctx, scale) => {
-      // Swim-lane sheet is a static DOM overlay (#swimlane-overlay), not drawn
-      // on the canvas. Only rail columns are canvas-drawn (world-coord).
-      // Rail columns: simple world-coord backgrounds + headers
+      // PADI lanes and optional rail columns are graph-space surfaces, so they
+      // zoom and pan with the live graph instead of fighting the camera.
       try {
+        drawPadiLaneSheet(ctx, scale);
         const gNodes = fg.graphData().nodes;
         if (showDepRail) {
           const dn = gNodes.filter(n => n.rail === 'dependency');
@@ -1277,7 +1750,15 @@ function initGraph(data) {
         }
       } catch(e) { /* rail rendering is non-critical */ }
     })
+    .onRenderFramePost(() => {
+      positionSwimlaneControls();
+    })
+    .onZoom(() => {
+      if (currentLens === 'padi' && viewMode !== 'agent') layoutPadi();
+      positionSwimlaneControls();
+    })
     .onNodeClick(node => {
+      if (node?.padiControl) { handlePadiControlClick(node); return; }
       // Wire mode: handle wire target click
       if (wireMode) { handleWireClick(node); return; }
       // Chat synthetic node → open sidecar on Agent tab
@@ -1330,7 +1811,7 @@ function initGraph(data) {
     .cooldownTicks(100);
   window.fg = fg; // expose for debugging
 
-  // Build the static swim-lane sheet and keep the canvas + sheet + node pins
+  // Build the swim-lane controls and keep the canvas, sheet, and node targets
   // in sync with the container size (force-graph auto-sizing is unreliable
   // when the panel/viewport changes, which left the canvas at 0×0).
   buildSwimlaneOverlay();
@@ -1338,7 +1819,11 @@ function initGraph(data) {
   const wrapEl = document.getElementById('graph-wrap');
   const syncSize = () => {
     fg.width(wrapEl.clientWidth).height(wrapEl.clientHeight);
-    if (currentLens === 'padi' && viewMode !== 'agent') layoutPadi();
+    if (currentLens === 'padi' && viewMode !== 'agent') {
+      invalidatePadiShelfAnchors();
+      layoutPadi();
+      fitPadiToViewport(0);
+    }
   };
   if (window.ResizeObserver) new ResizeObserver(syncSize).observe(wrapEl);
   syncSize();
@@ -1351,14 +1836,16 @@ function renderLens() {
   else fg.dagMode(null);
   applyLayout(vd);
   applyForces();
-  // In PADI mode, pin nodes onto the static swim-lane sheet (screen-aligned).
+  // In PADI mode, hold nodes on the graph-space factory floor.
   if (currentLens === 'padi') {
     layoutPadi();
     fg.cooldownTicks(Infinity);   // keep the sheet alive (floaty)…
     fg.cooldownTime(Infinity);    // …the engine also stops after cooldownTime (15s default)
-    // PADI is a control surface, not a pannable canvas — lock the camera so the
-    // graph can't drift off the static sheet. Node drag + click stay enabled.
-    fg.enableZoomInteraction(false).enablePanInteraction(false);
+    fg.enableZoomInteraction(true).enablePanInteraction(true);
+    if (padiFitPending) {
+      padiFitPending = false;
+      requestAnimationFrame(() => fitPadiToViewport(650));
+    }
   } else {
     document.getElementById('swimlane-overlay').classList.remove('on');  // sheet is PADI-only
     document.getElementById('swimlane-controls').classList.remove('on');
@@ -1372,7 +1859,8 @@ function renderLens() {
   if (viewMode === 'agent' && focusedAgentId) {
     info.textContent = `${vd.nodes.length} focused nodes · agent: ${cleanAgentId(focusedAgentId)} · project: ${currentCluster || '—'}`;
   } else {
-    info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
+    const displayNodeCount = vd.nodes.filter(n => !n.padiControl).length;
+    info.textContent = `${displayNodeCount} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
   }
   updateViewCrumb();
 }
@@ -1401,11 +1889,12 @@ document.getElementById('infra-btn').addEventListener('click', () => {
 });
 
 // ── New cluster tab ──
-document.getElementById('new-tab-btn').addEventListener('click', () => {
+document.getElementById('new-tab-btn').addEventListener('click', async () => {
   const name = prompt('New cluster name (a-z, 0-9, -, _):');
   if (!name) return;
+  if (!(await ensureGraphSecret())) return;
   const body = `name=${encodeURIComponent(name)}`;
-  fetch(apiUrl('/new-cluster'), { method: 'POST', headers: csrfHeaders(), body })
+  fetch(apiUrl('/new-cluster'), { method: 'POST', headers: mutationHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (data.ok) {
@@ -1434,6 +1923,7 @@ function loadRegistryAgents() {
       }
       registryAgentIds = ids;
       renderLaneLibraries();
+      if (fg && currentLens === 'padi' && viewMode !== 'agent') renderLens();
     })
     .catch(() => {});
 }
@@ -1444,20 +1934,21 @@ function clusterHasAgent(id) {
 }
 
 // Shared actions, reused by both the spawn form and drag/click-to-add.
-function spawnBlankAgent(id, desc, msgEl) {
+async function spawnBlankAgent(id, desc, msgEl) {
   id = (id || '').trim();
   if (!id) { setLaneMsg(msgEl, 'err', 'Enter an agent_id'); return; }
   if (!/^[a-z][a-z0-9_]*$/.test(id)) { setLaneMsg(msgEl, 'err', 'Invalid id (a-z, 0-9, _)'); return; }
+  if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
   setLaneMsg(msgEl, '', 'Spawning…');
   const body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent((desc || '').trim() || id + ' agent')}`;
-  fetch(apiUrl('/spawn'), { method: 'POST', headers: { ...csrfHeaders(), ...graphSecretHeaders() }, body })
+  fetch(apiUrl('/spawn'), { method: 'POST', headers: mutationHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Spawn failed'); return; }
       setLaneMsg(msgEl, 'ok', `✓ Spawned ${data.agent_id}`);
       if (currentCluster) {
         const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
-        fetch(apiUrl('/add-agent'), { method: 'POST', headers: { ...csrfHeaders(), ...graphSecretHeaders() }, body: addBody })
+        fetch(apiUrl('/add-agent'), { method: 'POST', headers: mutationHeaders(), body: addBody })
           .finally(() => setTimeout(() => loadGraph(currentCluster), 500));
       } else {
         setTimeout(() => loadGraph(currentCluster), 500);
@@ -1465,11 +1956,12 @@ function spawnBlankAgent(id, desc, msgEl) {
     })
     .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
 }
-function addAgentToCluster(agentId, msgEl) {
+async function addAgentToCluster(agentId, msgEl) {
   if (!currentCluster) { setLaneMsg(msgEl, 'err', 'No cluster selected'); return; }
+  if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
   setLaneMsg(msgEl, '', 'Adding…');
   const body = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(agentId)}`;
-  fetch(apiUrl('/add-agent'), { method: 'POST', headers: { ...csrfHeaders(), ...graphSecretHeaders() }, body })
+  fetch(apiUrl('/add-agent'), { method: 'POST', headers: mutationHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Failed'); return; }
@@ -1499,12 +1991,13 @@ const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', router: 'router', agent: 
 function buildSwimlaneControls() {
   const layer = document.getElementById('swimlane-controls');
   if (!layer || layer.childElementCount) return;
-  PADI_LANES.forEach(lane => {
+  PADI_LANES.forEach((lane, laneIndex) => {
     const sk = LANE_KEY_TO_SPAWNER[lane.key];
     const sp = LANE_SPAWNERS[sk] || {};
     const row = document.createElement('div');
     row.className = 'swimlane-ctrl-row';
     row.dataset.lane = lane.key;
+    row.dataset.laneIndex = String(laneIndex);
     row.dataset.spawner = sk;
     row.style.setProperty('--lane-hue', `rgb(${lane.hue})`);
 
@@ -1608,6 +2101,7 @@ function renderLaneLibraries() {
 
 // ── Refresh ──
 document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
+document.getElementById('unlock-edits').addEventListener('click', unlockGraphEdits);
 
 // ── Chat toggle ── (wired after toggleSidecar is defined, see sidecar widget section)
 
@@ -1629,7 +2123,12 @@ function startPulse() {
           const llmStr = p.litellm_alive ? '🧠' : '';
           const liveStr = [pulseStr, authStr, llmStr].filter(Boolean).join(' ');
           const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
-          info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}${clusterTag}`;
+          if (currentLens === 'padi' && viewMode !== 'agent') {
+            const displayNodeCount = fg.graphData().nodes.filter(n => !n.padiControl).length;
+            info.textContent = `${displayNodeCount} nodes · ${fg.graphData().links.length} links · lens: padi · swim lanes${clusterTag}`;
+          } else {
+            info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}${clusterTag}`;
+          }
         }
       })
       .catch(() => {});
@@ -1907,7 +2406,7 @@ document.getElementById('inspect-close').addEventListener('click', () => {
   inspectedNode = null;
 });
 
-document.getElementById('inspect-save').addEventListener('click', () => {
+document.getElementById('inspect-save').addEventListener('click', async () => {
   if (!inspectedNode || inspectedNode.type !== 'agent') return;
   const agentId = inspectedNode.id.replace('agent:', '');
   const saveMsg = document.getElementById('inspect-save-msg');
@@ -1934,13 +2433,16 @@ document.getElementById('inspect-save').addEventListener('click', () => {
   if (!Object.keys(fields).length) {
     saveMsg.className = 'save-msg'; saveMsg.textContent = 'No changes'; return;
   }
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err'; saveMsg.textContent = 'Edits locked'; return;
+  }
 
   // Save each field
   saveMsg.className = 'save-msg'; saveMsg.textContent = 'Saving...';
   let saved = 0, total = Object.keys(fields).length;
   for (const [field, value] of Object.entries(fields)) {
     const body = `agent_id=${encodeURIComponent(agentId)}&field=${encodeURIComponent(field)}&value=${encodeURIComponent(value)}`;
-    fetch(apiUrl('/save-agent'), { method: 'POST', headers: csrfHeaders(), body })
+    fetch(apiUrl('/save-agent'), { method: 'POST', headers: mutationHeaders(), body })
       .then(r => r.json())
       .then(data => {
         saved++;
@@ -1978,7 +2480,7 @@ document.getElementById('wire-cancel').addEventListener('click', () => {
   document.getElementById('inspect-wire').textContent = 'Wire to...';
 });
 
-function handleWireClick(node) {
+async function handleWireClick(node) {
   if (!wireMode || !wireSource || node.id === wireSource.id) return;
   wireMode = false;
   document.getElementById('wire-status').classList.remove('active');
@@ -1989,9 +2491,12 @@ function handleWireClick(node) {
   const target = node.id;
   const saveMsg = document.getElementById('inspect-save-msg');
   saveMsg.className = 'save-msg'; saveMsg.textContent = `Checking contract: ${source} → ${target}...`;
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err'; saveMsg.textContent = 'Edits locked'; wireSource = null; return;
+  }
 
   const body = `source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`;
-  fetch(apiUrl('/wire'), { method: 'POST', headers: csrfHeaders(), body })
+  fetch(apiUrl('/wire'), { method: 'POST', headers: mutationHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (data.valid) {
@@ -2019,7 +2524,7 @@ let ADK_CHAT_BASE = window.ADK_CHAT_BASE || '/chat/';
 let __chatToken = '';
 async function fetchChatToken() {
   try {
-    const r = await fetch(apiUrl('/chat-token'));
+    const r = await fetch(apiUrl('/chat-token'), { headers: graphSecretHeaders() });
     if (r.ok) {
       const d = await r.json();
       __chatToken = d.token || '';
@@ -2095,6 +2600,11 @@ async function sendHubertMessage() {
   const input = document.getElementById('hubert-input');
   const text = input.value.trim();
   if (!text || hubertSending) return;
+  if (!(await ensureGraphSecret())) {
+    hubertMessages.push({ role: 'system', text: 'Edits are locked. Unlock edits before asking Hubert to act on the graph.' });
+    renderHubertMessages();
+    return;
+  }
   hubertSending = true;
   hubertMessages.push({ role: 'user', text });
   renderHubertMessages();
@@ -2108,7 +2618,7 @@ async function sendHubertMessage() {
   if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
 
   try {
-    const hdrs = { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' };
+    const hdrs = mutationHeaders({ 'Content-Type': 'application/json' });
     // Try to get real CRM username; fall back to 'graph-ui' for standalone mode.
     const principal = window.frappe?.session?.user || 'graph-ui';
     const body = JSON.stringify({
@@ -2177,7 +2687,7 @@ function attachFocusConfigHandlers(agentId) {
   btn.addEventListener('click', () => saveFocusedAgentConfig(agentId));
 }
 
-function saveFocusedAgentConfig(agentId) {
+async function saveFocusedAgentConfig(agentId) {
   const clean = cleanAgentId(agentId);
   const saveMsg = document.getElementById('inspect-save-msg');
   const instruction = document.getElementById('focus-instruction')?.value?.trim() || '';
@@ -2196,9 +2706,14 @@ function saveFocusedAgentConfig(agentId) {
   });
   saveMsg.className = 'save-msg';
   saveMsg.textContent = 'Saving config...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
   fetch(apiUrl('/agent-config'), {
     method: 'POST',
-    headers: { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' },
+    headers: mutationHeaders({ 'Content-Type': 'application/json' }),
     body,
   })
     .then(r => r.json())
@@ -2223,12 +2738,17 @@ function attachFocusRunHandlers(agentId) {
   if (generate) generate.addEventListener('click', () => generateFocusedAgent(agentId));
 }
 
-function verifyFocusedAgent(agentId) {
+async function verifyFocusedAgent(agentId) {
   const clean = cleanAgentId(agentId);
   const saveMsg = document.getElementById('inspect-save-msg');
   saveMsg.className = 'save-msg';
   saveMsg.textContent = 'Verifying...';
-  fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: { ...csrfHeaders(), ...graphSecretHeaders() } })
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
+  fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: mutationHeaders() })
     .then(r => r.json())
     .then(data => {
       focusedAgentVerify = data;
@@ -2240,15 +2760,20 @@ function verifyFocusedAgent(agentId) {
     .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
 }
 
-function generateFocusedAgent(agentId) {
+async function generateFocusedAgent(agentId) {
   const clean = cleanAgentId(agentId);
   if (!confirm(`Generate agent ${clean}? This will write generated files from the current config.`)) return;
   const saveMsg = document.getElementById('inspect-save-msg');
   saveMsg.className = 'save-msg';
   saveMsg.textContent = 'Generating...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
   fetch(apiUrl('/agent-generate'), {
     method: 'POST',
-    headers: { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' },
+    headers: mutationHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ agent_id: clean }),
   })
     .then(r => r.json())
@@ -2272,15 +2797,20 @@ function attachFocusEvalHandlers(agentId) {
   btn.addEventListener('click', () => runFocusedAgentEvals(agentId));
 }
 
-function runFocusedAgentEvals(agentId) {
+async function runFocusedAgentEvals(agentId) {
   const clean = cleanAgentId(agentId);
   const saveMsg = document.getElementById('inspect-save-msg');
   const evalsetId = focusedAgentEvalsets?.[0]?.id || 'default';
   saveMsg.className = 'save-msg';
   saveMsg.textContent = 'Running evals...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
   fetch(apiUrl('/agent-eval-run'), {
     method: 'POST',
-    headers: { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' },
+    headers: mutationHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ agent_id: clean, evalset_id: evalsetId }),
   })
     .then(r => r.json())
@@ -2332,9 +2862,8 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Init ──
+initGraphSecretFromStorage();
 loadClusters();
-fetchGraphSecret();
-fetchChatToken();
 loadRegistryAgents();
 loadModels();
 startPulse();
