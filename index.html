@@ -1555,6 +1555,10 @@ function handlePadiControlClick(node) {
     const graphNode = findGraphNode('tool:' + node.padiAgentId);
     if (graphNode) openInspect(graphNode);
   }
+  if (node.padiControlKind === 'library' && node.padiSpawner === 'interface' && node.padiAgentId) {
+    const graphNode = findGraphNode('iface:' + node.padiAgentId);
+    if (graphNode) openInspect(graphNode);
+  }
 }
 
 // ── Graph init ──
@@ -1993,7 +1997,24 @@ const LANE_SPAWNERS = {
       if (node) openInspect(node);
     },
   },
-  interface: { disabled: true, blankLabel: 'New interface' },
+  interface: {
+    blankLabel: 'New interface',
+    disabled: true,
+    library() {
+      const collapsed = collapseIntake({ nodes: graphData?.nodes || [], links: [] });
+      return collapsed.nodes
+        .filter(n => n.type === 'intake')
+        .map(n => ({
+          id: n.id.replace('iface:', ''),
+          name: n.name || n.id.replace('iface:', ''),
+          inCluster: clusterHasNode(n.id),
+        }));
+    },
+    onDrop(item, msg) {
+      const node = findGraphNode('iface:' + item.id);
+      if (node) openInspect(node);
+    },
+  },
   router: { disabled: true, blankLabel: 'New router' },
 };
 const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', router: 'router', agent: 'agent', tools: 'tool' };
