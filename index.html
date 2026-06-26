@@ -1625,7 +1625,7 @@ function handleWireClick(node) {
 // ── Unified sidecar widget (Agent + Hubert tabs) ──
 // ADK_CHAT_BASE is the external Gradio URL (chat.forschfrontiers.com in prod, localhost in dev).
 // __chatToken authenticates the iframe via the bridge's token-bridge middleware.
-const ADK_CHAT_BASE = window.ADK_CHAT_BASE || 'https://chat.forschfrontiers.com/chat/';
+let ADK_CHAT_BASE = window.ADK_CHAT_BASE || 'https://chat.forschfrontiers.com/chat/';
 let __chatToken = '';
 async function fetchChatToken() {
   try {
@@ -1633,7 +1633,7 @@ async function fetchChatToken() {
     if (r.ok) {
       const d = await r.json();
       __chatToken = d.token || '';
-      if (d.base) { /* server override takes precedence */ }
+      if (d.base) ADK_CHAT_BASE = d.base;
     }
   } catch(_) {}
 }
