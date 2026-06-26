@@ -290,8 +290,8 @@
   <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
   <button class="lens-btn" data-lens="live">Live only</button>
   <button class="lens-btn active" data-lens="padi">PADI (swim lanes)</button>
-  <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies (rail)</button>
-  <button class="action-btn shared on" id="shared-btn" style="margin-top:4px;">▾ Show shared</button>
+  <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies</button>
+  <button class="action-btn infra" id="infra-btn" style="margin-top:4px;">▸ Infrastructure</button>
 
   <div class="sep"></div>
   <h3>Add Agent to Cluster</h3>
@@ -541,7 +541,7 @@ async function fetchGraphSecret() {
 }
 
 // ── State ──
-let graphData, currentLens = 'padi', lineageRoot = null, showDeps = false, showShared = true;
+let graphData, currentLens = 'padi', lineageRoot = null, showDepRail = false, showInfraRail = false;
 let currentCluster = null;
 let clusters = [];
 // ── Focus mode state ──
@@ -605,20 +605,9 @@ function selectCluster(name) {
 function loadGraph(clusterName) {
   info.textContent = 'Loading…';
   const url = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
-  Promise.all([
-    fetch(url).then(r => r.json()),
-    fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
-  ])
-    .then(([data, caps]) => {
-      const have = new Set(data.nodes.map(n => n.id));
-      (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
-      // Only add capability links whose both endpoints exist in the node set
-      // (builder may have pruned tools not used by this cluster's agents)
-      (caps.links || []).forEach(l => {
-        const s = typeof l.source === 'object' ? l.source.id : l.source;
-        const t = typeof l.target === 'object' ? l.target.id : l.target;
-        if (have.has(s) && have.has(t)) data.links.push(l);
-      });
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
       const hosted = data.nodes.find(n => n.id === 'ui:bridge');
       if (hosted) hosted.name = 'Hosted Chat';
       collapseIntake(data);
@@ -778,32 +767,24 @@ function getVisibleData() {
     base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
   }
 
-  if (!showDeps) {
-    const capIds = new Set(base.nodes.filter(n => n.type === 'capability').map(n => n.id));
-    if (capIds.size) {
+  // Filter by rail visibility
+  if (!showDepRail) {
+    const depIds = new Set(base.nodes.filter(n => n.rail === 'dependency').map(n => n.id));
+    if (depIds.size) {
       base = {
-        nodes: base.nodes.filter(n => !capIds.has(n.id)),
-        links: base.links.filter(l => !capIds.has(lid(l.source)) && !capIds.has(lid(l.target))),
+        nodes: base.nodes.filter(n => !depIds.has(n.id)),
+        links: base.links.filter(l => !depIds.has(lid(l.source)) && !depIds.has(lid(l.target))),
       };
     }
   }
-  if (!showShared) {
-    const sharedIds = new Set(base.nodes.filter(n => n.shared).map(n => n.id));
-    if (sharedIds.size) {
+  if (!showInfraRail) {
+    const infraIds = new Set(base.nodes.filter(n => n.rail === 'infrastructure').map(n => n.id));
+    if (infraIds.size) {
       base = {
-        nodes: base.nodes.filter(n => !sharedIds.has(n.id)),
-        links: base.links.filter(l => !sharedIds.has(lid(l.source)) && !sharedIds.has(lid(l.target))),
+        nodes: base.nodes.filter(n => !infraIds.has(n.id)),
+        links: base.links.filter(l => !infraIds.has(lid(l.source)) && !infraIds.has(lid(l.target))),
       };
     }
-  }
-
-  // Hide model nodes from main graph (they live in agent focus view)
-  const modelIds = new Set(base.nodes.filter(n => n.id && n.id.startsWith('model:')).map(n => n.id));
-  if (modelIds.size) {
-    base = {
-      nodes: base.nodes.filter(n => !modelIds.has(n.id)),
-      links: base.links.filter(l => !modelIds.has(lid(l.source)) && !modelIds.has(lid(l.target))),
-    };
   }
 
   return base;
@@ -1014,13 +995,21 @@ function initGraph(data) {
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText(b.label, BAND_X0 + 26, b.cy - 46);
       }
-      if (showDeps) {
+      if (showDepRail) {
         ctx.fillStyle = 'rgba(86,212,221,0.06)';
         ctx.fillRect(-RAIL_X - 46, -360, 92, 720);
         ctx.fillStyle = 'rgba(86,212,221,0.75)';
         ctx.font = `${12 / scale}px -apple-system, sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('DEPENDENCIES', -RAIL_X, -384);
+      }
+      if (showInfraRail) {
+        ctx.fillStyle = 'rgba(200,160,255,0.06)';
+        ctx.fillRect(-RAIL_X - 46, -360, 92, 720);
+        ctx.fillStyle = 'rgba(200,160,255,0.75)';
+        ctx.font = `${12 / scale}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('INFRASTRUCTURE', -RAIL_X, -384);
       }
     })
     .onNodeClick(node => {
@@ -1102,19 +1091,19 @@ document.querySelectorAll('.lens-btn').forEach(btn => {
 
 // ── Dependency rail toggle ──
 document.getElementById('deps-btn').addEventListener('click', () => {
-  showDeps = !showDeps;
+  showDepRail = !showDepRail;
   const b = document.getElementById('deps-btn');
-  b.textContent = (showDeps ? '▾' : '▸') + ' Dependencies (rail)';
-  b.classList.toggle('on', showDeps);
+  b.textContent = (showDepRail ? '▾' : '▸') + ' Dependencies';
+  b.classList.toggle('on', showDepRail);
   renderLens();
 });
 
-// ── Shared components toggle ──
-document.getElementById('shared-btn').addEventListener('click', () => {
-  showShared = !showShared;
-  const b = document.getElementById('shared-btn');
-  b.textContent = (showShared ? '▾' : '▸') + ' Show shared';
-  b.classList.toggle('on', showShared);
+// ── Infrastructure rail toggle ──
+document.getElementById('infra-btn').addEventListener('click', () => {
+  showInfraRail = !showInfraRail;
+  const b = document.getElementById('infra-btn');
+  b.textContent = (showInfraRail ? '▾' : '▸') + ' Infrastructure';
+  b.classList.toggle('on', showInfraRail);
   renderLens();
 });
 

@@ -1,0 +1,46 @@
+# Infrastructure topology for the ADK workspace
+# Describes where agents run and what services support them.
+# This is descriptive metadata, not live config — update when topology changes.
+
+hosts:
+  - id: hetzner-vps
+    name: "Hetzner VPS (hubertsp6)"
+    provider: hetzner
+    tailscale: hubert-cloud-sp6.tail818cf8.ts.net
+
+containers:
+  - id: adk-bridge
+    name: "ADK Bridge"
+    host: hetzner-vps
+    port: 8800
+    runs_agents: true
+
+services:
+  - id: litellm
+    name: "LiteLLM (model gateway)"
+    host: hetzner-vps
+    port: 4000
+    role: model_routing
+
+  - id: authsome
+    name: "Authsome (credential gateway)"
+    host: hetzner-vps
+    port: 7998
+    role: credential_broker
+    brokers: [github, resend, cloudflare-global, frappe-crm]
+
+  - id: frappe-crm
+    name: "Frappe CRM (ff-ops-prod)"
+    host: railway
+    url: crm.forschfrontiers.com
+    role: crm_backend
+
+networks:
+  - id: tailscale
+    name: "Tailscale mesh"
+    type: mesh_vpn
+
+tunnels:
+  - id: cloudflare
+    name: "Cloudflare tunnel"
+    type: reverse_proxy
