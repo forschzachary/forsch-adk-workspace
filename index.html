@@ -644,11 +644,14 @@ function enterAgentFocus(agentId) {
   updateViewCrumb();
   renderLens();
   openAgentWorkbench(agentId);
-  // Zoom to the agent node
+  // Zoom to the agent node — dynamic based on node count
   const n = getNodeById(agentId);
   if (n && Number.isFinite(n.x) && Number.isFinite(n.y)) {
     fg.centerAt(n.x, n.y, 650);
-    fg.zoom(2.2, 650);
+    const focusData = buildAgentFocusData();
+    const nodeCount = focusData.nodes.length;
+    const zoom = Math.max(0.8, Math.min(2.5, 3.0 / Math.sqrt(nodeCount)));
+    fg.zoom(zoom, 650);
   }
   loadFocusedAgentData(agentId);
   writeHashState();
@@ -802,23 +805,32 @@ function clearFocusPins(nodes) {
 }
 
 function applyLayout(vd) {
-  // ── Focus mode: star layout around focused agent ──
+  // ── Focus mode: tiered layout ──
   if (viewMode === 'agent' && focusedAgentId) {
     const center = vd.nodes.find(n => n.id === focusedAgentId);
-    if (center) { center.fx = 0; center.fy = 0; }
-    // Synthetic dev nodes form a ring
+    if (center) { center.fx = 0; center.fy = -200; }
+
+    // Synthetic dev nodes in a horizontal row below agent
     const dev = vd.nodes.filter(n => n.synthetic && n.focusChild);
-    const radius = 220;
+    const devSpacing = Math.max(120, 600 / Math.max(1, dev.length));
     dev.forEach((n, i) => {
-      const angle = (-Math.PI / 2) + (i / Math.max(1, dev.length)) * Math.PI * 2;
-      n.fx = Math.cos(angle) * radius;
-      n.fy = Math.sin(angle) * radius;
+      n.fx = (i - (dev.length - 1) / 2) * devSpacing;
+      n.fy = 0;
     });
-    // Real neighbors cluster to the left
-    const neighbors = vd.nodes.filter(n => !n.synthetic && n.id !== focusedAgentId);
-    neighbors.forEach((n, i) => {
-      n.fx = -340 + (i % 3) * 90;
-      n.fy = -120 + Math.floor(i / 3) * 90;
+
+    // Real tools fanned out below
+    const tools = vd.nodes.filter(n => !n.synthetic && n.id !== focusedAgentId && n.type === 'tool');
+    const toolSpacing = Math.max(80, 500 / Math.max(1, tools.length));
+    tools.forEach((n, i) => {
+      n.fx = (i - (tools.length - 1) / 2) * toolSpacing;
+      n.fy = 200;
+    });
+
+    // Everything else (model, channels, etc.) between dev and tools
+    const others = vd.nodes.filter(n => !n.synthetic && n.id !== focusedAgentId && n.type !== 'tool');
+    others.forEach((n, i) => {
+      n.fx = (i - (others.length - 1) / 2) * 100;
+      n.fy = 100;
     });
     return;
   }
