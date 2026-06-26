@@ -444,6 +444,23 @@ function csrfHeaders() {
   return h;
 }
 
+// ── Graph secret for workbench API calls ──
+// In standalone mode, fetches the secret from /graph-secret so the browser
+// can hit gated endpoints. In CRM embed, the proxy injects X-Graph-Secret
+// server-side and this stays empty.
+let __graphSecret = '';
+function graphSecretHeaders() {
+  const h = {};
+  if (__graphSecret) h['X-Graph-Secret'] = __graphSecret;
+  return h;
+}
+async function fetchGraphSecret() {
+  try {
+    const r = await fetch(apiUrl('/graph-secret'));
+    if (r.ok) { const d = await r.json(); __graphSecret = d.secret || ''; }
+  } catch(_) {}
+}
+
 // ── State ──
 let graphData, currentLens = 'padi', lineageRoot = null, showDeps = false, showShared = true;
 let currentCluster = null;
@@ -609,8 +626,30 @@ function buildAgentFocusData() {
     if (target === focusedAgentId) ids.add(source);
   }
 
-  const baseNodes = graphData.nodes.filter(n => ids.has(n.id));
+  // Also pull in the agent's model node (even if no explicit link exists)
+  let modelNodeId = null;
+  if (agent.model) {
+    modelNodeId = `model:${agent.model}`;
+    if (graphData.nodes.some(n => n.id === modelNodeId)) ids.add(modelNodeId);
+  }
+
+  const baseNodes = graphData.nodes.filter(n => ids.has(n.id)).map(n => {
+    // Model nodes: override shared/blank so they're visible in focus
+    if (n.id === modelNodeId) {
+      return { ...n, shared: false, state: n.state === 'blank' ? 'built' : n.state };
+    }
+    return n;
+  });
   const baseLinks = graphData.links.filter(l => ids.has(lid(l.source)) && ids.has(lid(l.target)));
+
+  // Add model link if agent has a model and it's included but not already linked
+  if (modelNodeId && ids.has(modelNodeId) && !baseLinks.some(l => {
+    const s = lid(l.source), t = lid(l.target);
+    return (s === focusedAgentId && t === modelNodeId) || (s === modelNodeId && t === focusedAgentId);
+  })) {
+    baseLinks.push({ source: focusedAgentId, target: modelNodeId, kind: 'pinned-model' });
+  }
+
   const devNodes = buildFocusDevNodes(agent);
   const devLinks = devNodes.map(n => ({ source: focusedAgentId, target: n.id, kind: 'focus' }));
 
@@ -672,6 +711,16 @@ function getVisibleData() {
       };
     }
   }
+
+  // Hide model nodes from main graph (they live in agent focus view)
+  const modelIds = new Set(base.nodes.filter(n => n.id && n.id.startsWith('model:')).map(n => n.id));
+  if (modelIds.size) {
+    base = {
+      nodes: base.nodes.filter(n => !modelIds.has(n.id)),
+      links: base.links.filter(l => !modelIds.has(lid(l.source)) && !modelIds.has(lid(l.target))),
+    };
+  }
+
   return base;
 }
 
@@ -1283,12 +1332,34 @@ function renderFocusSection(agentId, section) {
     attachFocusConfigHandlers(agentId);
   } else if (section === 'tools') {
     const tools = focusedAgentTools.length ? focusedAgentTools : (focusedAgentConfig?.config?.tools || focusedAgentConfig?.tools || []);
-    const toolList = Array.isArray(tools) ? tools.map(t => typeof t === 'string' ? t : (t.name || t.id || JSON.stringify(t))) : [];
-    target.innerHTML = `
-      <div class="field"><label>Available Tools (${toolList.length})</label>
-        <pre class="ro json-block">${esc(JSON.stringify(toolList, null, 2))}</pre>
-      </div>
-    `;
+    const toolNames = Array.isArray(tools) ? tools.map(t => typeof t === 'string' ? t : (t.name || t.id || JSON.stringify(t))) : [];
+
+    // Group tools by prefix (e.g. forsch.adk_components.tools.X → X)
+    const groups = {};
+    toolNames.forEach(t => {
+      const parts = t.split('.');
+      const short = parts[parts.length - 1];
+      const prefix = parts.length > 1 ? parts.slice(0, -1).join('.') : '(root)';
+      (groups[prefix] = groups[prefix] || []).push({ full: t, short });
+    });
+
+    let toolsHtml = `<div class="field"><label>Tools (${toolNames.length})</label></div>`;
+    if (toolNames.length === 0) {
+      toolsHtml += '<div class="ro" style="padding:8px 0;">No tools assigned to this agent.</div>';
+    } else {
+      for (const [prefix, items] of Object.entries(groups)) {
+        const label = prefix === '(root)' ? 'Other' : prefix.split('.').pop();
+        toolsHtml += `<div style="margin-bottom:8px;"><div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">${esc(label)} (${items.length})</div>`;
+        items.forEach(t => {
+          toolsHtml += `<div class="tool-check" style="padding:2px 0;font-size:11px;">
+            <span style="color:#f0883e;">&#9679;</span> ${esc(t.short)}
+            ${t.short !== t.full ? `<span style="color:#484f58;font-size:10px;margin-left:4px;">${esc(t.full)}</span>` : ''}
+          </div>`;
+        });
+        toolsHtml += '</div>';
+      }
+    }
+    target.innerHTML = toolsHtml;
   } else if (section === 'evals') {
     const evalsets = focusedAgentEvalsets || [];
     const lastRun = focusedAgentEval;
@@ -1536,12 +1607,13 @@ aiInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendAiMessage(
 // ── Fetch focused agent data ──
 function loadFocusedAgentData(agentId) {
   const clean = cleanAgentId(agentId);
+  const hdrs = { ...csrfHeaders(), ...graphSecretHeaders() };
   Promise.allSettled([
-    fetch(apiUrl(`/agent-config?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() }).then(r => r.json()),
-    fetch(apiUrl('/agent-tools'), { headers: csrfHeaders() }).then(r => r.json()),
-    fetch(apiUrl('/agent-models'), { headers: csrfHeaders() }).then(r => r.json()),
-    fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() }).then(r => r.json()),
-    fetch(apiUrl(`/agent-evals?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() }).then(r => r.json()),
+    fetch(apiUrl(`/agent-config?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl('/agent-tools'), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl('/agent-models'), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl(`/agent-evals?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
   ]).then(results => {
     const [config, tools, models, verify, evals] = results;
     focusedAgentConfig = config.status === 'fulfilled' ? config.value : { ok: false, error: config.reason?.message || 'config failed' };
@@ -1586,7 +1658,7 @@ function saveFocusedAgentConfig(agentId) {
   saveMsg.textContent = 'Saving config...';
   fetch(apiUrl('/agent-config'), {
     method: 'POST',
-    headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' },
     body,
   })
     .then(r => r.json())
@@ -1616,7 +1688,7 @@ function verifyFocusedAgent(agentId) {
   const saveMsg = document.getElementById('inspect-save-msg');
   saveMsg.className = 'save-msg';
   saveMsg.textContent = 'Verifying...';
-  fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() })
+  fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: { ...csrfHeaders(), ...graphSecretHeaders() } })
     .then(r => r.json())
     .then(data => {
       focusedAgentVerify = data;
@@ -1636,7 +1708,7 @@ function generateFocusedAgent(agentId) {
   saveMsg.textContent = 'Generating...';
   fetch(apiUrl('/agent-generate'), {
     method: 'POST',
-    headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ agent_id: clean }),
   })
     .then(r => r.json())
@@ -1668,7 +1740,7 @@ function runFocusedAgentEvals(agentId) {
   saveMsg.textContent = 'Running evals...';
   fetch(apiUrl('/agent-eval-run'), {
     method: 'POST',
-    headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ agent_id: clean, evalset_id: evalsetId }),
   })
     .then(r => r.json())
@@ -1720,6 +1792,7 @@ document.addEventListener('keydown', e => {
 
 // ── Init ──
 loadClusters();
+fetchGraphSecret();
 loadRegistryAgents();
 loadModels();
 startPulse();

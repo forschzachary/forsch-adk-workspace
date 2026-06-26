@@ -952,6 +952,10 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, get_pulse())
         elif path in ("/clusters", "/clusters/"):
             self._json_response(200, list_clusters())
+        elif path == "/graph-secret":
+            # Serve the secret to the browser for same-origin API calls.
+            # In CRM embed the proxy injects it server-side; here the browser needs it.
+            self._json_response(200, {"secret": GRAPH_SECRET or ""})
         elif path == "/manifest":
             qs = parse_qs(parsed.query)
             cluster = qs.get("cluster", [None])[0]
@@ -978,7 +982,9 @@ class Handler(SimpleHTTPRequestHandler):
                     "gemini-3-pro-preview", "gemini-3-flash-preview",
                     "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
                 ]})
-        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_secret():
+        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and GRAPH_SECRET and not self._check_secret():
+            # Only gate when a secret is configured (prod/CRM embed).
+            # Standalone dev mode (no secret) leaves these read-only endpoints open.
             self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
         elif path == "/agent-config":
             qs = parse_qs(parsed.query)
