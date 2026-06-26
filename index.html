@@ -1916,6 +1916,23 @@ function clusterHasAgent(id) {
   return !!(graphData && graphData.nodes && graphData.nodes.some(n => n.id === 'agent:' + id));
 }
 
+function clusterHasNode(nodeId) {
+  return !!(graphData && graphData.nodes && graphData.nodes.some(n => n.id === nodeId));
+}
+
+async function addNodeToCluster(type, id, msgEl) {
+  if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
+  setLaneMsg(msgEl, '', 'Adding…');
+  const body = `type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`;
+  fetch(apiUrl('/wire'), { method: 'POST', headers: mutationHeaders(), body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) { setLaneMsg(msgEl, 'ok', 'Added'); loadGraph(currentCluster); }
+      else setLaneMsg(msgEl, 'err', data.error || 'Failed');
+    })
+    .catch(() => setLaneMsg(msgEl, 'err', 'Network error'));
+}
+
 // Shared actions, reused by both the spawn form and drag/click-to-add.
 async function spawnBlankAgent(id, desc, msgEl) {
   id = (id || '').trim();
@@ -1964,7 +1981,20 @@ const LANE_SPAWNERS = {
     library() { return registryAgentIds.map(id => ({ id, name: id, inCluster: clusterHasAgent(id) })); },
     onDrop(item, msg) { addAgentToCluster(item.id, msg); },
   },
-  tool: { disabled: true, blankLabel: 'New tool' },
+  tool: {
+    blankLabel: 'New tool',
+    disabled: true,
+    library() {
+      return (graphData?.nodes || [])
+        .filter(n => n.type === 'tool')
+        .map(n => ({
+          id: n.id.replace('tool:', ''),
+          name: n.name || n.id.replace('tool:', ''),
+          inCluster: clusterHasNode(n.id),
+        }));
+    },
+    onDrop(item, msg) { addNodeToCluster('tool', item.id, msg); },
+  },
   interface: { disabled: true, blankLabel: 'New interface' },
   router: { disabled: true, blankLabel: 'New router' },
 };
