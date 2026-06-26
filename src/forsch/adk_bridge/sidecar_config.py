@@ -109,3 +109,22 @@ textarea, input, select {{ border-radius: 14px !important; }}
 }}
 footer {{ display: none !important; }}
 """
+ENTER_TO_SEND_JS = """
+() => {
+  function bindEnterToSend() {
+    const prompt = document.querySelector('#ff-prompt textarea');
+    const run = document.querySelector('#ff-run-btn button');
+    if (!prompt || !run || prompt.dataset.ffEnterBound === '1') return;
+    prompt.dataset.ffEnterBound = '1';
+    prompt.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      run.click();
+    });
+  }
+  const observer = new MutationObserver(bindEnterToSend);
+  observer.observe(document.body, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', bindEnterToSend);
+  bindEnterToSend();
+}
+"""

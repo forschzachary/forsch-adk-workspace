@@ -15,7 +15,7 @@ import gradio as gr
 
 from forsch.adk_bridge.run import stream_agent_structured
 from forsch.adk_bridge.runtime import get_runtime
-from forsch.adk_bridge.sidecar_config import BRAND, PROMPTS, build_css
+from forsch.adk_bridge.sidecar_config import BRAND, ENTER_TO_SEND_JS, PROMPTS, build_css
 
 
 # ── Runtime helpers ──────────────────────────────────────────────────────────
@@ -243,6 +243,7 @@ def build_gradio_app() -> gr.Blocks:
     initial_session_id = _new_session_id(default_agent)
 
     with gr.Blocks(title=BRAND["title"], elem_id="ff-sidecar") as demo:
+        demo.js = ENTER_TO_SEND_JS
         gr.HTML(f"<style>{build_css()}</style>", visible=False)
 
         with gr.Column(elem_id="ff-hero"):
