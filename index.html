@@ -8,15 +8,29 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
   #graph-wrap { width: 100vw; height: 100vh; position: relative; }
-  #graph { width: 100%; height: 100%; }
-  /* ── Band labels (screen-pinned) ── */
-  .band-label {
-    display: none; position: absolute; left: 14px;
-    pointer-events: none; z-index: 5;
-    font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-    text-transform: uppercase; color: rgba(140,160,180,0.5);
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-    white-space: nowrap;
+  #graph { width: 100%; height: 100%; position: relative; z-index: 2; }
+  /* ── Swim-lane overlay: a static screen-aligned sheet the graph is drawn over ── */
+  #swimlane-overlay {
+    position: absolute; left: 0; top: 36px; right: 300px; bottom: 0;
+    pointer-events: none; z-index: 1;
+    display: none; flex-direction: column;
+  }
+  #swimlane-overlay.on { display: flex; }
+  .swimlane-row {
+    position: relative; flex: 1 1 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .swimlane-row:first-child { border-top: none; }
+  .swimlane-label {
+    position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; gap: 9px;
+    font-size: 10px; font-weight: 600; letter-spacing: 2.5px;
+    text-transform: uppercase; color: rgba(150,170,190,0.42);
+    white-space: nowrap; user-select: none;
+  }
+  .swimlane-label::before {
+    content: ''; width: 3px; height: 24px; border-radius: 2px;
+    background: var(--lane-hue); opacity: 0.55;
   }
   /* ── Tab bar ── */
   #tab-bar {
@@ -292,11 +306,8 @@
   <button class="tab-new" id="new-tab-btn" title="New cluster">+</button>
 </div>
 <div id="graph-wrap">
+  <div id="swimlane-overlay"></div>
   <div id="graph"></div>
-  <div class="band-label">Interfaces</div>
-  <div class="band-label">Router</div>
-  <div class="band-label">Agent · Logic</div>
-  <div class="band-label">Tools · Data</div>
 </div>
 <div id="panel">
   <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
@@ -458,15 +469,17 @@ const LANE_Y = {
   agent: 80, logic: 80,
   tool: 240, database: 240,
 };
-const LANE_SPREAD = 60;  // vertical jitter range within lane
-const BANDS = [
-  { cy: -240, label: 'INTERFACES',    fill: 'rgba(210,168,255,0.07)' },
-  { cy: -80,  label: 'ROUTER',        fill: 'rgba(255,123,114,0.07)' },
-  { cy: 80,   label: 'AGENT · LOGIC', fill: 'rgba(88,166,255,0.07)' },
-  { cy: 240,  label: 'TOOLS · DATA',  fill: 'rgba(240,136,62,0.07)' },
+// Swim-lane sheet rows, top → bottom. The graph is drawn over these as a
+// static screen-aligned backdrop; node lane assignment reuses LANE_Y above.
+const PADI_LANES = [
+  { key: 'interfaces', label: 'Interfaces',    hue: '210,168,255' },
+  { key: 'router',     label: 'Router',        hue: '255,123,114' },
+  { key: 'agent',      label: 'Agent · Logic', hue: '88,166,255'  },
+  { key: 'tools',      label: 'Tools · Data',  hue: '240,136,62'  },
 ];
+// LANE_Y value → swim-lane row index
+const LANE_INDEX = { '-240': 0, '-80': 1, '80': 2, '240': 3 };
 const RAIL_X = 900;
-const BAND_X0 = -1800, BAND_X1 = 1800;
 
 // ── Interface abstraction ──
 const CHANNEL_LABEL = {
@@ -564,6 +577,9 @@ async function fetchGraphSecret() {
 let graphData, currentLens = 'padi', lineageRoot = null, showDepRail = false, showInfraRail = false;
 let currentCluster = null;
 let clusters = [];
+// PADI swim-lane geometry (world coords), shared between layout, forces, and
+// link routing. Lanes are held by gentle forces — nothing is hard-pinned.
+let padiLaneY = [], padiLaneBound = [], padiTick = 0;
 // ── Focus mode state ──
 let viewMode = 'project'; // 'project' | 'agent'
 let focusedAgentId = null;
@@ -871,22 +887,9 @@ function applyLayout(vd) {
     n.fy = railMidpoint + (i - (infraNodes.length - 1) / 2) * railOffset;
   });
 
-  if (currentLens === 'padi') {
-    const ags = vd.nodes.filter(n => n.type === 'agent').sort((a, b) => a.id.localeCompare(b.id));
-    const gap = 200;
-    ags.forEach((n, i) => {
-      n.fx = (i - (ags.length - 1) / 2) * gap;
-      n.fy = LANE_Y.agent;
-    });
-    vd.nodes.forEach(n => {
-      if (n.type === 'agent' || n.rail) return; // skip agents (pinned above) and rail nodes
-      const baseY = (LANE_Y[n.type] !== undefined) ? LANE_Y[n.type] : LANE_Y.agent;
-      // Spread vertically within lane to reduce label overlap
-      const hash = n.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-      n.fy = baseY + ((hash % 100) / 100 - 0.5) * LANE_SPREAD;
-      n.fx = null;
-    });
-  } else {
+  // PADI swim-lane positions are computed screen-aligned in layoutPadi()
+  // (called from renderLens) so the graph lands on the static overlay sheet.
+  if (currentLens !== 'padi') {
     vd.nodes.forEach(n => {
       if (n.rail) return; // rail nodes stay pinned
       n.fx = null;
@@ -895,15 +898,167 @@ function applyLayout(vd) {
   }
 }
 
+// ── Swim-lane sheet: build the overlay rows once, then keep the graph
+// pinned onto them every render (screen-aligned, deterministic). ──
+function buildSwimlaneOverlay() {
+  const overlay = document.getElementById('swimlane-overlay');
+  if (!overlay || overlay.childElementCount) return;
+  PADI_LANES.forEach(lane => {
+    const row = document.createElement('div');
+    row.className = 'swimlane-row';
+    row.dataset.lane = lane.key;
+    // Subtle hue wash, slightly stronger at the labelled left edge → fades right,
+    // so the sheet reads as a labelled backdrop the graph sits on.
+    row.style.background = `linear-gradient(90deg, rgba(${lane.hue},0.10) 0%, rgba(${lane.hue},0.05) 28%, rgba(${lane.hue},0.025) 100%)`;
+    const label = document.createElement('span');
+    label.className = 'swimlane-label';
+    label.style.setProperty('--lane-hue', `rgb(${lane.hue})`);
+    label.textContent = lane.label;
+    row.appendChild(label);
+    overlay.appendChild(row);
+  });
+}
+
+// Pin every visible node onto its swim-lane row, spread evenly across the
+// usable width. Camera is 1:1 (centerAt 0,0, zoom 1) so world coords == screen
+// offset from centre — the nodes land exactly on the static overlay rows.
+function layoutPadi() {
+  const overlay = document.getElementById('swimlane-overlay');
+  const wrap = document.getElementById('graph-wrap');
+  if (!fg || !overlay || !wrap) return;
+  if (currentLens !== 'padi' || viewMode === 'agent') {
+    overlay.classList.remove('on');
+    return;
+  }
+  overlay.classList.add('on');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  fg.centerAt(0, 0, 0);
+  fg.zoom(1, 0);
+
+  // Lane row centres, in graph-wrap-relative px → world Y (centre at 0).
+  const wrapTop = wrap.getBoundingClientRect().top;
+  const rows = overlay.querySelectorAll('.swimlane-row');
+  const laneY = [];
+  rows.forEach(r => {
+    const b = r.getBoundingClientRect();
+    laneY.push((b.top + b.height / 2 - wrapTop) - H / 2);
+  });
+
+  // Lane row centres + dividers (world Y), shared with the link router.
+  padiLaneY = laneY;
+  padiLaneBound = [];
+  for (let i = 0; i < laneY.length - 1; i++) padiLaneBound.push((laneY[i] + laneY[i + 1]) / 2);
+
+  // Usable horizontal span: left margin → left edge of the control panel.
+  const panel = document.getElementById('panel');
+  const panelLeft = panel ? panel.getBoundingClientRect().left : W - 300;
+  const xLeft = 70, xRight = Math.max(xLeft + 200, panelLeft - 48);
+
+  // Bucket visible non-rail nodes by lane, then give each a floaty *target*
+  // (forces pull toward it — nothing is hard-pinned, so the sheet stays alive).
+  const buckets = [[], [], [], []];
+  fg.graphData().nodes.forEach(n => {
+    if (n.rail) { n.__lane = undefined; return; }
+    const li = LANE_INDEX[String(LANE_Y[n.type])] ?? 2;
+    n.__lane = li;
+    buckets[li].push(n);
+  });
+  buckets.forEach((arr, li) => {
+    arr.sort((a, b) => a.id.localeCompare(b.id));
+    const n = arr.length;
+    arr.forEach((node, k) => {
+      const t = n === 1 ? 0.5 : (k + 0.5) / n;
+      node.__tx = (xLeft + (xRight - xLeft) * t) - W / 2;
+      node.__ty = laneY[li];
+      if (node.__phase === undefined) {
+        const h = node.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        node.__phase = (h % 100) / 100 * Math.PI * 2;
+      }
+      // Seed an initial position so nodes ease in within their lane, not from origin.
+      if (!Number.isFinite(node.x)) { node.x = node.__tx; node.y = node.__ty; }
+      // Never hard-pin: lanes are held by forces (see padiLaneForce).
+      node.fx = undefined; node.fy = undefined;
+    });
+  });
+}
+
+// Custom force: spring each node toward its lane target (firm vertically so the
+// lane holds, loose horizontally so it drifts) plus a perpetual gentle wobble so
+// the whole sheet feels alive rather than frozen. Constant (not alpha-scaled) so
+// motion never dies even when the simulation cools.
+function padiLaneForce() {
+  padiTick++;
+  const nodes = padiLaneForce._nodes || [];
+  for (const n of nodes) {
+    if (n.rail || n.__tx === undefined) continue;
+    n.vx += (n.__tx - n.x) * 0.045;
+    n.vy += (n.__ty - n.y) * 0.20;
+    n.vx += Math.cos(padiTick * 0.020 + n.__phase) * 0.26;
+    n.vy += Math.sin(padiTick * 0.025 + n.__phase * 1.7) * 0.18;
+  }
+}
+padiLaneForce.initialize = nodes => { padiLaneForce._nodes = nodes; };
+
+// PADI link routing: leave the lower node going straight up, drop a pin where it
+// crosses the lane divider, then bend straight to the upper node.
+function drawPadiLink(link, ctx, scale) {
+  const s = link.source, t = link.target;
+  if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
+  const col = padiLinkColor(link);
+  ctx.lineWidth = 1.1 / scale;
+  ctx.strokeStyle = col;
+  // Rail or same-lane links: a plain straight line.
+  if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    return;
+  }
+  const upper = s.__lane < t.__lane ? s : t;   // smaller index = higher row
+  const lower = s.__lane < t.__lane ? t : s;
+  const boundY = padiLaneBound[upper.__lane];   // divider just below the upper lane
+  if (!Number.isFinite(boundY)) {
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(lower.x, lower.y);   // straight up from the lower node…
+  ctx.lineTo(lower.x, boundY);    // …to the row crossing…
+  ctx.lineTo(upper.x, upper.y);   // …then bend to the upper node.
+  ctx.stroke();
+  // Pin at the crossing.
+  ctx.beginPath();
+  ctx.arc(lower.x, boundY, 3 / scale, 0, 2 * Math.PI);
+  ctx.fillStyle = col;
+  ctx.fill();
+  ctx.lineWidth = 1.5 / scale;
+  ctx.strokeStyle = '#0d1117';
+  ctx.stroke();
+}
+function padiLinkColor(l) {
+  if (l.kind === 'depends-on') return 'rgba(165,214,255,0.45)';
+  if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.45)';
+  return 'rgba(139,160,184,0.5)';
+}
+
 function applyForces() {
   const charge = fg.d3Force('charge');
   const link = fg.d3Force('link');
+  const center = fg.d3Force('center');
   if (currentLens === 'padi') {
-    if (charge) charge.strength(-1200);
-    if (link) link.distance(120).strength(0.04);
+    // No charge/link tug — they'd shove nodes off their even spread (and behind
+    // the panel). Positioning + the floaty bob are entirely the lane force's job.
+    if (charge) charge.strength(0);
+    if (link) link.distance(90).strength(0);
+    if (center) center.strength(0);   // else it recentres the centroid, sliding the whole sheet off
+    fg.d3Force('lane', padiLaneForce);
+    fg.d3VelocityDecay(0.55);
+    fg.d3AlphaDecay(0);          // never fully cool → perpetual gentle float
   } else {
     if (charge) charge.strength(-30);
     if (link) link.distance(30).strength(1);
+    if (center) center.strength(1);
+    fg.d3Force('lane', null);    // drop the lane force outside PADI
+    fg.d3VelocityDecay(0.4);
+    fg.d3AlphaDecay(0.0228);     // d3 default
   }
 }
 
@@ -1039,35 +1194,19 @@ function initGraph(data) {
       if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.4)'; // infra rail
       return '#30363d';
     })
-    .linkDirectionalArrowLength(6)
+    .linkDirectionalArrowLength(() => currentLens === 'padi' ? 0 : 6)
     .linkDirectionalArrowRelPos(0.95)
     .linkLabel(l => l.kind)
     .linkWidth(1)
+    .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
+    .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
     .linkDirectionalParticles(0)
     .linkDirectionalParticleSpeed(0.004)
     .linkDirectionalParticleWidth(1.5)
     .linkDirectionalParticleColor(() => '#3fb950')
     .onRenderFramePre((ctx, scale) => {
-      const bandLabels = document.querySelectorAll('.band-label');
-      if (currentLens !== 'padi') {
-        bandLabels.forEach(el => el.style.display = 'none');
-        return;
-      }
-      // Get canvas transform to map graph Y → screen Y
-      const t = ctx.getTransform();
-      const wrapRect = document.getElementById('graph-wrap').getBoundingClientRect();
-      for (let i = 0; i < BANDS.length; i++) {
-        const b = BANDS[i];
-        // Draw band background in graph coords (ctx already transformed)
-        ctx.fillStyle = b.fill;
-        ctx.fillRect(BAND_X0, b.cy - 64, BAND_X1 - BAND_X0, 128);
-        // Position label: graph Y → screen Y via transform matrix
-        if (bandLabels[i]) {
-          const screenY = t.d * b.cy + t.f;
-          bandLabels[i].style.display = 'block';
-          bandLabels[i].style.top = (screenY - 8) + 'px';
-        }
-      }
+      // Swim-lane sheet is a static DOM overlay (#swimlane-overlay), not drawn
+      // on the canvas. Only rail columns are canvas-drawn (world-coord).
       // Rail columns: simple world-coord backgrounds + headers
       try {
         const gNodes = fg.graphData().nodes;
@@ -1159,6 +1298,18 @@ function initGraph(data) {
     .dagLevelDistance(80)
     .cooldownTicks(100);
   window.fg = fg; // expose for debugging
+
+  // Build the static swim-lane sheet and keep the canvas + sheet + node pins
+  // in sync with the container size (force-graph auto-sizing is unreliable
+  // when the panel/viewport changes, which left the canvas at 0×0).
+  buildSwimlaneOverlay();
+  const wrapEl = document.getElementById('graph-wrap');
+  const syncSize = () => {
+    fg.width(wrapEl.clientWidth).height(wrapEl.clientHeight);
+    if (currentLens === 'padi' && viewMode !== 'agent') layoutPadi();
+  };
+  if (window.ResizeObserver) new ResizeObserver(syncSize).observe(wrapEl);
+  syncSize();
 }
 
 function renderLens() {
@@ -1168,17 +1319,17 @@ function renderLens() {
   else fg.dagMode(null);
   applyLayout(vd);
   applyForces();
-  fg.cooldownTicks(150);
-  fg.d3ReheatSimulation();
-  // In PADI mode, cap zoom so all bands stay visible
+  // In PADI mode, pin nodes onto the static swim-lane sheet (screen-aligned).
   if (currentLens === 'padi') {
-    const viewH = document.getElementById('graph').clientHeight;
-    const bandExtent = 304 * 2; // bands span y=-304 to y=304
-    const maxZoom = (viewH - 60) / bandExtent; // 60px padding
-    setTimeout(() => {
-      if (fg.zoom() > maxZoom) fg.zoom(maxZoom, 300);
-    }, 180);
+    layoutPadi();
+    fg.cooldownTicks(Infinity);   // keep the sheet alive (floaty)…
+    fg.cooldownTime(Infinity);    // …the engine also stops after cooldownTime (15s default)
+  } else {
+    document.getElementById('swimlane-overlay').classList.remove('on');  // sheet is PADI-only
+    fg.cooldownTicks(150);
+    fg.cooldownTime(15000);
   }
+  fg.d3ReheatSimulation();
   const tag = currentLens === 'padi' ? ' · swim lanes' : '';
   const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
   if (viewMode === 'agent' && focusedAgentId) {
