@@ -1551,6 +1551,10 @@ function handlePadiControlClick(node) {
   if (node.padiControlKind === 'library' && node.padiSpawner === 'agent' && node.padiAgentId) {
     addAgentToCluster(node.padiAgentId, null);
   }
+  if (node.padiControlKind === 'library' && node.padiSpawner === 'tool' && node.padiAgentId) {
+    const graphNode = findGraphNode('tool:' + node.padiAgentId);
+    if (graphNode) openInspect(graphNode);
+  }
 }
 
 // ── Graph init ──
@@ -1920,17 +1924,8 @@ function clusterHasNode(nodeId) {
   return !!(graphData && graphData.nodes && graphData.nodes.some(n => n.id === nodeId));
 }
 
-async function addNodeToCluster(type, id, msgEl) {
-  if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
-  setLaneMsg(msgEl, '', 'Adding…');
-  const body = `type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`;
-  fetch(apiUrl('/wire'), { method: 'POST', headers: mutationHeaders(), body })
-    .then(r => r.json())
-    .then(data => {
-      if (data.ok) { setLaneMsg(msgEl, 'ok', 'Added'); loadGraph(currentCluster); }
-      else setLaneMsg(msgEl, 'err', data.error || 'Failed');
-    })
-    .catch(() => setLaneMsg(msgEl, 'err', 'Network error'));
+function findGraphNode(nodeId) {
+  return (graphData?.nodes || []).find(n => n.id === nodeId);
 }
 
 // Shared actions, reused by both the spawn form and drag/click-to-add.
@@ -1993,7 +1988,10 @@ const LANE_SPAWNERS = {
           inCluster: clusterHasNode(n.id),
         }));
     },
-    onDrop(item, msg) { addNodeToCluster('tool', item.id, msg); },
+    onDrop(item, msg) {
+      const node = findGraphNode('tool:' + item.id);
+      if (node) openInspect(node);
+    },
   },
   interface: { disabled: true, blankLabel: 'New interface' },
   router: { disabled: true, blankLabel: 'New router' },
