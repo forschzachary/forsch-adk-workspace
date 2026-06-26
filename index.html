@@ -428,7 +428,7 @@ function collapseIntake(data) {
 // This function rewrites paths to go through the proxy.
 function apiUrl(path){
   const loc = window.location;
-  if (loc.pathname.includes('graph_embed') || loc.search.includes('path='))
+  if (loc.pathname.includes('graph_embed') || new URLSearchParams(loc.search).has('path'))
     return loc.pathname + '?path=' + encodeURIComponent(path);
   return path;
 }
@@ -998,7 +998,7 @@ document.getElementById('new-tab-btn').addEventListener('click', () => {
 
 // ── Add agent to cluster ──
 function loadRegistryAgents() {
-  fetch('registry/agents/agents.yaml')
+  fetch(apiUrl('registry/agents/agents.yaml'))
     .then(r => r.text())
     .then(text => {
       // Crude YAML parse — extract agent ids from "  <id>:" lines under "agents:"
