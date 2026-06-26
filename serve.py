@@ -969,8 +969,16 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, list_clusters())
         elif path == "/graph-secret":
             # Serve the secret to the browser for same-origin API calls.
-            # In CRM embed the proxy injects it server-side; here the browser needs it.
-            self._json_response(200, {"secret": GRAPH_SECRET or ""})
+            # In CRM embed the proxy already injects X-Graph-Secret server-side,
+            # so if the request already carries a valid secret, return empty —
+            # the browser doesn't need it (the proxy handles auth).
+            hdr_secret = self.headers.get("X-Graph-Secret", "")
+            if GRAPH_SECRET and hdr_secret == GRAPH_SECRET:
+                # CRM proxy mode — secret already injected, don't leak it.
+                self._json_response(200, {"secret": ""})
+            else:
+                # Standalone mode — browser needs it for direct API calls.
+                self._json_response(200, {"secret": GRAPH_SECRET or ""})
         elif path == "/chat-token":
             # Serve the bridge CHAT_TOKEN so the browser can authenticate the Gradio iframe.
             # In CRM embed the proxy injects it server-side; here the browser needs it.
@@ -1001,9 +1009,9 @@ class Handler(SimpleHTTPRequestHandler):
                     "gemini-3-pro-preview", "gemini-3-flash-preview",
                     "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
                 ]})
-        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and GRAPH_SECRET and not self._check_secret():
-            # Only gate when a secret is configured (prod/CRM embed).
-            # Standalone dev mode (no secret) leaves these read-only endpoints open.
+        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_secret():
+            # Fail-closed: if GRAPH_SECRET is empty (misconfig), block access rather
+            # than silently opening the endpoints. Standalone dev should set a secret.
             self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
         elif path == "/agent-config":
             qs = parse_qs(parsed.query)

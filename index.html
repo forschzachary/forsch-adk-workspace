@@ -1718,11 +1718,13 @@ async function sendHubertMessage() {
   if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
 
   try {
-    const hdrs = { ...graphSecretHeaders(), 'Content-Type': 'application/json' };
+    const hdrs = { ...csrfHeaders(), ...graphSecretHeaders(), 'Content-Type': 'application/json' };
+    // Try to get real CRM username; fall back to 'graph-ui' for standalone mode.
+    const principal = window.frappe?.session?.user || 'graph-ui';
     const body = JSON.stringify({
       message: context + text,
       session_id: hubertSessionId,
-      principal: 'graph-ui'
+      principal
     });
     const r = await fetch(apiUrl('/chat'), { method: 'POST', headers: hdrs, body });
     const data = await r.json();
