@@ -1631,7 +1631,7 @@ function handleWireClick(node) {
 // ── Unified sidecar widget (Agent + Hubert tabs) ──
 // ADK_CHAT_BASE is the external Gradio URL (chat.forschfrontiers.com in prod, localhost in dev).
 // __chatToken authenticates the iframe via the bridge's token-bridge middleware.
-let ADK_CHAT_BASE = window.ADK_CHAT_BASE || 'https://chat.forschfrontiers.com/chat/';
+let ADK_CHAT_BASE = window.ADK_CHAT_BASE || '/chat/';
 let __chatToken = '';
 async function fetchChatToken() {
   try {

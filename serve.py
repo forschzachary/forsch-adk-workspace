@@ -59,7 +59,7 @@ def _chat_token() -> str:
     return token
 
 # External URL for the Gradio bridge (browser-facing iframe src).
-CHAT_BASE_URL = os.environ.get("CHAT_BASE_URL", "https://chat.forschfrontiers.com/chat/")
+CHAT_BASE_URL = os.environ.get("CHAT_BASE_URL", "/chat/")
 CRM_API_KEY_FILE = _HERMES_HOME / "secrets" / "frappe-admin-api-key"
 CRM_BASE = os.environ.get("CRM_BASE_URL", "https://crm.forschfrontiers.com")
 
