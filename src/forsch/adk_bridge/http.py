@@ -1,6 +1,8 @@
 import re
 import os
 import json
+import hmac
+import urllib.parse
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -52,7 +54,7 @@ class _TokenBridge:
         path = scope.get("path", "")
         headers = dict(scope.get("headers") or [])
         # Already authenticated header present? pass through.
-        if headers.get(b"x-chat-token", b"").decode() == _CHAT_TOKEN:
+        if hmac.compare_digest(headers.get(b"x-chat-token", b"").decode(), _CHAT_TOKEN):
             return await self.app(scope, receive, send)
 
         # Pull the token from query string or cookie.
@@ -60,7 +62,7 @@ class _TokenBridge:
         qs = scope.get("query_string", b"").decode()
         for pair in qs.split("&"):
             if pair.startswith(f"{_COOKIE}="):
-                token = pair.split("=", 1)[1]
+                token = urllib.parse.unquote(pair.split("=", 1)[1])
                 break
         if token is None:
             cookie_hdr = headers.get(b"cookie", b"").decode()
@@ -70,7 +72,7 @@ class _TokenBridge:
                     token = c.split("=", 1)[1]
                     break
 
-        if token == _CHAT_TOKEN:
+        if token is not None and hmac.compare_digest(token, _CHAT_TOKEN):
             # Inject the header Chainlit's auth callback reads.
             new_headers = [
                 (k, v) for (k, v) in scope.get("headers", []) if k != b"x-chat-token"
@@ -80,7 +82,7 @@ class _TokenBridge:
             scope["headers"] = new_headers
 
             set_cookie = (
-                f"{_COOKIE}={_CHAT_TOKEN}; Path=/; HttpOnly; SameSite=None; Secure"
+                f"{_COOKIE}={_CHAT_TOKEN}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned"
             ).encode()
 
             async def send_wrapper(message):
@@ -96,6 +98,11 @@ class _TokenBridge:
         # Gate /chat/ routes — Gradio has no header_auth_callback, so we
         # must block at the ASGI level (same pattern as the spike's _TokenGate).
         if path.startswith("/chat/"):
+            if scope["type"] == "websocket":
+                # Reject the handshake cleanly — HTTP response frames are illegal
+                # on a websocket scope and crash/hang the ASGI server.
+                await send({"type": "websocket.close", "code": 1008})
+                return
             await send({
                 "type": "http.response.start",
                 "status": 401,
@@ -132,6 +139,10 @@ class _SameSiteNoneMiddleware:
                         # Ensure Secure is present
                         if "Secure" not in v_str and "secure" not in v_str:
                             v_str += "; Secure"
+                        # CHIPS: partition the cookie so it survives in a
+                        # cross-site iframe with 3p cookies blocked.
+                        if "artitioned" not in v_str:
+                            v_str += "; Partitioned"
                         new_headers.append((k, v_str.encode("utf-8")))
                     else:
                         new_headers.append((k, v))
