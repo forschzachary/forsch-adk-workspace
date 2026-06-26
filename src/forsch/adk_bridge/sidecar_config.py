@@ -13,6 +13,7 @@ BRAND = {
     "surface": "gradio sidecar",
     "agent_note": "Use this as the fast interaction layer. Durable config stays in the graph/control plane.",
     "prompt_placeholder": "Ask the selected agent to run a focused check, explain itself, or draft an eval...",
+    "default_agent": "ops",
 }
 
 THEME = {
@@ -37,8 +38,8 @@ PROMPTS = {
 }
 
 
-def build_css(theme: dict[str, str] | None = None) -> str:
-    t = {**THEME, **(theme or {})}
+def build_css() -> str:
+    t = THEME
     return f"""
 :root {{
   --ff-bg: {t['bg']};

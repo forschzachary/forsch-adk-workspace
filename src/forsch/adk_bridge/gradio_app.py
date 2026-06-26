@@ -25,7 +25,8 @@ def _agent_choices() -> list[str]:
 
 
 def _default_agent(choices: list[str]) -> str:
-    return "ops" if "ops" in choices else (choices[0] if choices else "")
+    preferred = BRAND.get("default_agent")
+    return preferred if preferred in choices else (choices[0] if choices else "")
 
 
 def _new_session_id(agent_name: str) -> str:
@@ -66,8 +67,10 @@ def _status(agent_name: str, tools: list[dict[str, Any]], running: bool, session
 
 # ── State helpers ────────────────────────────────────────────────────────────
 
-def _apply_prompt(label: str) -> str:
-    return PROMPTS.get(label, "")
+def _apply_prompt(label: str | None, current_prompt: str) -> str:
+    if label is None:
+        return current_prompt or ""
+    return PROMPTS.get(label, current_prompt or "")
 
 
 def _select_agent(agent_name: str):
@@ -78,18 +81,13 @@ def _select_agent(agent_name: str):
         "ready · new agent session",
         session_id,
         "",
-        [],
         _trace_text([]),
     )
 
 
 def _clear_chat(agent_name: str):
     session_id = _new_session_id(agent_name)
-    return [], "", "ready · new session", session_id, "", [], _trace_text([])
-
-
-def _new_chat(agent_name: str):
-    return _clear_chat(agent_name)
+    return [], "", "ready · new session", session_id, "", _trace_text([])
 
 
 def _reuse_last_prompt(last_prompt: str):
@@ -108,14 +106,14 @@ async def _send_message(
     history = list(history or [])
     text = (message or "").strip()
     if not text:
-        yield history, "", "Write a message first. Ambitious otherwise.", text, [], _trace_text([])
+        yield history, "", "Write a message first. Ambitious otherwise.", text, _trace_text([])
         return
 
     rt = get_runtime()
     agent = rt.agents.get(agent_name)
     if agent is None:
         history.append({"role": "assistant", "content": f"Agent '{agent_name}' is not loaded."})
-        yield history, message, "Agent unavailable.", text, [], _trace_text([])
+        yield history, message, "Agent unavailable.", text, _trace_text([])
         return
 
     session_id = _normalize_session_id(agent_name, session_id)
@@ -125,6 +123,7 @@ async def _send_message(
 
     full_text = ""
     tools: list[dict[str, Any]] = []
+    trace = _trace_text(tools)
 
     async for kind, data in stream_agent_structured(
         agent,
@@ -136,16 +135,16 @@ async def _send_message(
     ):
         if kind == "text":
             if not isinstance(data, str):
-                yield history, "", f"skipped malformed text event: {type(data).__name__}", text, tools, _trace_text(tools)
+                yield history, "", f"skipped malformed text event: {type(data).__name__}", text, trace
                 continue
             full_text += data
             assistant_msg["content"] = full_text
             if tools:
-                assistant_msg["metadata"] = _metadata(tools)
-            yield history, "", _status(agent_name, tools, True, session_id), text, tools, _trace_text(tools)
+                assistant_msg["metadata"] = _metadata(tools, trace)
+            yield history, "", _status(agent_name, tools, True, session_id), text, trace
         elif kind == "tool_call":
             if not isinstance(data, dict):
-                yield history, "", f"skipped malformed tool call: {type(data).__name__}", text, tools, _trace_text(tools)
+                yield history, "", f"skipped malformed tool call: {type(data).__name__}", text, trace
                 continue
             tools.append({
                 "name": data.get("name", "tool"),
@@ -154,12 +153,13 @@ async def _send_message(
                 "status": "pending",
                 "started": time.time(),
             })
+            trace = _trace_text(tools)
             assistant_msg["content"] = full_text or "working..."
-            assistant_msg["metadata"] = _metadata(tools)
-            yield history, "", _status(agent_name, tools, True, session_id), text, tools, _trace_text(tools)
+            assistant_msg["metadata"] = _metadata(tools, trace)
+            yield history, "", _status(agent_name, tools, True, session_id), text, trace
         elif kind == "tool_result":
             if not isinstance(data, dict):
-                yield history, "", f"skipped malformed tool result: {type(data).__name__}", text, tools, _trace_text(tools)
+                yield history, "", f"skipped malformed tool result: {type(data).__name__}", text, trace
                 continue
             for tool in reversed(tools):
                 if tool["status"] == "pending":
@@ -167,22 +167,25 @@ async def _send_message(
                     tool["result"] = data.get("result", {})
                     tool["duration"] = time.time() - tool["started"]
                     break
+            trace = _trace_text(tools)
             assistant_msg["content"] = full_text or "working..."
-            assistant_msg["metadata"] = _metadata(tools)
-            yield history, "", _status(agent_name, tools, True, session_id), text, tools, _trace_text(tools)
+            assistant_msg["metadata"] = _metadata(tools, trace)
+            yield history, "", _status(agent_name, tools, True, session_id), text, trace
 
     assistant_msg["content"] = full_text or "No visible response returned."
     if tools:
-        assistant_msg["metadata"] = _metadata(tools)
-    yield history, "", _status(agent_name, tools, False, session_id), text, tools, _trace_text(tools)
+        assistant_msg["metadata"] = _metadata(tools, trace)
+    yield history, "", _status(agent_name, tools, False, session_id), text, trace
 
 
 async def _regenerate_last(agent_name: str, history: list[dict[str, Any]] | None, session_id: str, last_prompt: str):
     history = list(history or [])
     if not last_prompt:
-        yield history, "", "nothing to regenerate", last_prompt, [], _trace_text([])
+        yield history, "", "nothing to regenerate", last_prompt, _trace_text([])
         return
     if history and history[-1].get("role") == "assistant":
+        history.pop()
+    if history and history[-1].get("role") == "user":
         history.pop()
     async for update in _send_message(last_prompt, agent_name, history, session_id):
         yield update
@@ -190,15 +193,17 @@ async def _regenerate_last(agent_name: str, history: list[dict[str, Any]] | None
 
 # ── Rendering helpers ────────────────────────────────────────────────────────
 
-def _metadata(tools: list[dict[str, Any]]) -> dict[str, Any]:
+def _metadata(tools: list[dict[str, Any]], trace: str | None = None) -> dict[str, Any]:
     latest = tools[-1]
-    return {
+    meta: dict[str, Any] = {
         "title": f"tool: {latest['name']}",
         "id": latest["name"],
-        "log": _trace_text(tools),
+        "log": trace if trace is not None else _trace_text(tools),
         "status": latest.get("status", "done"),
-        "duration": latest.get("duration"),
     }
+    if latest.get("duration") is not None:
+        meta["duration"] = latest["duration"]
+    return meta
 
 
 def _trace_text(tools: list[dict[str, Any]]) -> str:
@@ -206,7 +211,9 @@ def _trace_text(tools: list[dict[str, Any]]) -> str:
         return "No tool calls yet."
     lines: list[str] = []
     for idx, tool in enumerate(tools, start=1):
-        duration = f" · {tool.get('duration'):.2f}s" if tool.get("duration") else ""
+        duration = ""
+        if tool.get("duration") is not None:
+            duration = f" · {tool['duration']:.2f}s"
         lines.append(f"{idx}. {tool['name']} [{tool.get('status', 'done')}]{duration}")
         lines.append(f"   args: {_compact_json(tool.get('args'))}")
         if tool.get("result") is not None:
@@ -219,7 +226,12 @@ def _compact_json(value: Any) -> str:
         rendered = json.dumps(value, ensure_ascii=False, default=str)
     except TypeError:
         rendered = str(value)
-    return rendered if len(rendered) <= 700 else rendered[:700] + "..."
+    if len(rendered) <= 700:
+        return rendered
+    return json.dumps(
+        {"truncated": True, "chars": len(rendered), "preview": rendered[:650]},
+        ensure_ascii=False,
+    )
 
 
 # ── UI assembly ──────────────────────────────────────────────────────────────
@@ -240,7 +252,6 @@ def build_gradio_app() -> gr.Blocks:
 
         session_state = gr.State(initial_session_id)
         last_prompt_state = gr.State("")
-        trace_state = gr.State([])
 
         with gr.Row(elem_id="ff-workspace"):
             with gr.Column(scale=1, min_width=260, elem_id="ff-rail"):
@@ -270,28 +281,28 @@ def build_gradio_app() -> gr.Blocks:
         run_event = send.click(
             _send_message,
             inputs=[prompt, agent_dd, chatbot, session_state],
-            outputs=[chatbot, prompt, status, last_prompt_state, trace_state, trace_box],
+            outputs=[chatbot, prompt, status, last_prompt_state, trace_box],
         )
         submit_event = prompt.submit(
             _send_message,
             inputs=[prompt, agent_dd, chatbot, session_state],
-            outputs=[chatbot, prompt, status, last_prompt_state, trace_state, trace_box],
+            outputs=[chatbot, prompt, status, last_prompt_state, trace_box],
         )
         regen_event = regen.click(
             _regenerate_last,
             inputs=[agent_dd, chatbot, session_state, last_prompt_state],
-            outputs=[chatbot, prompt, status, last_prompt_state, trace_state, trace_box],
+            outputs=[chatbot, prompt, status, last_prompt_state, trace_box],
         )
 
-        quick.change(_apply_prompt, inputs=quick, outputs=prompt)
+        quick.change(_apply_prompt, inputs=[quick, prompt], outputs=prompt)
         agent_dd.change(
             _select_agent,
             inputs=agent_dd,
-            outputs=[runtime_html, chatbot, status, session_state, last_prompt_state, trace_state, trace_box],
+            outputs=[runtime_html, chatbot, status, session_state, last_prompt_state, trace_box],
         )
-        new_chat.click(_new_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state, last_prompt_state, trace_state, trace_box])
+        new_chat.click(_clear_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state, last_prompt_state, trace_box])
         reuse.click(_reuse_last_prompt, inputs=last_prompt_state, outputs=prompt)
-        clear.click(_clear_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state, last_prompt_state, trace_state, trace_box])
+        clear.click(_clear_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state, last_prompt_state, trace_box])
         stop.click(None, cancels=[run_event, submit_event, regen_event])
 
     return demo
