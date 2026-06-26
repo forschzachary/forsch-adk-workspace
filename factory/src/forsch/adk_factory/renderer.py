@@ -15,6 +15,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from forsch.adk_factory.models import AgentSpec
+from forsch.adk_factory.tool_metadata import ToolRegistry
 
 # factory/src/forsch/adk_factory/renderer.py -> parents[3] == factory/
 _TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
@@ -55,6 +56,17 @@ def compose_instruction(workspace_root, spec: AgentSpec) -> str:
     return preamble or job
 
 
+def expand_tools(tool_patterns: list[str]) -> list[str]:
+    """Expand wildcard patterns like 'crm.*' to concrete FQ tool names.
+
+    Literal FQ names pass through unchanged. Unknown families expand to empty.
+    """
+    result: list[str] = []
+    for pattern in tool_patterns:
+        result.extend(ToolRegistry.expand_wildcard(pattern))
+    return result
+
+
 def render_agent(spec: AgentSpec) -> dict[str, str]:
     """Return a map of workspace-relative path -> rendered file content (web surface)."""
     out: dict[str, str] = {}
@@ -69,7 +81,8 @@ def render_agent(spec: AgentSpec) -> dict[str, str]:
 
 def render_agent_package(spec: AgentSpec) -> dict[str, str]:
     """Return a map of workspace-relative path -> rendered runnable agent module."""
-    leaves = [t.rsplit(".", 1)[-1] for t in spec.tools]
+    expanded = expand_tools(spec.tools)
+    leaves = [t.rsplit(".", 1)[-1] for t in expanded]
     tmpl = _env.get_template("agent.py.j2")
     # Pinned model HARD-wins (ignores the global FORSCH_ADK_MODEL); unpinned agents
     # fall to the global env default. A bare model name gets the `openai/` proxy
@@ -83,10 +96,11 @@ def render_agent_package(spec: AgentSpec) -> dict[str, str]:
     content = tmpl.render(
         a=spec,
         tool_leaves=leaves,
+        expanded_tools=expanded,
         name_repr=repr(spec.adk_name),
         description_repr=repr(spec.description),
         instruction_repr=repr(spec.instruction.rstrip("\n")),
         model_expr=model_expr,
     )
-    rel = f"agents/{spec.id}/src/forsch/agent_{spec.id}/agent.py"
+    rel = f"agents/{spec.id}/src/forsch/agent_{spec.id.replace('-', '_')}/agent.py"
     return {rel: content}

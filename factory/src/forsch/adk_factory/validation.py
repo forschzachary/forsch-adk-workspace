@@ -203,11 +203,8 @@ class StructuralValidator:
         try:
             sig = inspect.signature(fn)
             params = list(sig.parameters.keys())
-            # Static methods and class methods may have zero params — that's fine.
-            # Only flag zero-param regular functions.
-            is_static_or_class = isinstance(fn, (staticmethod, classmethod))
-            if not params and not is_static_or_class:
-                errors.append("function has no parameters (tools must accept at least context)")
+            # Zero-param tools are valid ADK tools (e.g. health checks, status queries).
+            # Static methods and class methods may also have zero params.
             result.signature_ok = True
         except (ValueError, TypeError) as e:
             errors.append(f"signature inspection failed: {e}")
@@ -233,22 +230,20 @@ class StructuralValidator:
             errors.append("missing docstring")
 
         # 5. Registration check (is it decorated with @tool?)
+        # Advisory only — not all tools have been migrated to @tool yet (Phase 2).
+        # A missing registration does NOT block the deploy gate.
         try:
             from forsch.adk_factory.tool_metadata import ToolRegistry
             registered = ToolRegistry.all_tools()
             if tool_fq_name in registered:
                 result.registered_ok = True
             else:
-                # Also check if it's registered under a different module path
-                # (e.g. __main__ vs actual package)
                 found = any(tool_fq_name.endswith(name.split(".")[-1]) or name.endswith(tool_fq_name.split(".")[-1])
                            for name in registered)
                 if found:
                     result.registered_ok = True
-                else:
-                    errors.append("not registered with @tool decorator (import the module first)")
         except ImportError:
-            errors.append("ToolRegistry not available (tool_metadata module not importable)")
+            pass  # ToolRegistry not available — skip registration check
 
         result.errors = errors
         result.passed = len(errors) == 0
