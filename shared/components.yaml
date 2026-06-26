@@ -14,9 +14,6 @@ tools:
   - write_host_file
   - get_crm_health_snapshot
   - list_recent_crm_leads
-  - log_groceries
-  - get_grocery_log
-  - add_reminder
 
 models:
   - gpt-5.5

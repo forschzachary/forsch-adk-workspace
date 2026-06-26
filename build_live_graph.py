@@ -520,9 +520,11 @@ for aid, a in agents.items():
         link(nid, f"group:{g}", "wears")
 
     for t in a.get("tools", []) or []:
-        # Tools are already in shared layer — just link
-        if f"tool:{t}" in nodes:
-            link(nid, f"tool:{t}", "uses")
+        # Tool may be in shared layer OR cluster-specific (not shared)
+        tid = f"tool:{t}"
+        if tid not in nodes:
+            node(tid, t, "tool", shared=False)
+        link(nid, tid, "uses")
 
     for c in a.get("discord_channels", []) or []:
         node(f"chan:{c}", c, "intake")
@@ -595,6 +597,34 @@ if cap_file.exists():
 
 all_nodes = list(nodes.values()) + extra_nodes
 all_links = links + extra_links
+
+# ── Prune orphan shared tools (shared tools not linked to any cluster agent) ──
+
+# Find tools that have a direct link to/from an agent node
+agent_linked_tools = set()
+for l in all_links:
+    s = l["source"] if isinstance(l["source"], str) else l["source"].get("id", "")
+    t = l["target"] if isinstance(l["target"], str) else l["target"].get("id", "")
+    if s.startswith("agent:") and t.startswith("tool:"):
+        agent_linked_tools.add(t)
+    if t.startswith("agent:") and s.startswith("tool:"):
+        agent_linked_tools.add(s)
+
+# Remove shared tool nodes that no cluster agent uses
+# Also remove their non-agent links (tool -> cred/cap links become orphans)
+pruned_tool_ids = set()
+all_nodes = [n for n in all_nodes if not (
+    n.get("shared") and n.get("type") == "tool" and n["id"] not in agent_linked_tools
+) or (pruned_tool_ids.add(n["id"]) and False)]
+
+# Clean up links that referenced pruned tools
+all_links = [l for l in all_links
+    if (l["source"] if isinstance(l["source"], str) else l["source"].get("id","")) not in pruned_tool_ids
+    and (l["target"] if isinstance(l["target"], str) else l["target"].get("id","")) not in pruned_tool_ids
+]
+
+# Recount
+output_node_count = len(all_nodes)
 
 # ── Emit ──
 
