@@ -10,7 +10,14 @@
   #graph-wrap { width: 100vw; height: 100vh; position: relative; }
   #graph { width: 100%; height: 100%; }
   /* ── Band labels (screen-pinned) ── */
-  .band-label { display: none; } /* hidden — labels drawn on canvas */
+  .band-label {
+    display: none; position: absolute; left: 14px;
+    pointer-events: none; z-index: 5;
+    font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
+    text-transform: uppercase; color: rgba(140,160,180,0.5);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    white-space: nowrap;
+  }
   /* ── Tab bar ── */
   #tab-bar {
     position: fixed; top: 0; left: 0; right: 0; z-index: 15;
@@ -1041,15 +1048,26 @@ function initGraph(data) {
     .linkDirectionalParticleWidth(1.5)
     .linkDirectionalParticleColor(() => '#3fb950')
     .onRenderFramePre((ctx, scale) => {
+      const bandLabels = document.querySelectorAll('.band-label');
       if (currentLens !== 'padi') {
-        document.querySelectorAll('.band-label').forEach(el => el.style.display = 'none');
+        bandLabels.forEach(el => el.style.display = 'none');
         return;
       }
-      for (const b of BANDS) {
+      // Get canvas transform to map graph Y → screen Y
+      const t = ctx.getTransform();
+      const wrapRect = document.getElementById('graph-wrap').getBoundingClientRect();
+      for (let i = 0; i < BANDS.length; i++) {
+        const b = BANDS[i];
+        // Draw band background in graph coords (ctx already transformed)
         ctx.fillStyle = b.fill;
         ctx.fillRect(BAND_X0, b.cy - 64, BAND_X1 - BAND_X0, 128);
+        // Position label: graph Y → screen Y via transform matrix
+        if (bandLabels[i]) {
+          const screenY = t.d * b.cy + t.f;
+          bandLabels[i].style.display = 'block';
+          bandLabels[i].style.top = (screenY - 8) + 'px';
+        }
       }
-      document.querySelectorAll('.band-label').forEach(el => el.style.display = 'block');
       // Rail columns: simple world-coord backgrounds + headers
       try {
         const gNodes = fg.graphData().nodes;
@@ -1140,6 +1158,7 @@ function initGraph(data) {
     .dagMode('td')
     .dagLevelDistance(80)
     .cooldownTicks(100);
+  window.fg = fg; // expose for debugging
 }
 
 function renderLens() {
