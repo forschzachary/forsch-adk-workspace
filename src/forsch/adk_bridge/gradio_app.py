@@ -1,7 +1,7 @@
-"""Clean Gradio sidecar for ADK agents.
+"""Modular Gradio sidecar for ADK agents.
 
-Mounted at /chat by http.py. This is an operator surface: pick an agent, send a
-message, watch tool calls, keep the chrome quiet.
+Mounted at /chat by http.py. This is the golden-template chat surface: persistent
+agent chat, compact operator controls, theme/copy isolated in sidecar_config.py.
 """
 
 from __future__ import annotations
@@ -15,186 +15,88 @@ import gradio as gr
 
 from forsch.adk_bridge.run import stream_agent_structured
 from forsch.adk_bridge.runtime import get_runtime
+from forsch.adk_bridge.sidecar_config import BRAND, PROMPTS, build_css
 
-CSS = """
-:root {
-  --ff-bg: #f7f3ea;
-  --ff-panel: #fffdf7;
-  --ff-ink: #241f1a;
-  --ff-muted: #6d655d;
-  --ff-line: #ded6c8;
-  --ff-accent: #8a5f2d;
-  --ff-accent-soft: #efe2cf;
-  --ff-ok: #287a55;
-}
-.gradio-container {
-  max-width: none !important;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(138, 95, 45, 0.10), transparent 28rem),
-    var(--ff-bg) !important;
-  color: var(--ff-ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-#ff-sidecar {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 22px;
-}
-#ff-hero {
-  border: 1px solid var(--ff-line);
-  border-radius: 22px;
-  padding: 18px 20px;
-  background: rgba(255, 253, 247, 0.82);
-  box-shadow: 0 18px 60px rgba(36, 31, 26, 0.08);
-}
-#ff-hero h1 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 32px;
-  letter-spacing: -0.04em;
-}
-#ff-hero p {
-  margin: 6px 0 0;
-  color: var(--ff-muted);
-  font-size: 15px;
-}
-.ff-status-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-}
-.ff-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--ff-line);
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: #fffaf0;
-  color: var(--ff-muted);
-  font-size: 13px;
-  line-height: 16px;
-}
-.ff-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ff-ok);
-}
-#ff-workspace {
-  margin-top: 14px;
-  align-items: stretch;
-}
-#ff-rail, #ff-compose-card, #ff-chat-card {
-  border: 1px solid var(--ff-line);
-  border-radius: 20px;
-  background: rgba(255, 253, 247, 0.92);
-  box-shadow: 0 12px 38px rgba(36, 31, 26, 0.06);
-}
-#ff-rail {
-  padding: 14px;
-}
-#ff-rail .wrap {
-  gap: 12px;
-}
-#ff-compose-card {
-  padding: 14px;
-}
-#ff-chat-card {
-  padding: 8px 12px 12px;
-}
-.ff-section-title {
-  font-size: 12px;
-  line-height: 16px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ff-muted);
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.ff-note {
-  color: var(--ff-muted);
-  font-size: 13px;
-  line-height: 18px;
-}
-#ff-quick .secondary, #ff-quick button {
-  border-radius: 14px !important;
-  justify-content: flex-start !important;
-  min-height: 36px !important;
-}
-#ff-run-btn button, #ff-clear-btn button {
-  border-radius: 14px !important;
-  min-height: 40px !important;
-}
-#ff-run-btn button {
-  background: var(--ff-ink) !important;
-  color: white !important;
-  border-color: var(--ff-ink) !important;
-}
-#ff-chatbot {
-  border: 0 !important;
-  background: transparent !important;
-}
-#ff-chatbot .message {
-  border-radius: 16px !important;
-}
-#ff-chatbot .bot, #ff-chatbot .assistant {
-  background: #fffaf0 !important;
-}
-#ff-chatbot .user {
-  background: #efe2cf !important;
-}
-textarea, input, select {
-  border-radius: 14px !important;
-}
-#ff-prompt textarea {
-  min-height: 128px !important;
-  font-size: 15px !important;
-  line-height: 21px !important;
-}
-footer { display: none !important; }
-"""
 
-PROMPTS = {
-    "Health check": "Run your smallest useful health check. Tell me what passed, what failed, and the next safe move.",
-    "Explain this agent": "Explain what this agent is responsible for, what tools it has, and where the risky assumptions are.",
-    "Runbook": "Give me a short operator runbook for this agent: normal path, failure signals, and recovery steps.",
-    "Eval idea": "Propose three small eval cases for this agent. Keep them concrete and easy to automate.",
-}
-
+# ── Runtime helpers ──────────────────────────────────────────────────────────
 
 def _agent_choices() -> list[str]:
-    rt = get_runtime()
-    return sorted(rt.agents.keys())
+    return sorted(get_runtime().agents.keys())
 
 
 def _default_agent(choices: list[str]) -> str:
-    if "ops" in choices:
-        return "ops"
-    return choices[0] if choices else ""
+    return "ops" if "ops" in choices else (choices[0] if choices else "")
 
 
-def _runtime_summary(agent_name: str) -> str:
+def _new_session_id(agent_name: str) -> str:
+    safe_agent = (agent_name or "agent").replace(":", "-")
+    return f"gradio:{safe_agent}:{uuid.uuid4().hex}"
+
+
+def _normalize_session_id(agent_name: str, session_id: str | None) -> str:
+    return session_id if session_id and session_id.startswith("gradio:") else _new_session_id(agent_name)
+
+
+def _short_session(session_id: str | None) -> str:
+    return (session_id or "")[-8:] or "new"
+
+
+def _runtime_summary(agent_name: str, session_id: str | None = None) -> str:
     choices = _agent_choices()
     active = agent_name or _default_agent(choices)
     return (
         "<div class='ff-status-row'>"
         f"<span class='ff-chip'><span class='ff-dot'></span>{len(choices)} agents loaded</span>"
         f"<span class='ff-chip'>active: {active or 'none'}</span>"
-        "<span class='ff-chip'>surface: gradio sidecar</span>"
+        f"<span class='ff-chip'>session: {_short_session(session_id)}</span>"
+        f"<span class='ff-chip'>surface: {BRAND['surface']}</span>"
         "</div>"
     )
 
+
+def _status(agent_name: str, tools: list[dict[str, Any]], running: bool, session_id: str) -> str:
+    state = "running" if running else "ready"
+    pending = sum(1 for tool in tools if tool.get("status") == "pending")
+    done = sum(1 for tool in tools if tool.get("status") == "done")
+    return (
+        f"{state} · agent {agent_name} · session {_short_session(session_id)} "
+        f"· tools {done} done / {pending} pending"
+    )
+
+
+# ── State helpers ────────────────────────────────────────────────────────────
 
 def _apply_prompt(label: str) -> str:
     return PROMPTS.get(label, "")
 
 
 def _select_agent(agent_name: str):
-    return _runtime_summary(agent_name), [], "ready · new agent session", _new_session_id(agent_name)
+    session_id = _new_session_id(agent_name)
+    return (
+        _runtime_summary(agent_name, session_id),
+        [],
+        "ready · new agent session",
+        session_id,
+        "",
+        [],
+        _trace_text([]),
+    )
 
+
+def _clear_chat(agent_name: str):
+    session_id = _new_session_id(agent_name)
+    return [], "", "ready · new session", session_id, "", [], _trace_text([])
+
+
+def _new_chat(agent_name: str):
+    return _clear_chat(agent_name)
+
+
+def _reuse_last_prompt(last_prompt: str):
+    return last_prompt or ""
+
+
+# ── Chat execution ───────────────────────────────────────────────────────────
 
 async def _send_message(
     message: str,
@@ -202,22 +104,18 @@ async def _send_message(
     history: list[dict[str, Any]] | None,
     session_id: str,
 ):
-    """Stream one operator message through an ADK agent.
-
-    Returns OpenAI-style message dicts for Gradio Chatbot. Tool calls are exposed
-    as metadata so Gradio renders them as collapsible thought panels.
-    """
+    """Stream one operator message through an ADK agent."""
     history = list(history or [])
     text = (message or "").strip()
     if not text:
-        yield history, "", "Write a message first. Ambitious otherwise."
+        yield history, "", "Write a message first. Ambitious otherwise.", text, [], _trace_text([])
         return
 
     rt = get_runtime()
     agent = rt.agents.get(agent_name)
     if agent is None:
         history.append({"role": "assistant", "content": f"Agent '{agent_name}' is not loaded."})
-        yield history, message, "Agent unavailable."
+        yield history, message, "Agent unavailable.", text, [], _trace_text([])
         return
 
     session_id = _normalize_session_id(agent_name, session_id)
@@ -238,32 +136,30 @@ async def _send_message(
     ):
         if kind == "text":
             if not isinstance(data, str):
-                yield history, "", f"skipped malformed text event: {type(data).__name__}"
+                yield history, "", f"skipped malformed text event: {type(data).__name__}", text, tools, _trace_text(tools)
                 continue
             full_text += data
             assistant_msg["content"] = full_text
             if tools:
                 assistant_msg["metadata"] = _metadata(tools)
-            yield history, "", _status(agent_name, tools, running=True)
+            yield history, "", _status(agent_name, tools, True, session_id), text, tools, _trace_text(tools)
         elif kind == "tool_call":
             if not isinstance(data, dict):
-                yield history, "", f"skipped malformed tool call: {type(data).__name__}"
+                yield history, "", f"skipped malformed tool call: {type(data).__name__}", text, tools, _trace_text(tools)
                 continue
-            tools.append(
-                {
-                    "name": data.get("name", "tool"),
-                    "args": data.get("args", {}),
-                    "result": None,
-                    "status": "pending",
-                    "started": time.time(),
-                }
-            )
+            tools.append({
+                "name": data.get("name", "tool"),
+                "args": data.get("args", {}),
+                "result": None,
+                "status": "pending",
+                "started": time.time(),
+            })
             assistant_msg["content"] = full_text or "working..."
             assistant_msg["metadata"] = _metadata(tools)
-            yield history, "", _status(agent_name, tools, running=True)
+            yield history, "", _status(agent_name, tools, True, session_id), text, tools, _trace_text(tools)
         elif kind == "tool_result":
             if not isinstance(data, dict):
-                yield history, "", f"skipped malformed tool result: {type(data).__name__}"
+                yield history, "", f"skipped malformed tool result: {type(data).__name__}", text, tools, _trace_text(tools)
                 continue
             for tool in reversed(tools):
                 if tool["status"] == "pending":
@@ -273,34 +169,49 @@ async def _send_message(
                     break
             assistant_msg["content"] = full_text or "working..."
             assistant_msg["metadata"] = _metadata(tools)
-            yield history, "", _status(agent_name, tools, running=True)
+            yield history, "", _status(agent_name, tools, True, session_id), text, tools, _trace_text(tools)
 
     assistant_msg["content"] = full_text or "No visible response returned."
     if tools:
         assistant_msg["metadata"] = _metadata(tools)
-    yield history, "", _status(agent_name, tools, running=False)
+    yield history, "", _status(agent_name, tools, False, session_id), text, tools, _trace_text(tools)
 
+
+async def _regenerate_last(agent_name: str, history: list[dict[str, Any]] | None, session_id: str, last_prompt: str):
+    history = list(history or [])
+    if not last_prompt:
+        yield history, "", "nothing to regenerate", last_prompt, [], _trace_text([])
+        return
+    if history and history[-1].get("role") == "assistant":
+        history.pop()
+    async for update in _send_message(last_prompt, agent_name, history, session_id):
+        yield update
+
+
+# ── Rendering helpers ────────────────────────────────────────────────────────
 
 def _metadata(tools: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build Gradio metadata for the latest tool call.
-
-    Gradio shows one metadata block per message. Keep it compact: latest tool in
-    the title, full tool trace in the log.
-    """
     latest = tools[-1]
-    log_lines = []
-    for idx, tool in enumerate(tools, start=1):
-        log_lines.append(f"{idx}. {tool['name']}")
-        log_lines.append(f"   args: {_compact_json(tool.get('args'))}")
-        if tool.get("result") is not None:
-            log_lines.append(f"   result: {_compact_json(tool.get('result'))}")
     return {
         "title": f"tool: {latest['name']}",
         "id": latest["name"],
-        "log": "\n".join(log_lines),
+        "log": _trace_text(tools),
         "status": latest.get("status", "done"),
         "duration": latest.get("duration"),
     }
+
+
+def _trace_text(tools: list[dict[str, Any]]) -> str:
+    if not tools:
+        return "No tool calls yet."
+    lines: list[str] = []
+    for idx, tool in enumerate(tools, start=1):
+        duration = f" · {tool.get('duration'):.2f}s" if tool.get("duration") else ""
+        lines.append(f"{idx}. {tool['name']} [{tool.get('status', 'done')}]{duration}")
+        lines.append(f"   args: {_compact_json(tool.get('args'))}")
+        if tool.get("result") is not None:
+            lines.append(f"   result: {_compact_json(tool.get('result'))}")
+    return "\n".join(lines)
 
 
 def _compact_json(value: Any) -> str:
@@ -311,27 +222,7 @@ def _compact_json(value: Any) -> str:
     return rendered if len(rendered) <= 700 else rendered[:700] + "..."
 
 
-def _status(agent_name: str, tools: list[dict[str, Any]], running: bool) -> str:
-    state = "running" if running else "ready"
-    pending = sum(1 for tool in tools if tool.get("status") == "pending")
-    done = sum(1 for tool in tools if tool.get("status") == "done")
-    return f"{state} · agent {agent_name} · persistent chat · tools {done} done / {pending} pending"
-
-
-def _new_session_id(agent_name: str) -> str:
-    safe_agent = (agent_name or "agent").replace(":", "-")
-    return f"gradio:{safe_agent}:{uuid.uuid4().hex}"
-
-
-def _normalize_session_id(agent_name: str, session_id: str | None) -> str:
-    if session_id and session_id.startswith("gradio:"):
-        return session_id
-    return _new_session_id(agent_name)
-
-
-def _clear_chat(agent_name: str):
-    return [], "", "ready · new session", _new_session_id(agent_name)
-
+# ── UI assembly ──────────────────────────────────────────────────────────────
 
 def build_gradio_app() -> gr.Blocks:
     """Create the Gradio Blocks app for the ADK sidecar."""
@@ -339,78 +230,68 @@ def build_gradio_app() -> gr.Blocks:
     default_agent = _default_agent(choices)
     initial_session_id = _new_session_id(default_agent)
 
-    with gr.Blocks(title="ADK Sidecar", elem_id="ff-sidecar") as demo:
-        # Gradio 6 moved Blocks(css=...) to launch(); this app is mounted, not
-        # launched, so inject the stylesheet directly.
-        gr.HTML(f"<style>{CSS}</style>", visible=False)
+    with gr.Blocks(title=BRAND["title"], elem_id="ff-sidecar") as demo:
+        gr.HTML(f"<style>{build_css()}</style>", visible=False)
+
         with gr.Column(elem_id="ff-hero"):
-            gr.Markdown("# ADK Sidecar")
-            gr.Markdown("Focused operator chat for the agent graph. Pick an agent, run a task, inspect the tool trace.")
-            runtime_html = gr.HTML(_runtime_summary(default_agent))
+            gr.Markdown(f"# {BRAND['title']}")
+            gr.Markdown(BRAND["subtitle"])
+            runtime_html = gr.HTML(_runtime_summary(default_agent, initial_session_id))
 
         session_state = gr.State(initial_session_id)
+        last_prompt_state = gr.State("")
+        trace_state = gr.State([])
 
         with gr.Row(elem_id="ff-workspace"):
             with gr.Column(scale=1, min_width=260, elem_id="ff-rail"):
                 gr.Markdown("<div class='ff-section-title'>Agent</div>")
-                agent_dd = gr.Dropdown(
-                    choices=choices,
-                    value=default_agent,
-                    label="",
-                    interactive=True,
-                    container=False,
-                )
-                gr.Markdown(
-                    "<div class='ff-note'>Use this as the fast interaction layer. Durable config stays in the graph/control plane.</div>"
-                )
+                agent_dd = gr.Dropdown(choices=choices, value=default_agent, label="", interactive=True, container=False)
+                gr.Markdown(f"<div class='ff-note'>{BRAND['agent_note']}</div>")
                 gr.Markdown("<div class='ff-section-title'>Quick prompts</div>")
-                quick = gr.Radio(
-                    choices=list(PROMPTS.keys()),
-                    label="",
-                    container=False,
-                    elem_id="ff-quick",
-                )
-                status = gr.Textbox(
-                    value="ready",
-                    label="Status",
-                    interactive=False,
-                    lines=2,
-                )
+                quick = gr.Radio(choices=list(PROMPTS.keys()), label="", container=False, elem_id="ff-quick")
+                status = gr.Textbox(value="ready", label="Status", interactive=False, lines=2)
+                with gr.Row():
+                    new_chat = gr.Button("New session")
+                    reuse = gr.Button("Reuse last")
 
             with gr.Column(scale=3):
                 with gr.Column(elem_id="ff-chat-card"):
-                    chatbot = gr.Chatbot(
-                        label="Conversation",
-                        height=520,
-                        elem_id="ff-chatbot",
-                    )
+                    chatbot = gr.Chatbot(label="Conversation", height=520, elem_id="ff-chatbot")
                 with gr.Column(elem_id="ff-compose-card"):
-                    prompt = gr.Textbox(
-                        label="Message",
-                        placeholder="Ask the selected agent to run a focused check, explain itself, or draft an eval...",
-                        lines=5,
-                        elem_id="ff-prompt",
-                    )
+                    prompt = gr.Textbox(label="Message", placeholder=BRAND["prompt_placeholder"], lines=5, elem_id="ff-prompt")
                     with gr.Row():
                         send = gr.Button("Run", variant="primary", elem_id="ff-run-btn")
+                        stop = gr.Button("Stop", elem_id="ff-stop-btn")
+                        regen = gr.Button("Regenerate")
                         clear = gr.Button("Clear", elem_id="ff-clear-btn")
+                with gr.Accordion("Tool trace", open=False, elem_id="ff-trace-card"):
+                    trace_box = gr.Textbox(value=_trace_text([]), label="Latest run", interactive=False, lines=9, elem_id="ff-tool-trace")
+
+        run_event = send.click(
+            _send_message,
+            inputs=[prompt, agent_dd, chatbot, session_state],
+            outputs=[chatbot, prompt, status, last_prompt_state, trace_state, trace_box],
+        )
+        submit_event = prompt.submit(
+            _send_message,
+            inputs=[prompt, agent_dd, chatbot, session_state],
+            outputs=[chatbot, prompt, status, last_prompt_state, trace_state, trace_box],
+        )
+        regen_event = regen.click(
+            _regenerate_last,
+            inputs=[agent_dd, chatbot, session_state, last_prompt_state],
+            outputs=[chatbot, prompt, status, last_prompt_state, trace_state, trace_box],
+        )
 
         quick.change(_apply_prompt, inputs=quick, outputs=prompt)
         agent_dd.change(
             _select_agent,
             inputs=agent_dd,
-            outputs=[runtime_html, chatbot, status, session_state],
+            outputs=[runtime_html, chatbot, status, session_state, last_prompt_state, trace_state, trace_box],
         )
-        send.click(
-            _send_message,
-            inputs=[prompt, agent_dd, chatbot, session_state],
-            outputs=[chatbot, prompt, status],
-        )
-        prompt.submit(
-            _send_message,
-            inputs=[prompt, agent_dd, chatbot, session_state],
-            outputs=[chatbot, prompt, status],
-        )
-        clear.click(_clear_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state])
+        new_chat.click(_new_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state, last_prompt_state, trace_state, trace_box])
+        reuse.click(_reuse_last_prompt, inputs=last_prompt_state, outputs=prompt)
+        clear.click(_clear_chat, inputs=agent_dd, outputs=[chatbot, prompt, status, session_state, last_prompt_state, trace_state, trace_box])
+        stop.click(None, cancels=[run_event, submit_event, regen_event])
 
     return demo
