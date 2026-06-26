@@ -1783,7 +1783,6 @@ function initGraph(data) {
       // zoom and pan with the live graph instead of fighting the camera.
       try {
         drawPadiLaneSheet(ctx, scale);
-        drawLiveParticles(ctx, scale);
         const gNodes = fg.graphData().nodes;
         if (showDepRail) {
           const dn = gNodes.filter(n => n.rail === 'dependency');
@@ -1821,7 +1820,8 @@ function initGraph(data) {
         }
       } catch(e) { /* rail rendering is non-critical */ }
     })
-    .onRenderFramePost(() => {
+    .onRenderFramePost((ctx, scale) => {
+      drawLiveParticles(ctx, scale);
       positionSwimlaneControls();
     })
     .onZoom(() => {
