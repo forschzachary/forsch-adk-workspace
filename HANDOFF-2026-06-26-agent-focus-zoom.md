@@ -3,7 +3,7 @@
 **Date:** 2026-06-26
 **Author:** Hubert
 **Branch:** `main` (3 commits ahead of origin)
-**Repo:** `/opt/data/workspace/adk/spikes/live-agent-graph/`
+**Repo:** `/opt/data/workspace/adk/live-agent-graph/`
 
 ---
 

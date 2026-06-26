@@ -1,7 +1,7 @@
-# Spike: Live Agent Graph — force-graph control surface for the ADK bridge
+# Live Agent Graph — force-graph control surface for the ADK bridge
 
 **Status:** D1 ✅ D2 ✅ D3 ✅ | D4 ✅ D5 ✅  
-**Spike ID:** live-agent-graph  
+**Project ID:** live-agent-graph  
 **Started:** 2026-06-23  
 **Repo:** https://github.com/forschzachary/live-agent-graph (private)
 
