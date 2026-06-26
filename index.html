@@ -612,7 +612,13 @@ function loadGraph(clusterName) {
     .then(([data, caps]) => {
       const have = new Set(data.nodes.map(n => n.id));
       (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
-      (caps.links || []).forEach(l => data.links.push(l));
+      // Only add capability links whose both endpoints exist in the node set
+      // (builder may have pruned tools not used by this cluster's agents)
+      (caps.links || []).forEach(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        if (have.has(s) && have.has(t)) data.links.push(l);
+      });
       const hosted = data.nodes.find(n => n.id === 'ui:bridge');
       if (hosted) hosted.name = 'Hosted Chat';
       collapseIntake(data);
