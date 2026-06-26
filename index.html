@@ -1219,8 +1219,7 @@ document.getElementById('spawn-btn').addEventListener('click', () => {
 // ── Refresh ──
 document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
 
-// ── Chat toggle ──
-document.getElementById('chat-toggle').addEventListener('click', toggleSidecar);
+// ── Chat toggle ── (wired after toggleSidecar is defined, see sidecar widget section)
 
 // ── Pulse (live traffic particles) ──
 let pulseInterval;
@@ -1677,6 +1676,7 @@ function toggleSidecar() {
     openSidecar(sidecarAgentId || '', 'hubert');
   }
 }
+document.getElementById('chat-toggle').addEventListener('click', toggleSidecar);
 
 // Hubert chat tab
 function renderHubertMessages() {
