@@ -624,6 +624,10 @@ def _enrich_manifest(cluster_name: str, manifest: dict) -> dict:
                     if not any(l["source"] == n["id"] and l["target"] == cid for l in links):
                         links.append({"source": n["id"], "target": cid, "kind": "runs-in"})
 
+    # Prune links that reference missing nodes
+    node_ids = {n["id"] for n in nodes}
+    links = [l for l in links if l.get("source") in node_ids and l.get("target") in node_ids]
+
     rail_nodes = {
         "dependency": [n["id"] for n in nodes if n.get("rail") == "dependency"],
         "infrastructure": [n["id"] for n in nodes if n.get("rail") == "infrastructure"],

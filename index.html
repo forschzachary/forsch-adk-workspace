@@ -10,13 +10,7 @@
   #graph-wrap { width: 100vw; height: 100vh; position: relative; }
   #graph { width: 100%; height: 100%; }
   /* ── Band labels (screen-pinned) ── */
-  .band-label {
-    position: absolute; left: 12px; z-index: 5;
-    font-size: 15px; font-weight: 700; letter-spacing: 0.08em;
-    color: rgba(210,215,225,0.9); pointer-events: none;
-    text-transform: uppercase; white-space: nowrap;
-    display: none;
-  }
+  .band-label { display: none; } /* hidden — labels drawn on canvas */
   /* ── Tab bar ── */
   #tab-bar {
     position: fixed; top: 0; left: 0; right: 0; z-index: 15;
@@ -292,10 +286,10 @@
 </div>
 <div id="graph-wrap">
   <div id="graph"></div>
-  <div class="band-label" data-band-cy="-240">Interfaces</div>
-  <div class="band-label" data-band-cy="-80">Router</div>
-  <div class="band-label" data-band-cy="80">Agent · Logic</div>
-  <div class="band-label" data-band-cy="240">Tools · Data</div>
+  <div class="band-label">Interfaces</div>
+  <div class="band-label">Router</div>
+  <div class="band-label">Agent · Logic</div>
+  <div class="band-label">Tools · Data</div>
 </div>
 <div id="panel">
   <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
@@ -445,7 +439,7 @@ function computeNodeMetrics(data) {
 let nodeMetrics = { cc: {}, gc: {} };
 
 function nodeRadius(node) {
-  if (node.rail) return 3; // Rail nodes are small
+  if (node.rail) return 5; // Rail nodes are medium dots
   const count = nodeMetrics.cc[node.id] || 0;
   return Math.max(4, Math.min(16, 4 + count * 1.3));
 }
@@ -853,14 +847,21 @@ function applyLayout(vd) {
   // Pin rail nodes in a column on the left edge
   const depNodes = vd.nodes.filter(n => n.rail === 'dependency');
   const infraNodes = vd.nodes.filter(n => n.rail === 'infrastructure');
-  const railOffset = 80; // vertical spacing between rail nodes
+  const railOffset = 90;
+  // Infra sort order: top-down logical stack
+  const infraOrder = ['tunnel','network','service','container','host'];
+  infraNodes.sort((a, b) => {
+    const ai = infraOrder.indexOf(a.type), bi = infraOrder.indexOf(b.type);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  const railMidpoint = 0; // centered vertically on graph
   depNodes.forEach((n, i) => {
-    n.fx = -RAIL_X;
-    n.fy = (i - (depNodes.length - 1) / 2) * railOffset;
+    n.fx = -400;
+    n.fy = railMidpoint + (i - (depNodes.length - 1) / 2) * railOffset;
   });
   infraNodes.forEach((n, i) => {
-    n.fx = -RAIL_X - 100;
-    n.fy = (i - (infraNodes.length - 1) / 2) * railOffset;
+    n.fx = -540;
+    n.fy = railMidpoint + (i - (infraNodes.length - 1) / 2) * railOffset;
   });
 
   if (currentLens === 'padi') {
@@ -1007,14 +1008,24 @@ function initGraph(data) {
         }
       }
 
-      // ── Label below circle ──
+      // ── Label ──
       const label = node.name;
-      const fontSize = Math.max(9, 11 / globalScale);
+      const fontSize = node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale);
       ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
-      ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
+      if (node.rail) {
+        // Rail nodes: label to the right, vertically centered
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = color + hexAlpha(0.9);
+        ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
+        ctx.restore();
+      } else {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
+        ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
+      }
     })
     .linkColor(l => {
       if (l.kind === 'depends-on') return 'rgba(165,214,255,0.4)'; // dependency rail
@@ -1038,36 +1049,45 @@ function initGraph(data) {
         ctx.fillStyle = b.fill;
         ctx.fillRect(BAND_X0, b.cy - 64, BAND_X1 - BAND_X0, 128);
       }
-      // Position HTML band labels using camera transform (clamp to viewport)
-      const t = ctx.getTransform();
-      const viewH = document.getElementById('graph').clientHeight;
-      document.querySelectorAll('.band-label').forEach(el => {
-        const worldY = parseFloat(el.dataset.bandCy);
-        const screenY = worldY * t.d + t.f;
-        if (screenY < -20 || screenY > viewH + 20) {
-          el.style.display = 'none';
-        } else {
-          el.style.display = 'block';
-          el.style.top = (screenY - 8) + 'px';
+      document.querySelectorAll('.band-label').forEach(el => el.style.display = 'block');
+      // Rail columns: simple world-coord backgrounds + headers
+      try {
+        const gNodes = fg.graphData().nodes;
+        if (showDepRail) {
+          const dn = gNodes.filter(n => n.rail === 'dependency');
+          if (dn.length) {
+            const cx = dn.reduce((s,n) => s + n.x, 0) / dn.length;
+            const cy = dn.reduce((s,n) => s + n.y, 0) / dn.length;
+            const hw = 100, hh = dn.length * 50;
+            ctx.fillStyle = 'rgba(86,212,221,0.04)';
+            ctx.fillRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.strokeStyle = 'rgba(86,212,221,0.1)';
+            ctx.lineWidth = 1 / scale;
+            ctx.strokeRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.fillStyle = 'rgba(86,212,225,0.7)';
+            ctx.font = `bold ${11 / scale}px -apple-system, sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText('DEPENDENCIES', cx, cy - hh - 6 / scale);
+          }
         }
-      });
-      // Rail labels stay in world coords (they sit on the rail columns)
-      if (showDepRail) {
-        ctx.fillStyle = 'rgba(86,212,221,0.06)';
-        ctx.fillRect(-RAIL_X - 46, -360, 92, 720);
-        ctx.fillStyle = 'rgba(86,212,221,0.75)';
-        ctx.font = `${12 / scale}px -apple-system, sans-serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('DEPENDENCIES', -RAIL_X, -384);
-      }
-      if (showInfraRail) {
-        ctx.fillStyle = 'rgba(200,160,255,0.06)';
-        ctx.fillRect(-RAIL_X - 46, -360, 92, 720);
-        ctx.fillStyle = 'rgba(200,160,255,0.75)';
-        ctx.font = `${12 / scale}px -apple-system, sans-serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('INFRASTRUCTURE', -RAIL_X, -384);
-      }
+        if (showInfraRail) {
+          const ig = gNodes.filter(n => n.rail === 'infrastructure');
+          if (ig.length) {
+            const cx = ig.reduce((s,n) => s + n.x, 0) / ig.length;
+            const cy = ig.reduce((s,n) => s + n.y, 0) / ig.length;
+            const hw = 120, hh = ig.length * 55;
+            ctx.fillStyle = 'rgba(200,160,255,0.04)';
+            ctx.fillRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.strokeStyle = 'rgba(200,160,255,0.1)';
+            ctx.lineWidth = 1 / scale;
+            ctx.strokeRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.fillStyle = 'rgba(200,160,255,0.7)';
+            ctx.font = `bold ${11 / scale}px -apple-system, sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText('INFRASTRUCTURE', cx, cy - hh - 6 / scale);
+          }
+        }
+      } catch(e) { /* rail rendering is non-critical */ }
     })
     .onNodeClick(node => {
       // Wire mode: handle wire target click
