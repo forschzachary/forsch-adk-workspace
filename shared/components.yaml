@@ -1,19 +1,31 @@
 # Shared Components — tools, models, and infrastructure common to all clusters
 #
-# These are borrowed by every cluster. The per-cluster builder flags them
-# as shared:true so the UI can render them faded (visually distinct from
-# cluster-specific nodes). Toggle "Show shared" to reveal/hide them.
+# Tools are organized into families. Each cluster picks which families to
+# include via `config.tool_families` in its cluster.yaml, and can exclude
+# individual tools via `config.exclude_tools`.
+#
+# A tool that an agent uses but is NOT in any requested family still appears
+# as a non-shared (cluster-specific) node. The builder always wires agent tools.
 
-tools:
-  - get_workspace_inventory
-  - get_git_state
-  - validate_agent_imports
-  - check_service_health
-  - execute_bash_command
-  - read_host_file
-  - write_host_file
-  - get_crm_health_snapshot
-  - list_recent_crm_leads
+tool_families:
+  terminal:
+    - get_workspace_inventory
+    - get_git_state
+    - validate_agent_imports
+    - check_service_health
+    - execute_bash_command
+    - read_host_file
+    - write_host_file
+  crm:
+    - get_crm_health_snapshot
+    - list_recent_crm_leads
+  household:
+    - log_groceries
+    - get_grocery_log
+    - add_reminder
+
+# Legacy flat list (deprecated — kept for backward compat, builder prefers tool_families)
+tools: []
 
 models:
   - gpt-5.5

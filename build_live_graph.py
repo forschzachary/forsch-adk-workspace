@@ -284,16 +284,44 @@ if args.cluster:
     agents = {aid: registry[aid] for aid in member_ids if aid in registry}
 
     # Shared tool/model/connection lists
-    SHARED_TOOLS = set(shared.get("tools", []))
+    # New: tool_families (grouped) replaces flat tools list
+    TOOL_FAMILIES = shared.get("tool_families", {})
+    # Build flat tool->family lookup for family tagging
+    TOOL_FAMILY_MAP = {}
+    for family, tool_list in TOOL_FAMILIES.items():
+        for tname in tool_list:
+            TOOL_FAMILY_MAP[tname] = family
+    # Legacy fallback: flat tools list if no families defined
+    if not TOOL_FAMILY_MAP and shared.get("tools"):
+        for tname in shared.get("tools", []):
+            TOOL_FAMILY_MAP[tname] = "shared"
+    SHARED_TOOLS = set(TOOL_FAMILY_MAP.keys())
     SHARED_MODELS = set(shared.get("models", []))
     CONNECTIONS = shared.get("connections", {})
     TOOL_CONN = shared.get("tool_connections", {})
+
+    # Cluster-level tool family selection + excludes
+    cluster_families = cluster_config.get("tool_families", [])
+    cluster_excludes = set(cluster_config.get("exclude_tools", []))
+
+    # Resolve which shared tools this cluster gets:
+    # - If tool_families is specified, only include tools from those families
+    # - If not specified, include all shared tools (backward compat)
+    if cluster_families:
+        ALLOWED_TOOLS = set()
+        for family in cluster_families:
+            ALLOWED_TOOLS.update(TOOL_FAMILIES.get(family, []))
+        ALLOWED_TOOLS -= cluster_excludes
+    else:
+        ALLOWED_TOOLS = SHARED_TOOLS - cluster_excludes
 else:
     # Legacy mode: read from ADK workspace
     agents_yaml = ADK_WS / "agent_specs" / "agents.yaml"
     agents = (yaml.safe_load(agents_yaml.read_text()) or {}).get("agents", {}) if agents_yaml.exists() else {}
     SHARED_TOOLS = set()
     SHARED_MODELS = set()
+    TOOL_FAMILY_MAP = {}
+    ALLOWED_TOOLS = set()
     CONNECTIONS = {
         "github": "GitHub (OAuth)",
         "resend": "Resend (email)",
@@ -490,10 +518,11 @@ def node(nid, name, kind, shared=False, **kw):
 def link(s, t, kind):
     links.append({"source": s, "target": t, "kind": kind})
 
-# ── Shared layer: tools, models, connections (flagged shared:true) ──
+# ── Shared layer: tools (from allowed families), models, connections ──
 
-for tname in SHARED_TOOLS:
-    node(f"tool:{tname}", tname, "tool", shared=True)
+for tname in ALLOWED_TOOLS:
+    family = TOOL_FAMILY_MAP.get(tname, "shared")
+    node(f"tool:{tname}", tname, "tool", shared=True, family=family)
 for mname in SHARED_MODELS:
     node(f"model:{mname}", mname, "logic", shared=True)
 
@@ -520,10 +549,11 @@ for aid, a in agents.items():
         link(nid, f"group:{g}", "wears")
 
     for t in a.get("tools", []) or []:
-        # Tool may be in shared layer OR cluster-specific (not shared)
+        # Tool may be in shared layer (already created) or cluster-specific
         tid = f"tool:{t}"
         if tid not in nodes:
-            node(tid, t, "tool", shared=False)
+            family = TOOL_FAMILY_MAP.get(t, "agent-specific")
+            node(tid, t, "tool", shared=False, family=family)
         link(nid, tid, "uses")
 
     for c in a.get("discord_channels", []) or []:
@@ -617,10 +647,18 @@ all_nodes = [n for n in all_nodes if not (
     n.get("shared") and n.get("type") == "tool" and n["id"] not in agent_linked_tools
 ) or (pruned_tool_ids.add(n["id"]) and False)]
 
-# Clean up links that referenced pruned tools
+# Clean up links that referenced pruned tools (including capability links)
 all_links = [l for l in all_links
     if (l["source"] if isinstance(l["source"], str) else l["source"].get("id","")) not in pruned_tool_ids
     and (l["target"] if isinstance(l["target"], str) else l["target"].get("id","")) not in pruned_tool_ids
+]
+
+# Also remove links that reference tool nodes that don't exist at all
+# (e.g. capability links to tools not in this cluster's families)
+existing_node_ids = {n["id"] for n in all_nodes}
+all_links = [l for l in all_links
+    if (l["source"] if isinstance(l["source"], str) else l["source"].get("id","")) in existing_node_ids
+    and (l["target"] if isinstance(l["target"], str) else l["target"].get("id","")) in existing_node_ids
 ]
 
 # Recount
