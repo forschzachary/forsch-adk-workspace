@@ -171,6 +171,38 @@
   }
   #wire-status.active { display: block; }
   #wire-status .cancel { margin-left: 8px; background: none; border: none; color: #fff; text-decoration: underline; cursor: pointer; }
+  /* ── View crumb ── */
+  .view-crumb {
+    position: absolute; top: 48px; left: 16px; z-index: 5;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border: 1px solid rgba(139,148,158,0.25);
+    border-radius: 8px; background: rgba(13,17,23,0.82);
+    color: #8b949e; font-size: 12px;
+  }
+  .view-crumb button {
+    border: 1px solid #30363d; border-radius: 6px;
+    background: #161b22; color: #c9d1d9; cursor: pointer;
+    padding: 3px 8px; font-size: 11px;
+  }
+  .view-crumb button:hover { border-color: #58a6ff; }
+  /* ── Focus workbench ── */
+  .focus-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .focus-tab, .small-action {
+    border: 1px solid #30363d; border-radius: 6px;
+    background: #161b22; color: #c9d1d9;
+    padding: 5px 8px; cursor: pointer; font-size: 11px;
+  }
+  .focus-tab:hover { border-color: #58a6ff; }
+  .focus-tab.active { border-color: #58a6ff; color: #58a6ff; }
+  .small-action.danger-light { border-color: rgba(248,81,73,0.45); }
+  .small-action:hover { border-color: #58a6ff; }
+  .json-block { white-space: pre-wrap; max-height: 220px; overflow: auto; font-size: 11px; background: #0d1117; padding: 6px 8px; border-radius: 4px; border: 1px solid #30363d; }
+  .tool-check { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 11px; }
+  .tool-check input { width: auto; }
+  .eval-status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+  .eval-status.pass { background: #1a3a1a; border: 1px solid #3fb950; color: #3fb950; }
+  .eval-status.fail { background: #3a1a1a; border: 1px solid #ff7b72; color: #ff7b72; }
+  .eval-status.unknown { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
 </style>
 </head>
 <body>
@@ -262,6 +294,10 @@
   </div>
 </div>
 <div id="wire-status">Select target node... <button class="cancel" id="wire-cancel">Cancel</button></div>
+<div id="view-crumb" class="view-crumb">
+  <span id="view-crumb-text">Project view</span>
+  <button id="back-project-btn" style="display:none">← Back to project</button>
+</div>
 
 <script src="https://unpkg.com/force-graph@1.43.5/dist/force-graph.min.js"></script>
 <script>
@@ -402,6 +438,15 @@ function csrfHeaders() {
 let graphData, currentLens = 'padi', lineageRoot = null, showDeps = false, showShared = true;
 let currentCluster = null;
 let clusters = [];
+// ── Focus mode state ──
+let viewMode = 'project'; // 'project' | 'agent'
+let focusedAgentId = null;
+let focusedAgentConfig = null;
+let focusedAgentTools = [];
+let focusedAgentModels = [];
+let focusedAgentVerify = null;
+let focusedAgentEvalsets = [];
+let focusedAgentEval = null;
 const info = document.getElementById('info');
 const tooltip = document.getElementById('tooltip');
 const spawnMsg = document.getElementById('spawn-msg');
@@ -422,15 +467,60 @@ function loadClusters() {
     .catch(err => { info.textContent = 'Failed to load clusters — ' + err.message; });
 }
 
-function rende
+function renderTabs() {
+  const bar = document.getElementById('tab-bar');
+  // Clear existing tabs (keep the + button)
+  bar.querySelectorAll('.tab').forEach(t => t.remove());
+  clusters.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (c.name === currentCluster ? ' active' : '');
+    btn.dataset.cluster = c.name;
+    const pct = c.handoff_pct ? `<span class="pct">${c.handoff_pct}%</span>` : '';
+    btn.innerHTML = `${c.name}${pct}`;
+    btn.title = c.goal || c.name;
+    btn.addEventListener('click', () => selectCluster(c.name));
+    bar.insertBefore(btn, document.getElementById('new-tab-btn'));
+  });
+}
 
-... [OUTPUT TRUNCATED - 1925 chars omitted out of 51925 total] ...
+function selectCluster(name) {
+  currentCluster = name;
+  renderTabs();
+  // Update panel indicator
+  const ci = document.getElementById('cluster-indicator');
+  const c = clusters.find(x => x.name === name);
+  const pct = c && c.handoff_pct ? ` · ${c.handoff_pct}%` : '';
+  ci.textContent = c ? `📋 ${c.name}${pct}` : '— no cluster —';
+  ci.style.color = c ? '#58a6ff' : '#8b949e';
+  loadGraph(name);
+  writeHashState();
+}
 
- = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
+function loadGraph(clusterName) {
+  info.textContent = 'Loading…';
+  const url = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
+  Promise.all([
+    fetch(url).then(r => r.json()),
+    fetch('capabilities.json').then(r => r.json()).catch(() => ({ nodes: [], links: [] })),
+  ])
+    .then(([data, caps]) => {
+      const have = new Set(data.nodes.map(n => n.id));
+      (caps.nodes || []).forEach(n => { if (!have.has(n.id)) { data.nodes.push(n); have.add(n.id); } });
+      (caps.links || []).forEach(l => data.links.push(l));
+      const hosted = data.nodes.find(n => n.id === 'ui:bridge');
+      if (hosted) hosted.name = 'Hosted Chat';
+      collapseIntake(data);
+      graphData = data;
+      nodeMetrics = computeNodeMetrics(data);
+      const clusterTag = data.cluster ? ` · ${data.cluster}` : '';
+      info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
       if (!fg) initGraph(graphData);
       renderLens();
     })
     .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
+}
+
+// ── Lens logic ──
 }
 
 // ── Lens logic ──
@@ -442,7 +532,93 @@ function applyLens(lens) {
   renderLens();
 }
 
+// ── Focus mode: enter/exit ──
+function enterAgentFocus(agentId) {
+  if (!agentId || !agentId.startsWith('agent:')) return;
+  viewMode = 'agent';
+  focusedAgentId = agentId;
+  lineageRoot = null;
+  currentLens = 'padi';
+  updateViewCrumb();
+  renderLens();
+  openAgentWorkbench(agentId);
+  // Zoom to the agent node
+  const n = getNodeById(agentId);
+  if (n && Number.isFinite(n.x) && Number.isFinite(n.y)) {
+    fg.centerAt(n.x, n.y, 650);
+    fg.zoom(2.2, 650);
+  }
+  loadFocusedAgentData(agentId);
+  writeHashState();
+}
+
+function exitAgentFocus() {
+  viewMode = 'project';
+  focusedAgentId = null;
+  focusedAgentConfig = null;
+  focusedAgentVerify = null;
+  focusedAgentEval = null;
+  focusedAgentEvalsets = [];
+  // Clear focus-only pins so they don't leak into project view
+  if (graphData) {
+    graphData.nodes.forEach(n => {
+      if (!n.synthetic) { n.fx = undefined; n.fy = undefined; }
+    });
+  }
+  updateViewCrumb();
+  renderLens();
+  document.getElementById('inspect').classList.remove('open');
+  fg.zoomToFit(650, 80);
+  writeHashState();
+}
+
+// ── Focus mode graph projection ──
+function buildFocusDevNodes(agent) {
+  const base = agent.id;
+  const clean = cleanAgentId(base);
+  const evalState = focusedAgentEval?.ok ? 'built' : (focusedAgentEval?.error ? 'error' : 'blank');
+  const verifyState = focusedAgentVerify?.ok ? 'built' : (focusedAgentVerify?.error ? 'error' : 'blank');
+  return [
+    { id: focusNodeId(base, 'config'), name: 'Config', type: 'ui', state: agent.state || 'blank', synthetic: true, focusChild: true, artifact: `agent-config:${clean}` },
+    { id: focusNodeId(base, 'tools'), name: 'Tools', type: 'tool', state: 'built', synthetic: true, focusChild: true, artifact: `agent-tools:${clean}` },
+    { id: focusNodeId(base, 'evals'), name: 'Evals', type: 'capability', state: evalState, synthetic: true, focusChild: true, artifact: `agent-evals:${clean}` },
+    { id: focusNodeId(base, 'runtime'), name: 'Runtime', type: 'capability', state: agent.state || 'blank', synthetic: true, focusChild: true, artifact: `agent-runtime:${clean}` },
+    { id: focusNodeId(base, 'chat'), name: 'Chat', type: 'ui', state: 'built', synthetic: true, focusChild: true, artifact: `agent-chat:${clean}` },
+    { id: focusNodeId(base, 'generate'), name: 'Generate', type: 'capability', state: 'built', synthetic: true, focusChild: true, artifact: `agent-generate:${clean}` },
+    { id: focusNodeId(base, 'verify'), name: 'Verify', type: 'capability', state: verifyState, synthetic: true, focusChild: true, artifact: `agent-verify:${clean}` },
+  ];
+}
+
+function buildAgentFocusData() {
+  const agent = getNodeById(focusedAgentId);
+  if (!agent) return { nodes: [], links: [] };
+
+  // Find the agent's direct neighbors from the full manifest
+  const ids = new Set([focusedAgentId]);
+  for (const l of graphData.links || []) {
+    const source = lid(l.source);
+    const target = lid(l.target);
+    if (source === focusedAgentId) ids.add(target);
+    if (target === focusedAgentId) ids.add(source);
+  }
+
+  const baseNodes = graphData.nodes.filter(n => ids.has(n.id));
+  const baseLinks = graphData.links.filter(l => ids.has(lid(l.source)) && ids.has(lid(l.target)));
+  const devNodes = buildFocusDevNodes(agent);
+  const devLinks = devNodes.map(n => ({ source: focusedAgentId, target: n.id, kind: 'focus' }));
+
+  return {
+    nodes: [...baseNodes, ...devNodes],
+    links: [...baseLinks, ...devLinks],
+  };
+}
+
 function getVisibleData() {
+  // ── Focus mode: agent-specific subgraph ──
+  if (viewMode === 'agent' && focusedAgentId) {
+    return buildAgentFocusData();
+  }
+
   let base;
   if (currentLens === 'all' || currentLens === 'padi' || currentLens === 'tier') {
     base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
@@ -493,7 +669,34 @@ function getVisibleData() {
 }
 
 // ── PADI layout ──
+function clearFocusPins(nodes) {
+  nodes.forEach(n => {
+    if (!n.synthetic) { n.fx = undefined; n.fy = undefined; }
+  });
+}
+
 function applyLayout(vd) {
+  // ── Focus mode: star layout around focused agent ──
+  if (viewMode === 'agent' && focusedAgentId) {
+    const center = vd.nodes.find(n => n.id === focusedAgentId);
+    if (center) { center.fx = 0; center.fy = 0; }
+    // Synthetic dev nodes form a ring
+    const dev = vd.nodes.filter(n => n.synthetic && n.focusChild);
+    const radius = 220;
+    dev.forEach((n, i) => {
+      const angle = (-Math.PI / 2) + (i / Math.max(1, dev.length)) * Math.PI * 2;
+      n.fx = Math.cos(angle) * radius;
+      n.fy = Math.sin(angle) * radius;
+    });
+    // Real neighbors cluster to the left
+    const neighbors = vd.nodes.filter(n => !n.synthetic && n.id !== focusedAgentId);
+    neighbors.forEach((n, i) => {
+      n.fx = -340 + (i % 3) * 90;
+      n.fy = -120 + Math.floor(i / 3) * 90;
+    });
+    return;
+  }
+
   const caps = vd.nodes.filter(n => n.type === 'capability');
   caps.forEach((n, i) => {
     n.fx = -RAIL_X;
@@ -588,13 +791,15 @@ function initGraph(data) {
       const isAgent = node.type === 'agent';
       const state = node.state;
       const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
+      const isSynthetic = !!node.synthetic;
 
-      // Alpha: dim for blank/building, extra-dim for shared
+      // Alpha: dim for blank/building, extra-dim for shared and synthetic
       let alpha = 1.0;
       if (state === 'blank') alpha = 0.35;
       else if (state === 'building') alpha = 0.6;
       else if (state === 'error') alpha = 0.75;
       if (node.shared) alpha *= 0.5;
+      if (isSynthetic) alpha *= 0.85;
 
       // ── Outer circle ──
       ctx.beginPath();
@@ -604,6 +809,7 @@ function initGraph(data) {
       ctx.strokeStyle = color + hexAlpha(alpha);
       ctx.lineWidth = 1.5 / globalScale;
       if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
+      if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -679,6 +885,13 @@ function initGraph(data) {
     .onNodeClick(node => {
       // Wire mode: handle wire target click
       if (wireMode) { handleWireClick(node); return; }
+      // Focus mode: synthetic node → switch workbench tab
+      if (node.synthetic && node.id.startsWith('focus:') && focusedAgentId) {
+        const suffix = node.id.split(':').pop();
+        const section = ['tools', 'evals', 'runtime'].includes(suffix) ? suffix : (suffix === 'generate' || suffix === 'verify' ? 'run' : 'config');
+        openAgentWorkbench(focusedAgentId, section);
+        return;
+      }
       // Lineage lens: click agent to set root
       if (currentLens === 'lineage' && node.type === 'agent') {
         lineageRoot = node.id;
@@ -686,6 +899,9 @@ function initGraph(data) {
       }
       // Always open inspect panel on click
       openInspect(node);
+    })
+    .onNodeDoubleClick(node => {
+      if (node?.type === 'agent') enterAgentFocus(node.id);
     })
     .onNodeHover(node => {
       if (node) {
@@ -723,7 +939,12 @@ function renderLens() {
   fg.d3ReheatSimulation();
   const tag = currentLens === 'padi' ? ' · swim lanes' : '';
   const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
-  info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
+  if (viewMode === 'agent' && focusedAgentId) {
+    info.textContent = `${vd.nodes.length} focused nodes · agent: ${cleanAgentId(focusedAgentId)} · project: ${currentCluster || '—'}`;
+  } else {
+    info.textContent = `${vd.nodes.length} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
+  }
+  updateViewCrumb();
 }
 
 // ── Lens buttons ──
@@ -964,11 +1185,164 @@ function openInspect(node) {
   const links = graphData.links.filter(l => lid(l.source) === node.id || lid(l.target) === node.id);
   html += `<div class="field"><label>Connections</label><div class="ro">${links.length} links</div></div>`;
 
+  // Focus button for agents
+  if (node.type === 'agent') {
+    html += `<div style="margin-top:10px;"><button id="insp-focus" class="small-action">🔍 Focus this agent</button></div>`;
+  }
+
   body.innerHTML = html;
   panel.classList.add('open');
+
+  // Attach focus button handler
+  const focusBtn = document.getElementById('insp-focus');
+  if (focusBtn) focusBtn.addEventListener('click', () => enterAgentFocus(node.id));
+}
+
+// ── Agent workbench panel ──
+function openAgentWorkbench(agentId, section = 'config') {
+  const agent = getNodeById(agentId);
+  if (!agent) return;
+  inspectedNode = agent;
+
+  const panel = document.getElementById('inspect');
+  const title = document.getElementById('inspect-title');
+  const body = document.getElementById('inspect-body');
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.textContent = '';
+
+  title.textContent = `${agent.name} workbench`;
+  title.style.color = COLORS.agent || '#c9d1d9';
+
+  body.innerHTML = `
+    <div class="focus-tabs">
+      <button data-section="config" class="focus-tab ${section === 'config' ? 'active' : ''}">Config</button>
+      <button data-section="tools" class="focus-tab ${section === 'tools' ? 'active' : ''}">Tools</button>
+      <button data-section="evals" class="focus-tab ${section === 'evals' ? 'active' : ''}">Evals</button>
+      <button data-section="runtime" class="focus-tab ${section === 'runtime' ? 'active' : ''}">Runtime</button>
+      <button data-section="run" class="focus-tab ${section === 'run' ? 'active' : ''}">Run</button>
+    </div>
+    <div id="focus-section"></div>
+  `;
+
+  panel.classList.add('open');
+  document.querySelectorAll('.focus-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.focus-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderFocusSection(agentId, btn.dataset.section);
+    });
+  });
+  renderFocusSection(agentId, section);
+}
+
+function renderFocusSection(agentId, section) {
+  const target = document.getElementById('focus-section');
+  if (!target) return;
+  const agent = getNodeById(agentId);
+  const clean = cleanAgentId(agentId);
+
+  if (section === 'config') {
+    const cfg = focusedAgentConfig?.config || focusedAgentConfig?.agent || focusedAgentConfig || {};
+    const model = cfg.model || agent?.model || '';
+    const instruction = cfg.instruction || '';
+    const description = cfg.description || agent?.name || clean;
+    const modelOpts = availableModels.map(m =>
+      `<option value="${esc(m)}" ${m === model ? 'selected' : ''}>${esc(m)}</option>`
+    ).join('');
+    target.innerHTML = `
+      <div class="field"><label>Agent ID</label><div class="ro">${esc(clean)}</div></div>
+      <div class="field"><label>Description</label><input id="focus-description" value="${esc(description)}"></div>
+      <div class="field"><label>Model</label><select id="focus-model"><option value="">— none —</option>${modelOpts}</select></div>
+      <div class="field"><label>Instruction</label><textarea id="focus-instruction" rows="8">${esc(instruction)}</textarea></div>
+      <div class="field"><label>Tools</label><div id="focus-tool-list" style="max-height:160px;overflow:auto;"></div></div>
+      <button id="focus-save-config" class="small-action">Save config</button>
+    `;
+    // Populate tools as checkboxes
+    const toolList = document.getElementById('focus-tool-list');
+    const selectedTools = cfg.tools || [];
+    const allTools = focusedAgentTools.length ? focusedAgentTools : (cfg.tools || []);
+    // Deduplicate
+    const toolSet = new Set([...selectedTools, ...allTools.map(t => typeof t === 'string' ? t : t.name || t.id || JSON.stringify(t))]);
+    if (toolSet.size === 0) {
+      toolList.innerHTML = '<div class="ro">No tools loaded. Click Tools tab to load.</div>';
+    } else {
+      toolSet.forEach(t => {
+        const checked = selectedTools.includes(t) ? 'checked' : '';
+        toolList.innerHTML += `<label class="tool-check"><input type="checkbox" class="focus-tool-check" value="${esc(t)}" ${checked}> ${esc(t)}</label>`;
+      });
+    }
+    attachFocusConfigHandlers(agentId);
+  } else if (section === 'tools') {
+    const tools = focusedAgentTools.length ? focusedAgentTools : (focusedAgentConfig?.config?.tools || focusedAgentConfig?.tools || []);
+    const toolList = Array.isArray(tools) ? tools.map(t => typeof t === 'string' ? t : (t.name || t.id || JSON.stringify(t))) : [];
+    target.innerHTML = `
+      <div class="field"><label>Available Tools (${toolList.length})</label>
+        <pre class="ro json-block">${esc(JSON.stringify(toolList, null, 2))}</pre>
+      </div>
+    `;
+  } else if (section === 'evals') {
+    const evalsets = focusedAgentEvalsets || [];
+    const lastRun = focusedAgentEval;
+    const statusClass = lastRun?.ok ? 'pass' : (lastRun?.error ? 'fail' : 'unknown');
+    const statusText = lastRun?.ok ? 'PASS' : (lastRun?.error ? 'FAIL' : 'No runs');
+    target.innerHTML = `
+      <div class="field"><label>Evalsets (${evalsets.length})</label>
+        <pre class="ro json-block">${esc(JSON.stringify(evalsets, null, 2))}</pre>
+      </div>
+      <button id="focus-run-evals-btn" class="small-action">Run evals</button>
+      <div style="margin-top:8px;">
+        <span class="eval-status ${statusClass}">${statusText}</span>
+      </div>
+      <div class="field" style="margin-top:8px;"><label>Last eval run</label>
+        <pre class="ro json-block">${esc(JSON.stringify(lastRun || { info: 'no runs yet' }, null, 2))}</pre>
+      </div>
+    `;
+    attachFocusEvalHandlers(agentId);
+  } else if (section === 'runtime') {
+    target.innerHTML = `
+      <div class="field"><label>Model</label><div class="ro">${esc(agent?.model || '—')}</div></div>
+      <div class="field"><label>State</label><div class="ro">${esc(agent?.state || '—')}</div></div>
+      <div class="field"><label>Role</label><div class="ro">${esc(agent?.role || 'plain')}</div></div>
+      <div class="field"><label>Runtime config</label>
+        <div class="ro" style="font-size:11px;color:#8b949e;">Temperature, output tokens, safety, session/cache config. Wire after core shape is verified.</div>
+      </div>
+    `;
+  } else if (section === 'run') {
+    const verifyStatus = focusedAgentVerify?.ok ? 'pass' : (focusedAgentVerify?.error ? 'fail' : 'unknown');
+    const verifyText = focusedAgentVerify?.ok ? 'PASS' : (focusedAgentVerify?.error ? 'FAIL' : 'Not run');
+    target.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button id="focus-verify-btn" class="small-action">Verify</button>
+        <button id="focus-generate-btn" class="small-action danger-light">Generate</button>
+      </div>
+      <div class="field"><label>Verify status</label>
+        <span class="eval-status ${verifyStatus}">${verifyText}</span>
+        <pre class="ro json-block" style="margin-top:6px;">${esc(JSON.stringify(focusedAgentVerify || { info: 'not run yet' }, null, 2))}</pre>
+      </div>
+    `;
+    attachFocusRunHandlers(agentId);
+  }
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function cleanAgentId(agentId) { return agentId.replace('agent:', ''); }
+function getNodeById(id) { return (graphData?.nodes || []).find(n => n.id === id) || null; }
+function focusNodeId(agentId, suffix) { return 'focus:' + agentId + ':' + suffix; }
+
+// ── View crumb ──
+function updateViewCrumb() {
+  const text = document.getElementById('view-crumb-text');
+  const back = document.getElementById('back-project-btn');
+  if (!text || !back) return;
+  if (viewMode === 'agent' && focusedAgentId) {
+    text.textContent = `Project: ${currentCluster || '—'} / Agent: ${cleanAgentId(focusedAgentId)}`;
+    back.style.display = 'inline-block';
+  } else {
+    text.textContent = currentCluster ? `Project: ${currentCluster}` : 'Project view';
+    back.style.display = 'none';
+  }
+}
+document.getElementById('back-project-btn').addEventListener('click', exitAgentFocus);
 
 document.getElementById('inspect-close').addEventListener('click', () => {
   document.getElementById('inspect').classList.remove('open');
@@ -1150,6 +1524,155 @@ function sendAiMessage() {
 aiSend.addEventListener('click', sendAiMessage);
 aiInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendAiMessage(); });
 
+// ── Fetch focused agent data ──
+function loadFocusedAgentData(agentId) {
+  const clean = cleanAgentId(agentId);
+  Promise.allSettled([
+    fetch(apiUrl(`/agent-config?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() }).then(r => r.json()),
+    fetch(apiUrl('/agent-tools'), { headers: csrfHeaders() }).then(r => r.json()),
+    fetch(apiUrl('/agent-models'), { headers: csrfHeaders() }).then(r => r.json()),
+    fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() }).then(r => r.json()),
+    fetch(apiUrl(`/agent-evals?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() }).then(r => r.json()),
+  ]).then(results => {
+    const [config, tools, models, verify, evals] = results;
+    focusedAgentConfig = config.status === 'fulfilled' ? config.value : { ok: false, error: config.reason?.message || 'config failed' };
+    focusedAgentTools = tools.status === 'fulfilled' ? (tools.value.tools || tools.value || []) : [];
+    focusedAgentModels = models.status === 'fulfilled' ? (models.value.models || []) : [];
+    focusedAgentVerify = verify.status === 'fulfilled' ? verify.value : { ok: false, error: verify.reason?.message || 'verify failed' };
+    focusedAgentEvalsets = evals.status === 'fulfilled' ? (evals.value.evalsets || []) : [];
+    focusedAgentEval = evals.status === 'fulfilled' ? (evals.value.last_run || null) : { ok: false, error: evals.reason?.message || 'evals failed' };
+    // Refresh workbench if still in focus mode
+    if (viewMode === 'agent' && focusedAgentId === agentId) {
+      openAgentWorkbench(agentId, 'config');
+      renderLens();
+    }
+  });
+}
+
+// ── Config save handler ──
+function attachFocusConfigHandlers(agentId) {
+  const btn = document.getElementById('focus-save-config');
+  if (!btn) return;
+  btn.addEventListener('click', () => saveFocusedAgentConfig(agentId));
+}
+
+function saveFocusedAgentConfig(agentId) {
+  const clean = cleanAgentId(agentId);
+  const saveMsg = document.getElementById('inspect-save-msg');
+  const instruction = document.getElementById('focus-instruction')?.value?.trim() || '';
+  if (!instruction) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Instruction cannot be blank';
+    return;
+  }
+  const tools = Array.from(document.querySelectorAll('.focus-tool-check:checked')).map(el => el.value);
+  const body = JSON.stringify({
+    agent_id: clean,
+    description: document.getElementById('focus-description')?.value || clean,
+    model: document.getElementById('focus-model')?.value || '',
+    instruction,
+    tools,
+  });
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Saving config...';
+  fetch(apiUrl('/agent-config'), {
+    method: 'POST',
+    headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+    body,
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok === false || data.error) {
+        saveMsg.className = 'save-msg err';
+        saveMsg.textContent = data.error || 'Save failed';
+        return;
+      }
+      saveMsg.className = 'save-msg ok';
+      saveMsg.textContent = 'Config saved';
+      loadFocusedAgentData(agentId);
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+// ── Verify & Generate handlers ──
+function attachFocusRunHandlers(agentId) {
+  const verify = document.getElementById('focus-verify-btn');
+  const generate = document.getElementById('focus-generate-btn');
+  if (verify) verify.addEventListener('click', () => verifyFocusedAgent(agentId));
+  if (generate) generate.addEventListener('click', () => generateFocusedAgent(agentId));
+}
+
+function verifyFocusedAgent(agentId) {
+  const clean = cleanAgentId(agentId);
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Verifying...';
+  fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: csrfHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      focusedAgentVerify = data;
+      saveMsg.className = data.ok === false ? 'save-msg err' : 'save-msg ok';
+      saveMsg.textContent = data.ok === false ? (data.error || 'Verify failed') : 'Verify passed';
+      renderFocusSection(agentId, 'run');
+      renderLens();
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+function generateFocusedAgent(agentId) {
+  const clean = cleanAgentId(agentId);
+  if (!confirm(`Generate agent ${clean}? This will write generated files from the current config.`)) return;
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Generating...';
+  fetch(apiUrl('/agent-generate'), {
+    method: 'POST',
+    headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_id: clean }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok === false || data.error) {
+        saveMsg.className = 'save-msg err';
+        saveMsg.textContent = data.error || 'Generate failed';
+        return;
+      }
+      saveMsg.className = 'save-msg ok';
+      saveMsg.textContent = 'Generated';
+      verifyFocusedAgent(agentId);
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+// ── Eval handlers ──
+function attachFocusEvalHandlers(agentId) {
+  const btn = document.getElementById('focus-run-evals-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => runFocusedAgentEvals(agentId));
+}
+
+function runFocusedAgentEvals(agentId) {
+  const clean = cleanAgentId(agentId);
+  const saveMsg = document.getElementById('inspect-save-msg');
+  const evalsetId = focusedAgentEvalsets?.[0]?.id || 'default';
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Running evals...';
+  fetch(apiUrl('/agent-eval-run'), {
+    method: 'POST',
+    headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_id: clean, evalset_id: evalsetId }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      focusedAgentEval = data;
+      saveMsg.className = data.ok ? 'save-msg ok' : 'save-msg err';
+      saveMsg.textContent = data.ok ? 'Evals passed' : (data.error || 'Evals failed');
+      renderFocusSection(agentId, 'evals');
+      renderLens();
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
 // ── Fetch models list ──
 function loadModels() {
   fetch(apiUrl('/models'))
@@ -1158,11 +1681,27 @@ function loadModels() {
     .catch(() => {});
 }
 
+// ── URL hash deep-linking ──
+function parseHashState() {
+  const raw = window.location.hash.replace(/^#/, '');
+  const params = new URLSearchParams(raw);
+  return { cluster: params.get('cluster'), agent: params.get('agent') };
+}
+
+function writeHashState() {
+  const params = new URLSearchParams();
+  if (currentCluster) params.set('cluster', currentCluster);
+  if (viewMode === 'agent' && focusedAgentId) params.set('agent', cleanAgentId(focusedAgentId));
+  const next = '#' + params.toString();
+  if (window.location.hash !== next) history.replaceState(null, '', next);
+}
+
 // ── Keyboard shortcuts ──
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Escape') {
     if (wireMode) { document.getElementById('wire-cancel').click(); return; }
+    if (viewMode === 'agent') { exitAgentFocus(); return; }
     if (document.getElementById('inspect').classList.contains('open')) {
       document.getElementById('inspect-close').click(); return;
     }
@@ -1175,6 +1714,28 @@ loadClusters();
 loadRegistryAgents();
 loadModels();
 startPulse();
+
+// ── Restore hash state on load ──
+setTimeout(() => {
+  const hash = parseHashState();
+  if (hash.cluster && hash.cluster !== currentCluster) {
+    selectCluster(hash.cluster);
+  }
+  if (hash.agent) {
+    // Wait for graph data to load, then enter focus
+    const tryFocus = () => {
+      if (graphData && graphData.nodes) {
+        const agentId = 'agent:' + hash.agent;
+        if (getNodeById(agentId)) {
+          enterAgentFocus(agentId);
+        }
+      } else {
+        setTimeout(tryFocus, 500);
+      }
+    };
+    setTimeout(tryFocus, 800);
+  }
+}, 500);
 </script>
 </body>
 </html>

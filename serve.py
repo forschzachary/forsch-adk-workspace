@@ -62,6 +62,10 @@ RATE_WINDOW = 60.0    # per 60 seconds
 # ── Audit log ──
 AUDIT_LOG = SPIKE_DIR / "chat_audit.log"
 
+# ── Eval paths ──
+EVALSETS_DIR = SPIKE_DIR / "evalsets"
+EVAL_RUNS_DIR = SPIKE_DIR / ".eval_runs"
+
 def _evict_stale():
     """Periodic cleanup: evict stale sessions and rate-limit windows."""
     while True:
@@ -871,6 +875,55 @@ def _verify_agent(agent_id: str) -> dict:
     }
 
 
+def _safe_agent_id(agent_id: str) -> str:
+    """Validate agent_id contains only safe characters."""
+    if not agent_id or not agent_id.replace("_", "").replace("-", "").isalnum():
+        raise ValueError(f"invalid agent_id: {agent_id!r}")
+    return agent_id
+
+
+def _list_agent_evalsets(agent_id: str) -> dict:
+    """List evalsets for an agent and return last run result."""
+    agent_id = _safe_agent_id(agent_id)
+    root = EVALSETS_DIR / agent_id
+    evalsets = []
+    if root.exists():
+        for path in sorted(root.glob("*.evalset.json")):
+            try:
+                data = json.loads(path.read_text())
+                cases = len(data.get("eval_cases", data.get("cases", [])))
+            except Exception:
+                cases = 0
+            evalsets.append({
+                "id": path.stem.replace(".evalset", ""),
+                "path": str(path.relative_to(SPIKE_DIR)),
+                "cases": cases,
+            })
+    last_path = EVAL_RUNS_DIR / agent_id / "last.json"
+    last_run = json.loads(last_path.read_text()) if last_path.exists() else None
+    return {"ok": True, "agent_id": agent_id, "evalsets": evalsets, "last_run": last_run}
+
+
+def _run_agent_eval(agent_id: str, evalset_id: str | None = None) -> dict:
+    """Run an eval for an agent. Honest fail if no runner is wired."""
+    agent_id = _safe_agent_id(agent_id)
+    # First pass: no fake green. If a real runner is not available, fail honestly.
+    result = {
+        "ok": False,
+        "agent_id": agent_id,
+        "evalset_id": evalset_id or "default",
+        "trajectory_pass": False,
+        "final_response_pass": False,
+        "score": 0.0,
+        "error": "eval runner not wired — install ADK eval or roundtrip_check",
+        "ran_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    out_dir = EVAL_RUNS_DIR / agent_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "last.json").write_text(json.dumps(result, indent=2))
+    return result
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(SPIKE_DIR), **kwargs)
@@ -890,7 +943,7 @@ class Handler(SimpleHTTPRequestHandler):
         """Return True for endpoints that mutate state (require auth + no CORS)."""
         return path in ("/spawn", "/wire", "/save-agent", "/promote",
                         "/new-cluster", "/add-agent", "/chat",
-                        "/agent-config", "/agent-generate")
+                        "/agent-config", "/agent-generate", "/agent-eval-run")
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -925,7 +978,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "gemini-3-pro-preview", "gemini-3-flash-preview",
                     "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
                 ]})
-        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify") and not self._check_secret():
+        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_secret():
             self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
         elif path == "/agent-config":
             qs = parse_qs(parsed.query)
@@ -945,6 +998,16 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(400, {"ok": False, "error": "missing ?agent_id=<id>"})
                 return
             self._json_response(200, _verify_agent(agent_id))
+        elif path == "/agent-evals":
+            qs = parse_qs(parsed.query)
+            agent_id = qs.get("agent_id", [None])[0]
+            if not agent_id:
+                self._json_response(400, {"ok": False, "error": "missing ?agent_id=<id>"})
+                return
+            try:
+                self._json_response(200, _list_agent_evalsets(agent_id))
+            except ValueError as exc:
+                self._json_response(400, {"ok": False, "error": str(exc)})
         else:
             super().do_GET()
 
@@ -1165,6 +1228,20 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(400, {"ok": False, "error": "missing agent_id"})
                 return
             self._json_response(200, _generate_agent(agent_id))
+
+        elif parsed.path == "/agent-eval-run":
+            if not self._check_secret():
+                self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
+                return
+            agent_id = params.get("agent_id", [None])[0]
+            evalset_id = params.get("evalset_id", [None])[0]
+            if not agent_id:
+                self._json_response(400, {"ok": False, "error": "agent_id required"})
+                return
+            try:
+                self._json_response(200, _run_agent_eval(agent_id, evalset_id))
+            except ValueError as exc:
+                self._json_response(400, {"ok": False, "error": str(exc)})
 
         else:
             self._json_response(404, {"error": "not found"})
