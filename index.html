@@ -979,7 +979,7 @@ function buildPadiControlNodes() {
       padiWidth: padiControlWidth('spawn', sp.blankLabel || ('New ' + sk)),
       padiHeight: 24,
     });
-    if (!sp.disabled && sp.library) {
+    if (sp.library) {
       sp.library().forEach((agent, order) => {
         nodes.push({
           id: `padi:library:${sk}:${agent.id}`,
@@ -2116,7 +2116,7 @@ function renderLaneLibraries() {
     const lib = layer.querySelector(`.lane-lib[data-lib="${sk}"]`);
     if (!lib) return;
     lib.innerHTML = '';
-    if (sp.disabled || !sp.library) return;
+    if (!sp.library) return;
     const items = sp.library();
     if (!items.length) {
       const e = document.createElement('span');
