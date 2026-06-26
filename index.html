@@ -21,17 +21,63 @@
     border-top: 1px solid rgba(255,255,255,0.04);
   }
   .swimlane-row:first-child { border-top: none; }
+  /* ── Interactive controls layer (above the canvas) ── */
+  #swimlane-controls {
+    position: absolute; left: 0; top: 36px; right: 300px; bottom: 0;
+    z-index: 3; pointer-events: none;
+    display: none; flex-direction: column;
+  }
+  #swimlane-controls.on { display: flex; }
+  .swimlane-ctrl-row { position: relative; flex: 1 1 0; pointer-events: none; transition: box-shadow 0.12s; }
+  body.dragging .swimlane-ctrl-row { pointer-events: auto; }   /* drop targets only while dragging a chip */
+  .swimlane-ctrl-row.drop-ok { box-shadow: inset 0 0 0 1px var(--lane-hue); background: rgba(255,255,255,0.02); }
+  .swimlane-header {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 9px 16px 0 18px; pointer-events: none;
+  }
+  .swimlane-header > * { pointer-events: auto; }
+  .swimlane-header.disabled { opacity: 0.4; }
   .swimlane-label {
-    position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
     display: flex; align-items: center; gap: 9px;
     font-size: 10px; font-weight: 600; letter-spacing: 2.5px;
-    text-transform: uppercase; color: rgba(150,170,190,0.42);
+    text-transform: uppercase; color: rgba(150,170,190,0.5);
     white-space: nowrap; user-select: none;
   }
   .swimlane-label::before {
-    content: ''; width: 3px; height: 24px; border-radius: 2px;
-    background: var(--lane-hue); opacity: 0.55;
+    content: ''; width: 3px; height: 18px; border-radius: 2px;
+    background: var(--lane-hue); opacity: 0.6;
   }
+  .lane-spawn-btn {
+    font-size: 11px; color: var(--lane-hue); background: transparent;
+    border: 1px dashed rgba(140,160,180,0.3); border-radius: 5px;
+    padding: 3px 9px; cursor: pointer; white-space: nowrap;
+  }
+  .lane-spawn-btn:hover:not(:disabled) { background: rgba(255,255,255,0.05); border-color: var(--lane-hue); }
+  .lane-spawn-btn:disabled { opacity: 0.4; cursor: default; border-style: dotted; }
+  .lane-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .lane-form[hidden] { display: none; }
+  .lane-form input {
+    font-size: 11px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; padding: 3px 7px; width: 128px;
+  }
+  .lane-form input:focus { outline: none; border-color: var(--lane-hue); }
+  .lane-form button {
+    font-size: 11px; background: #1a3a1a; border: 1px solid #2ea043; color: #3fb950;
+    border-radius: 4px; padding: 3px 10px; cursor: pointer;
+  }
+  .lane-lib { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .lane-chip {
+    font-size: 10px; font-family: ui-monospace, 'SF Mono', monospace; color: #c9d1d9;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--lane-hue);
+    border-radius: 10px; padding: 2px 9px; cursor: grab; white-space: nowrap; opacity: 0.85;
+  }
+  .lane-chip:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+  .lane-chip:active { cursor: grabbing; }
+  .lane-chip.in-cluster { opacity: 0.3; cursor: default; border-style: dashed; }
+  .lane-msg { font-size: 10px; }
+  .lane-msg.ok { color: #3fb950; }
+  .lane-msg.err { color: #ff7b72; }
   /* ── Tab bar ── */
   #tab-bar {
     position: fixed; top: 0; left: 0; right: 0; z-index: 15;
@@ -308,6 +354,7 @@
 <div id="graph-wrap">
   <div id="swimlane-overlay"></div>
   <div id="graph"></div>
+  <div id="swimlane-controls"></div>
 </div>
 <div id="panel">
   <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
@@ -320,24 +367,7 @@
   <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies</button>
   <button class="action-btn infra" id="infra-btn" style="margin-top:4px;">▸ Infrastructure</button>
 
-  <div class="sep"></div>
-  <h3>Add Agent to Cluster</h3>
-  <select id="add-agent-select" style="margin-bottom:4px;">
-    <option value="">— select agent —</option>
-  </select>
-  <button class="action-btn spawn" id="add-agent-btn" style="background:#1a1a2e;border-color:#d2a8ff;color:#d2a8ff;">Add to current cluster</button>
-  <div class="msg" id="add-agent-msg"></div>
-
-  <div class="sep"></div>
-  <h3>Spawn Agent</h3>
-  <input id="spawn-id" placeholder="agent_id (e.g. research)" maxlength="40">
-  <input id="spawn-desc" placeholder="description (optional)" maxlength="120">
-  <button class="action-btn spawn" id="spawn-btn">Spawn blank agent</button>
-  <div class="msg" id="spawn-msg"></div>
-  <div class="field" id="spawn-workspace-field" style="display:none;margin-top:6px;">
-    <label>Workspace</label>
-    <div class="ro" id="spawn-workspace-path" style="word-break:break-all;font-size:11px;"></div>
-  </div>
+  <!-- Spawn / Add-agent controls now live in the Agent·Logic lane header (PADI). -->
 
   <div class="sep"></div>
   <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
@@ -591,8 +621,8 @@ let focusedAgentEvalsets = [];
 let focusedAgentEval = null;
 const info = document.getElementById('info');
 const tooltip = document.getElementById('tooltip');
-const spawnMsg = document.getElementById('spawn-msg');
-const addAgentMsg = document.getElementById('add-agent-msg');
+// Per-lane spawn/library state (controls live in the swim-lane headers).
+let registryAgentIds = [], dragItem = null;
 
 // ── Cluster loading ──
 function loadClusters() {
@@ -910,11 +940,7 @@ function buildSwimlaneOverlay() {
     // Subtle hue wash, slightly stronger at the labelled left edge → fades right,
     // so the sheet reads as a labelled backdrop the graph sits on.
     row.style.background = `linear-gradient(90deg, rgba(${lane.hue},0.10) 0%, rgba(${lane.hue},0.05) 28%, rgba(${lane.hue},0.025) 100%)`;
-    const label = document.createElement('span');
-    label.className = 'swimlane-label';
-    label.style.setProperty('--lane-hue', `rgb(${lane.hue})`);
-    label.textContent = lane.label;
-    row.appendChild(label);
+    // Label + spawn controls live in the controls layer header, not the backdrop.
     overlay.appendChild(row);
   });
 }
@@ -926,28 +952,31 @@ function layoutPadi() {
   const overlay = document.getElementById('swimlane-overlay');
   const wrap = document.getElementById('graph-wrap');
   if (!fg || !overlay || !wrap) return;
+  const controls = document.getElementById('swimlane-controls');
   if (currentLens !== 'padi' || viewMode === 'agent') {
     overlay.classList.remove('on');
+    if (controls) controls.classList.remove('on');
     return;
   }
   overlay.classList.add('on');
+  if (controls) controls.classList.add('on');
   const W = wrap.clientWidth, H = wrap.clientHeight;
   fg.centerAt(0, 0, 0);
   fg.zoom(1, 0);
 
-  // Lane row centres, in graph-wrap-relative px → world Y (centre at 0).
+  // Lane geometry (graph-wrap-relative px → world Y, centre at 0).
   const wrapTop = wrap.getBoundingClientRect().top;
   const rows = overlay.querySelectorAll('.swimlane-row');
-  const laneY = [];
-  rows.forEach(r => {
+  const HEADER_PAD = 46;            // header band at each lane's top — keep nodes below it
+  const laneY = [], bounds = [];
+  rows.forEach((r, i) => {
     const b = r.getBoundingClientRect();
-    laneY.push((b.top + b.height / 2 - wrapTop) - H / 2);
+    const top = b.top - wrapTop, bottom = b.bottom - wrapTop;
+    laneY.push((top + HEADER_PAD + bottom) / 2 - H / 2);   // node target = centre below the header
+    if (i < rows.length - 1) bounds.push(bottom - H / 2);  // actual lane divider (for link pins)
   });
-
-  // Lane row centres + dividers (world Y), shared with the link router.
   padiLaneY = laneY;
-  padiLaneBound = [];
-  for (let i = 0; i < laneY.length - 1; i++) padiLaneBound.push((laneY[i] + laneY[i + 1]) / 2);
+  padiLaneBound = bounds;
 
   // Usable horizontal span: left margin → left edge of the control panel.
   const panel = document.getElementById('panel');
@@ -980,6 +1009,8 @@ function layoutPadi() {
       node.fx = undefined; node.fy = undefined;
     });
   });
+
+  renderLaneLibraries();   // keep chip in-cluster state in sync with the graph
 }
 
 // Custom force: spring each node toward its lane target plus a small perpetual
@@ -1303,6 +1334,7 @@ function initGraph(data) {
   // in sync with the container size (force-graph auto-sizing is unreliable
   // when the panel/viewport changes, which left the canvas at 0×0).
   buildSwimlaneOverlay();
+  buildSwimlaneControls();
   const wrapEl = document.getElementById('graph-wrap');
   const syncSize = () => {
     fg.width(wrapEl.clientWidth).height(wrapEl.clientHeight);
@@ -1329,6 +1361,7 @@ function renderLens() {
     fg.enableZoomInteraction(false).enablePanInteraction(false);
   } else {
     document.getElementById('swimlane-overlay').classList.remove('on');  // sheet is PADI-only
+    document.getElementById('swimlane-controls').classList.remove('on');
     fg.enableZoomInteraction(true).enablePanInteraction(true);
     fg.cooldownTicks(150);
     fg.cooldownTime(15000);
@@ -1384,92 +1417,194 @@ document.getElementById('new-tab-btn').addEventListener('click', () => {
     .catch(err => alert('Server error: ' + err.message));
 });
 
-// ── Add agent to cluster ──
+// ── Lane spawn / library (controls live in the swim-lane headers) ──
+
+// Load the built-agent registry → library chips for the Agent·Logic lane.
 function loadRegistryAgents() {
   fetch(apiUrl('registry/agents/agents.yaml'))
     .then(r => r.text())
     .then(text => {
       // Crude YAML parse — extract agent ids from "  <id>:" lines under "agents:"
-      const select = document.getElementById('add-agent-select');
-      select.innerHTML = '<option value="">— select agent —</option>';
+      const ids = [];
       let inAgents = false;
       for (const line of text.split('\n')) {
         if (line.startsWith('agents:')) { inAgents = true; continue; }
-        if (inAgents && /^  [a-z][a-z0-9_]*:/.test(line)) {
-          const id = line.trim().replace(':', '');
-          const opt = document.createElement('option');
-          opt.value = id;
-          opt.textContent = id;
-          select.appendChild(opt);
-        }
+        if (inAgents && /^  [a-z][a-z0-9_]*:/.test(line)) ids.push(line.trim().replace(':', ''));
         if (inAgents && line && !line.startsWith('  ')) break;
       }
+      registryAgentIds = ids;
+      renderLaneLibraries();
     })
     .catch(() => {});
 }
 
-document.getElementById('add-agent-btn').addEventListener('click', () => {
-  if (!currentCluster) { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'No cluster selected'; return; }
-  const agentId = document.getElementById('add-agent-select').value;
-  if (!agentId) { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'Select an agent'; return; }
-  addAgentMsg.className = 'msg'; addAgentMsg.textContent = 'Adding…';
-  const body = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(agentId)}`;
-  fetch(apiUrl('/add-agent'), { method: 'POST', headers: csrfHeaders(), body })
+function setLaneMsg(el, cls, txt) { if (el) { el.className = 'lane-msg ' + cls; el.textContent = txt; } }
+function clusterHasAgent(id) {
+  return !!(graphData && graphData.nodes && graphData.nodes.some(n => n.id === 'agent:' + id));
+}
+
+// Shared actions, reused by both the spawn form and drag/click-to-add.
+function spawnBlankAgent(id, desc, msgEl) {
+  id = (id || '').trim();
+  if (!id) { setLaneMsg(msgEl, 'err', 'Enter an agent_id'); return; }
+  if (!/^[a-z][a-z0-9_]*$/.test(id)) { setLaneMsg(msgEl, 'err', 'Invalid id (a-z, 0-9, _)'); return; }
+  setLaneMsg(msgEl, '', 'Spawning…');
+  const body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent((desc || '').trim() || id + ' agent')}`;
+  fetch(apiUrl('/spawn'), { method: 'POST', headers: { ...csrfHeaders(), ...graphSecretHeaders() }, body })
     .then(r => r.json())
     .then(data => {
-      if (data.ok) {
-        addAgentMsg.className = 'msg ok';
-        addAgentMsg.textContent = data.already_member ? `✓ ${agentId} already in ${currentCluster}` : `✓ Added ${agentId} to ${currentCluster}`;
+      if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Spawn failed'); return; }
+      setLaneMsg(msgEl, 'ok', `✓ Spawned ${data.agent_id}`);
+      if (currentCluster) {
+        const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
+        fetch(apiUrl('/add-agent'), { method: 'POST', headers: { ...csrfHeaders(), ...graphSecretHeaders() }, body: addBody })
+          .finally(() => setTimeout(() => loadGraph(currentCluster), 500));
+      } else {
         setTimeout(() => loadGraph(currentCluster), 500);
-      } else {
-        addAgentMsg.className = 'msg err'; addAgentMsg.textContent = data.error || 'Failed';
       }
     })
-    .catch(err => { addAgentMsg.className = 'msg err'; addAgentMsg.textContent = 'Server error: ' + err.message; });
-});
-
-// ── Spawn ──
-document.getElementById('spawn-btn').addEventListener('click', () => {
-  const id = document.getElementById('spawn-id').value.trim();
-  const desc = document.getElementById('spawn-desc').value.trim();
-  if (!id) { spawnMsg.className = 'msg err'; spawnMsg.textContent = 'Enter an agent_id'; return; }
-  if (!/^[a-z][a-z0-9_]*$/.test(id)) { spawnMsg.className = 'msg err'; spawnMsg.textContent = 'Invalid id (a-z, 0-9, _)'; return; }
-
-  spawnMsg.className = 'msg'; spawnMsg.textContent = 'Spawning…';
-  const body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent(desc || id + ' agent')}`;
-  fetch(apiUrl('/spawn'), { method: 'POST', headers: csrfHeaders(), body })
+    .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
+}
+function addAgentToCluster(agentId, msgEl) {
+  if (!currentCluster) { setLaneMsg(msgEl, 'err', 'No cluster selected'); return; }
+  setLaneMsg(msgEl, '', 'Adding…');
+  const body = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(agentId)}`;
+  fetch(apiUrl('/add-agent'), { method: 'POST', headers: { ...csrfHeaders(), ...graphSecretHeaders() }, body })
     .then(r => r.json())
     .then(data => {
-      if (data.ok) {
-        spawnMsg.className = 'msg ok'; spawnMsg.textContent = `✓ Spawned ${data.agent_id}`;
-        document.getElementById('spawn-id').value = '';
-        document.getElementById('spawn-desc').value = '';
-        // Show workspace path if returned
-        if (data.workspace) {
-          const wsField = document.getElementById('spawn-workspace-field');
-          wsField.style.display = 'block';
-          document.getElementById('spawn-workspace-path').textContent = data.workspace;
-        }
-        // Auto-add to current cluster
-        if (currentCluster) {
-          const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
-          fetch(apiUrl('/add-agent'), { method: 'POST', headers: csrfHeaders(), body: addBody })
-            .then(r => r.json())
-            .then(addData => {
-              if (addData.ok) spawnMsg.textContent += ` → added to ${currentCluster}`;
-              else spawnMsg.textContent += ` (add failed: ${addData.error})`;
-              setTimeout(() => loadGraph(currentCluster), 500);
-            })
-            .catch(() => setTimeout(() => loadGraph(currentCluster), 500));
-        } else {
-          setTimeout(() => loadGraph(currentCluster), 500);
-        }
-      } else {
-        spawnMsg.className = 'msg err'; spawnMsg.textContent = data.error || 'Spawn failed';
-      }
+      if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Failed'); return; }
+      setLaneMsg(msgEl, 'ok', data.already_member ? `✓ already in ${currentCluster}` : `✓ Added ${agentId}`);
+      setTimeout(() => loadGraph(currentCluster), 500);
     })
-    .catch(err => { spawnMsg.className = 'msg err'; spawnMsg.textContent = 'Server error: ' + err.message; });
-});
+    .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
+}
+
+// Per-lane spawner adapter. Only `agent` is wired this round; the rest are stubs
+// that follow-on specs (Tools / Interfaces / Router) fill in — no UI rework.
+const LANE_SPAWNERS = {
+  agent: {
+    blankLabel: 'New agent',
+    formFields: [{ ph: 'agent_id' }, { ph: 'description (optional)' }],
+    spawnBlank(vals, msg) { spawnBlankAgent(vals[0], vals[1], msg); },
+    library() { return registryAgentIds.map(id => ({ id, name: id, inCluster: clusterHasAgent(id) })); },
+    onDrop(item, msg) { addAgentToCluster(item.id, msg); },
+  },
+  tool: { disabled: true, blankLabel: 'New tool' },
+  interface: { disabled: true, blankLabel: 'New interface' },
+  router: { disabled: true, blankLabel: 'New router' },
+};
+const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', router: 'router', agent: 'agent', tools: 'tool' };
+
+// Build the per-lane header controls once (above the canvas).
+function buildSwimlaneControls() {
+  const layer = document.getElementById('swimlane-controls');
+  if (!layer || layer.childElementCount) return;
+  PADI_LANES.forEach(lane => {
+    const sk = LANE_KEY_TO_SPAWNER[lane.key];
+    const sp = LANE_SPAWNERS[sk] || {};
+    const row = document.createElement('div');
+    row.className = 'swimlane-ctrl-row';
+    row.dataset.lane = lane.key;
+    row.dataset.spawner = sk;
+    row.style.setProperty('--lane-hue', `rgb(${lane.hue})`);
+
+    const header = document.createElement('div');
+    header.className = 'swimlane-header' + (sp.disabled ? ' disabled' : '');
+
+    const label = document.createElement('span');
+    label.className = 'swimlane-label';
+    label.textContent = lane.label;
+    header.appendChild(label);
+
+    const btn = document.createElement('button');
+    btn.className = 'lane-spawn-btn';
+    btn.textContent = '＋ ' + (sp.blankLabel || ('New ' + sk));
+    if (sp.disabled) { btn.disabled = true; btn.title = 'not wired yet'; }
+    header.appendChild(btn);
+
+    const form = document.createElement('div');
+    form.className = 'lane-form';
+    form.hidden = true;
+    const msg = document.createElement('span');
+    msg.className = 'lane-msg';
+    if (!sp.disabled && sp.formFields) {
+      const inputs = sp.formFields.map(f => { const i = document.createElement('input'); i.placeholder = f.ph; return i; });
+      inputs.forEach(i => form.appendChild(i));
+      const go = document.createElement('button');
+      go.textContent = 'Spawn';
+      go.addEventListener('click', () => sp.spawnBlank(inputs.map(i => i.value), msg));
+      form.appendChild(go);
+      btn.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) inputs[0].focus(); });
+    }
+    header.appendChild(form);
+    header.appendChild(msg);
+
+    const lib = document.createElement('div');
+    lib.className = 'lane-lib';
+    lib.dataset.lib = sk;
+    header.appendChild(lib);
+
+    row.appendChild(header);
+
+    // Drop target (active only while a chip of this lane is being dragged).
+    if (!sp.disabled) {
+      row.addEventListener('dragover', e => {
+        if (dragItem && dragItem.laneKey === lane.key) { e.preventDefault(); row.classList.add('drop-ok'); }
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drop-ok'));
+      row.addEventListener('drop', e => {
+        e.preventDefault(); row.classList.remove('drop-ok');
+        if (dragItem && dragItem.laneKey === lane.key && !dragItem.inCluster) sp.onDrop(dragItem, msg);
+      });
+    }
+    layer.appendChild(row);
+  });
+}
+
+// (Re)populate each lane's library strip; in-cluster items are dimmed + non-draggable.
+function renderLaneLibraries() {
+  const layer = document.getElementById('swimlane-controls');
+  if (!layer) return;
+  PADI_LANES.forEach(lane => {
+    const sk = LANE_KEY_TO_SPAWNER[lane.key];
+    const sp = LANE_SPAWNERS[sk] || {};
+    const lib = layer.querySelector(`.lane-lib[data-lib="${sk}"]`);
+    if (!lib) return;
+    lib.innerHTML = '';
+    if (sp.disabled || !sp.library) return;
+    const items = sp.library();
+    if (!items.length) {
+      const e = document.createElement('span');
+      e.className = 'lane-msg'; e.style.opacity = '0.5'; e.textContent = `no built ${sk}s yet`;
+      lib.appendChild(e); return;
+    }
+    const msgEl = layer.querySelector(`.swimlane-ctrl-row[data-spawner="${sk}"] .lane-msg`);
+    items.forEach(it => {
+      const chip = document.createElement('div');
+      chip.className = 'lane-chip' + (it.inCluster ? ' in-cluster' : '');
+      chip.textContent = it.name;
+      if (it.inCluster) {
+        chip.title = 'already in cluster';
+      } else {
+        chip.draggable = true;
+        chip.title = 'drag into lane or click to add';
+        chip.addEventListener('dragstart', e => {
+          dragItem = { laneKey: lane.key, id: it.id, inCluster: false };
+          document.body.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('text/plain', it.id);
+        });
+        chip.addEventListener('dragend', () => {
+          dragItem = null;
+          document.body.classList.remove('dragging');
+          layer.querySelectorAll('.swimlane-ctrl-row').forEach(r => r.classList.remove('drop-ok'));
+        });
+        chip.addEventListener('click', () => sp.onDrop({ id: it.id }, msgEl));
+      }
+      lib.appendChild(chip);
+    });
+  });
+}
 
 // ── Refresh ──
 document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
