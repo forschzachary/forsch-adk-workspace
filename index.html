@@ -1623,7 +1623,20 @@ function handleWireClick(node) {
 }
 
 // ── Unified sidecar widget (Agent + Hubert tabs) ──
-const ADK_CHAT_BASE = window.ADK_CHAT_BASE || 'http://127.0.0.1:8800/chat/';
+// ADK_CHAT_BASE is the external Gradio URL (chat.forschfrontiers.com in prod, localhost in dev).
+// __chatToken authenticates the iframe via the bridge's token-bridge middleware.
+const ADK_CHAT_BASE = window.ADK_CHAT_BASE || 'https://chat.forschfrontiers.com/chat/';
+let __chatToken = '';
+async function fetchChatToken() {
+  try {
+    const r = await fetch(apiUrl('/chat-token'));
+    if (r.ok) {
+      const d = await r.json();
+      __chatToken = d.token || '';
+      if (d.base) { /* server override takes precedence */ }
+    }
+  } catch(_) {}
+}
 let sidecarOpen = false;
 let sidecarTab = 'agent';
 let sidecarAgentId = null;
@@ -1652,8 +1665,9 @@ function openSidecar(agentId, defaultTab) {
   sidecarAgentId = clean;
   document.getElementById('sidecar-agent-label').textContent = clean || '';
   if (clean) {
-    const url = new URL(ADK_CHAT_BASE, window.location.href);
+    const url = new URL(ADK_CHAT_BASE);
     url.searchParams.set('agent', clean);
+    if (__chatToken) url.searchParams.set('chat_token', __chatToken);
     document.getElementById('sidecar-agent-frame').src = url.toString();
   }
   document.getElementById('sidecar-widget').classList.add('open');
@@ -1928,6 +1942,7 @@ document.addEventListener('keydown', e => {
 // ── Init ──
 loadClusters();
 fetchGraphSecret();
+fetchChatToken();
 loadRegistryAgents();
 loadModels();
 startPulse();

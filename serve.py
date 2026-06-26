@@ -45,6 +45,21 @@ if not GRAPH_SECRET:
     if _secret_file.exists():
         GRAPH_SECRET = _secret_file.read_text().strip()
 CRM_ORIGIN = os.environ.get("CRM_ORIGIN", "https://crm.forschfrontiers.com")
+
+# Bridge CHAT_TOKEN — needed so the browser can authenticate the Gradio iframe.
+# Read from env var first, then fall back to bridge.env file.
+_BRIDGE_ENV_FILE = Path("/opt/data/workspace/adk/bridge/bridge.env")
+def _chat_token() -> str:
+    token = os.environ.get("CHAT_TOKEN", "")
+    if not token and _BRIDGE_ENV_FILE.exists():
+        for line in _BRIDGE_ENV_FILE.read_text().splitlines():
+            if line.startswith("CHAT_TOKEN="):
+                token = line.split("=", 1)[1].strip()
+                break
+    return token
+
+# External URL for the Gradio bridge (browser-facing iframe src).
+CHAT_BASE_URL = os.environ.get("CHAT_BASE_URL", "https://chat.forschfrontiers.com/chat/")
 CRM_API_KEY_FILE = _HERMES_HOME / "secrets" / "frappe-admin-api-key"
 CRM_BASE = os.environ.get("CRM_BASE_URL", "https://crm.forschfrontiers.com")
 
@@ -956,6 +971,10 @@ class Handler(SimpleHTTPRequestHandler):
             # Serve the secret to the browser for same-origin API calls.
             # In CRM embed the proxy injects it server-side; here the browser needs it.
             self._json_response(200, {"secret": GRAPH_SECRET or ""})
+        elif path == "/chat-token":
+            # Serve the bridge CHAT_TOKEN so the browser can authenticate the Gradio iframe.
+            # In CRM embed the proxy injects it server-side; here the browser needs it.
+            self._json_response(200, {"token": _chat_token(), "base": CHAT_BASE_URL})
         elif path == "/manifest":
             qs = parse_qs(parsed.query)
             cluster = qs.get("cluster", [None])[0]
