@@ -120,7 +120,8 @@
   #panel {
     position: fixed; top: 48px; right: 16px; z-index: 10;
     background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-    padding: 12px 16px; min-width: 220px; font-size: 13px; max-height: calc(100vh - 64px); overflow-y: auto;
+    padding: 12px 16px 16px; min-width: 220px; font-size: 13px; max-height: calc(100vh - 72px); overflow-y: auto;
+    scrollbar-gutter: stable;
   }
   #panel h3 { margin: 12px 0 6px; color: #58a6ff; font-size: 14px; }
   #panel h3:first-child { margin-top: 0; }
@@ -147,6 +148,7 @@
   #panel .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
   #panel .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   #panel .legend-icon { width: 12px; height: 12px; flex-shrink: 0; font-size: 11px; text-align: center; line-height: 12px; }
+  #panel .legend-note { font-size: 10px; color: #8b949e; margin-top: 4px; line-height: 1.35; max-width: 210px; white-space: normal; }
   #panel .sep { border-top: 1px solid #30363d; margin: 10px 0; }
   #panel .msg { font-size: 11px; margin-top: 4px; min-height: 16px; }
   #panel .msg.ok { color: #3fb950; }
@@ -435,7 +437,7 @@
     <div class="legend-item"><span class="legend-icon" style="color:#3fb950">◉</span> built — full arc</div>
     <div class="legend-item"><span class="legend-icon" style="color:#3fb950">◎</span> live — green pulse ring</div>
     <div class="legend-item"><span class="legend-icon" style="color:#ff7b72">✕</span> error — red cross</div>
-    <div style="font-size:10px;color:#8b949e;margin-top:4px;">Size = connected nodes · Fill arc = gate progress</div>
+    <div class="legend-note">Size = connected nodes · Fill arc = gate progress</div>
   </div>
 </div>
 <div id="info">Loading…</div>
@@ -1196,6 +1198,15 @@ function layoutPadiControlShelf(laneIndex, controls) {
   });
 }
 
+function snapPadiControlNode(node) {
+  if (!node?.padiControl || !fg || currentLens !== 'padi' || viewMode === 'agent') return false;
+  const controls = fg.graphData().nodes
+    .filter(n => n.padiControl && n.padiLaneIndex === node.padiLaneIndex);
+  layoutPadiControlShelf(node.padiLaneIndex, controls);
+  positionSwimlaneControls();
+  return true;
+}
+
 // Pin every visible node onto its swim-lane row, spread evenly across the
 // graph-space factory floor. The first render fits the whole floor to the
 // viewport; after that users can zoom/pan and the lanes move with the graph.
@@ -1721,6 +1732,14 @@ function initGraph(data) {
     .onZoom(() => {
       if (currentLens === 'padi' && viewMode !== 'agent') layoutPadi();
       positionSwimlaneControls();
+    })
+    .onNodeDrag(node => {
+      snapPadiControlNode(node);
+    })
+    .onNodeDragEnd(node => {
+      if (snapPadiControlNode(node) && typeof fg.d3ReheatSimulation === 'function') {
+        fg.d3ReheatSimulation();
+      }
     })
     .onNodeClick(node => {
       if (node?.padiControl) { handlePadiControlClick(node); return; }
