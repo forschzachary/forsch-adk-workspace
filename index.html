@@ -571,9 +571,9 @@ const PADI_CONTROL_GAP = 6;
 const PADI_CONTROL_LEFT_PAD = 18;
 const PADI_CONTROL_TOP_PAD = 28;
 const PADI_CONTROL_ROW_GAP = 28;
-const PADI_LIBRARY_GAP = 6;
-const PADI_LIBRARY_ROW_GAP = 7;
-const PADI_LIBRARY_SHELF_WIDTH = 230;
+const PADI_LIBRARY_COL_STEP = 86;
+const PADI_LIBRARY_ROW_STEP = 26;
+const PADI_LIBRARY_COLS = 3;
 const PADI_NODE_Y_OFFSET = 42;
 
 function padiLaneCenter(laneIndex) {
@@ -588,31 +588,6 @@ function padiControlScale() {
 
 function padiControlLayoutUnits(px) {
   return px / padiControlScale();
-}
-
-function padiScreenToGraph(x, y) {
-  if (!fg || typeof fg.screen2GraphCoords !== 'function') return null;
-  const p = fg.screen2GraphCoords(x, y);
-  return Number.isFinite(p?.x) && Number.isFinite(p?.y) ? p : null;
-}
-
-function capturePadiShelfAnchors() {
-  if (!fg || typeof fg.graph2ScreenCoords !== 'function' || !padiLaneY.length) return;
-  padiShelfAnchors = PADI_LANES.map((_, laneIndex) => {
-    const y = padiLaneY[laneIndex];
-    if (!Number.isFinite(y)) return null;
-    const laneTop = y - PADI_LANE_HEIGHT / 2;
-    const topLeft = fg.graph2ScreenCoords(padiWorld.xLeft, laneTop);
-    if (!Number.isFinite(topLeft?.x) || !Number.isFinite(topLeft?.y)) return null;
-    return {
-      x: topLeft.x + PADI_CONTROL_LEFT_PAD,
-      y: topLeft.y + PADI_CONTROL_TOP_PAD,
-    };
-  });
-}
-
-function invalidatePadiShelfAnchors() {
-  padiShelfAnchors = [];
 }
 
 // ── Interface abstraction ──
@@ -758,7 +733,6 @@ let clusters = [];
 // PADI swim-lane geometry (world coords), shared between layout, forces, and
 // link routing. Lanes are held by gentle forces — nothing is hard-pinned.
 let padiLaneY = [], padiLaneBound = [], padiTick = 0, padiFitPending = true;
-let padiShelfAnchors = [];
 let padiWorld = {
   xLeft: -560,
   xRight: 400,
@@ -838,7 +812,6 @@ function loadGraph(clusterName) {
       info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
       if (!fg) initGraph(graphData);
       padiFitPending = true;
-      invalidatePadiShelfAnchors();
       renderLens();
     })
     .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
@@ -849,7 +822,6 @@ function applyLens(lens) {
   currentLens = lens;
   if (lens === 'padi') {
     padiFitPending = true;
-    invalidatePadiShelfAnchors();
   }
   if (lens !== 'lineage') lineageRoot = null;
   document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
@@ -895,7 +867,6 @@ function exitAgentFocus() {
   }
   updateViewCrumb();
   padiFitPending = true;
-  invalidatePadiShelfAnchors();
   renderLens();
   document.getElementById('inspect').classList.remove('open');
   writeHashState();
@@ -1191,42 +1162,37 @@ function layoutPadiControlShelf(laneIndex, controls) {
       || a.name.localeCompare(b.name);
   });
 
-  const anchor = padiShelfAnchors[laneIndex];
-  const useScreenAnchor = !!anchor;
-  const shelfLeft = useScreenAnchor ? anchor.x : padiWorld.xLeft + padiControlLayoutUnits(PADI_CONTROL_LEFT_PAD);
-  const headerY = useScreenAnchor ? anchor.y : laneTop + padiControlLayoutUnits(PADI_CONTROL_TOP_PAD);
-  const libraryY = headerY + (useScreenAnchor ? PADI_CONTROL_ROW_GAP : padiControlLayoutUnits(PADI_CONTROL_ROW_GAP));
-  const shelfRight = shelfLeft + (useScreenAnchor ? PADI_LIBRARY_SHELF_WIDTH : padiControlLayoutUnits(PADI_LIBRARY_SHELF_WIDTH));
+  const shelfLeft = padiWorld.xLeft + padiControlLayoutUnits(PADI_CONTROL_LEFT_PAD);
+  const headerY = laneTop + padiControlLayoutUnits(PADI_CONTROL_TOP_PAD);
+  const libraryY = headerY + padiControlLayoutUnits(PADI_CONTROL_ROW_GAP);
 
   function place(node, centerX, centerY) {
-    const p = useScreenAnchor ? padiScreenToGraph(centerX, centerY) : { x: centerX, y: centerY };
-    if (!p) return;
-    node.__tx = p.x;
-    node.__ty = p.y;
-    node.x = p.x;
-    node.y = p.y;
-    node.fx = p.x;
-    node.fy = p.y;
+    node.__tx = centerX;
+    node.__ty = centerY;
+    node.x = centerX;
+    node.y = centerY;
+    node.fx = centerX;
+    node.fy = centerY;
   }
 
-  let cursor = shelfLeft;
-  sorted.filter(n => n.padiControlKind === 'label' || n.padiControlKind === 'spawn').forEach(node => {
-    const w = useScreenAnchor ? (node.padiWidth || 80) : padiControlLayoutUnits(node.padiWidth || 80);
-    place(node, cursor + w / 2, headerY);
-    cursor += w + (useScreenAnchor ? PADI_CONTROL_GAP : padiControlLayoutUnits(PADI_CONTROL_GAP));
-  });
+  const label = sorted.find(n => n.padiControlKind === 'label');
+  const spawn = sorted.find(n => n.padiControlKind === 'spawn');
+  if (label) {
+    const labelW = padiControlLayoutUnits(label.padiWidth || 80);
+    place(label, shelfLeft + labelW / 2, headerY);
+  }
+  if (spawn) {
+    const labelW = label ? padiControlLayoutUnits(label.padiWidth || 80) : 0;
+    const spawnW = padiControlLayoutUnits(spawn.padiWidth || 80);
+    place(spawn, shelfLeft + labelW + padiControlLayoutUnits(PADI_CONTROL_GAP) + spawnW / 2, headerY);
+  }
 
-  cursor = shelfLeft;
-  let rowY = libraryY;
-  sorted.filter(n => n.padiControlKind === 'library').forEach(node => {
-    const w = useScreenAnchor ? (node.padiWidth || 80) : padiControlLayoutUnits(node.padiWidth || 80);
-    const h = useScreenAnchor ? (node.padiHeight || 18) : padiControlLayoutUnits(node.padiHeight || 18);
-    if (cursor > shelfLeft && cursor + w > shelfRight) {
-      cursor = shelfLeft;
-      rowY += h + (useScreenAnchor ? PADI_LIBRARY_ROW_GAP : padiControlLayoutUnits(PADI_LIBRARY_ROW_GAP));
-    }
-    place(node, cursor + w / 2, rowY);
-    cursor += w + (useScreenAnchor ? PADI_LIBRARY_GAP : padiControlLayoutUnits(PADI_LIBRARY_GAP));
+  sorted.filter(n => n.padiControlKind === 'library').forEach((node, index) => {
+    const col = index % PADI_LIBRARY_COLS;
+    const row = Math.floor(index / PADI_LIBRARY_COLS);
+    const x = shelfLeft + padiControlLayoutUnits(PADI_LIBRARY_COL_STEP * col + (node.padiWidth || 80) / 2);
+    const y = libraryY + padiControlLayoutUnits(PADI_LIBRARY_ROW_STEP * row);
+    place(node, x, y);
   });
 }
 
@@ -1325,7 +1291,6 @@ function fitPadiToViewport(ms = 650) {
   fg.centerAt(cx + panelOffset / zoom, cy - 18 / zoom, ms);
   fg.zoom(zoom, ms);
   window.setTimeout(() => {
-    capturePadiShelfAnchors();
     layoutPadi();
     positionSwimlaneControls();
   }, ms ? ms + 40 : 0);
@@ -1820,7 +1785,6 @@ function initGraph(data) {
   const syncSize = () => {
     fg.width(wrapEl.clientWidth).height(wrapEl.clientHeight);
     if (currentLens === 'padi' && viewMode !== 'agent') {
-      invalidatePadiShelfAnchors();
       layoutPadi();
       fitPadiToViewport(0);
     }
