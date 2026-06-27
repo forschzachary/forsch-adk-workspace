@@ -59,7 +59,8 @@ def _chat_token() -> str:
                 break
     return token
 
-# External URL for the Gradio bridge (browser-facing iframe src).
+# External URL for the Gradio bridge iframe. serve.py reverse-proxies /chat/* to
+# the ADK bridge at 127.0.0.1:8800, so the iframe loads on the same hostname.
 CHAT_BASE_URL = os.environ.get("CHAT_BASE_URL", "/chat/")
 CRM_API_KEY_FILE = _HERMES_HOME / "secrets" / "frappe-admin-api-key"
 CRM_BASE = os.environ.get("CRM_BASE_URL", "https://crm.forschfrontiers.com")
@@ -198,6 +199,51 @@ def promote_agent(agent_id: str, target_role: str) -> dict:
         except json.JSONDecodeError:
             return {"ok": False, "error": f"parse error: {result.stdout[:200]}"}
     return {"ok": False, "error": result.stderr[:300] or f"exit {result.returncode}"}
+
+
+ADK_BRIDGE_URL = os.environ.get("ADK_BRIDGE_URL", "http://127.0.0.1:8800")
+
+def _proxy_to_bridge(handler, method):
+    """Reverse-proxy /chat/* to the ADK bridge (Gradio) at 127.0.0.1:8800.
+
+    This lets the Agent-tab iframe load /chat/ on the same hostname as the graph,
+    eliminating the need for chat.forschfrontiers.com as a separate tunnel route.
+    The bridge's own chat_token auth still applies.
+    """
+    import urllib.request
+    parsed = urlparse(handler.path)
+    if not parsed.path.startswith("/chat"):
+        return False
+    target = ADK_BRIDGE_URL + handler.path
+    try:
+        content_length = int(handler.headers.get("Content-Length", 0))
+        body = handler.rfile.read(content_length) if content_length > 0 else None
+        req = urllib.request.Request(target, data=body, method=method)
+        for key, val in handler.headers.items():
+            if key.lower() in ("host", "content-length", "transfer-encoding"):
+                continue
+            req.add_header(key, val)
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            handler.send_response(resp.status)
+            for key, val in resp.headers.items():
+                if key.lower() in ("transfer-encoding", "connection"):
+                    continue
+                handler.send_header(key, val)
+            handler.end_headers()
+            handler.wfile.write(resp.read())
+        return True
+    except urllib.error.HTTPError as e:
+        handler.send_response(e.code)
+        for key, val in e.headers.items():
+            if key.lower() in ("transfer-encoding", "connection"):
+                continue
+            handler.send_header(key, val)
+        handler.end_headers()
+        handler.wfile.write(e.read())
+        return True
+    except Exception:
+        handler._json_response(502, {"error": "bridge unreachable"})
+        return True
 
 
 def get_pulse():
@@ -1295,6 +1341,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(200, _list_agent_evalsets(agent_id))
             except ValueError as exc:
                 self._json_response(400, {"ok": False, "error": str(exc)})
+        elif path.startswith("/chat") and path != "/chat-token":
+            if _proxy_to_bridge(self, "GET"):
+                return
+            super().do_GET()
         else:
             super().do_GET()
 
@@ -1540,6 +1590,9 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(200, _run_agent_eval(agent_id, evalset_id))
             except ValueError as exc:
                 self._json_response(400, {"ok": False, "error": str(exc)})
+
+        elif parsed.path.startswith("/chat/") and parsed.path != "/chat-token":
+            _proxy_to_bridge(self, "POST")
 
         else:
             self._json_response(404, {"error": "not found"})

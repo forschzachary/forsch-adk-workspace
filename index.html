@@ -2642,8 +2642,8 @@ async function handleWireClick(node) {
 }
 
 // ── Unified sidecar widget (Agent + Hubert tabs) ──
-// ADK_CHAT_BASE is the external Gradio URL (chat.forschfrontiers.com in prod, localhost in dev).
-// __chatToken authenticates the iframe via the bridge's token-bridge middleware.
+// ADK_CHAT_BASE is the Gradio iframe URL. serve.py reverse-proxies /chat/ to the
+// ADK bridge at 127.0.0.1:8800, so the iframe loads on the same hostname.
 let ADK_CHAT_BASE = window.ADK_CHAT_BASE || '/chat/';
 let __chatToken = '';
 async function fetchChatToken() {
