@@ -64,4 +64,14 @@ tunnels:
     routes:
       - hostname: graph.forschfrontiers.com
         target: 127.0.0.1:8888
-    note: "Sole inbound path. Managed via Cloudflare dashboard ingress config + on-box cloudflared daemon (PID-managed, not systemd)."
+        note: "Sole inbound path for the graph + chat iframe. serve.py reverse-proxies /chat/* to the ADK bridge at 127.0.0.1:8800."
+      - hostname: chat.forschfrontiers.com
+        target: 127.0.0.1:8800
+        note: "Legacy separate route for the Gradio bridge. Superseded by the /chat/ proxy on the main hostname. Can be removed from the Cloudflare dashboard."
+      - hostname: cockpit.forschfrontiers.com
+        target: 127.0.0.1:8780
+      - hostname: files.forschfrontiers.com
+        target: 100.120.21.13:8334
+      - hostname: litellm.forschfrontiers.com
+        target: 127.0.0.1:4000
+    note: "Managed via Cloudflare dashboard ingress config + on-box cloudflared daemon (PID-managed, not systemd)."
