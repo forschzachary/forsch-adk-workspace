@@ -111,6 +111,15 @@ def api_add_reminder(body: ReminderRequest) -> dict[str, Any]:
     return result
 
 
+
+@app.post("/api/reminders/{reminder_id}/check")
+def api_check_reminder(reminder_id: int) -> dict[str, Any]:
+    result = remindctl.check_reminder(reminder_id=reminder_id)
+    if not result["ok"]:
+        raise HTTPException(status_code=404, detail=result.get("error", "not found"))
+    return result
+
+
 # ── Chore endpoints ────────────────────────────────────────────────────────
 
 
