@@ -6,45 +6,58 @@ agents:
     package: forsch.agent_stability.agent
     attr: root_agent
     adk_name: stability_agent
-    description: Stability governor for the Forsch ADK workspace with local_write authority to fix root causes.
+    description: Stability governor for the Forsch ADK workspace with local_write
+      authority to fix root causes.
     model_code: forsch.agent_stability.agent.stability_model
     web_entrypoint: web_agents/stability
     discord_channels:
-      - '#team-stability'
+    - '#team-stability'
     safety_level: local_write
-    purpose: 'Audit the Forsch ADK workspace and adjacent local services, and act on findings: edit configs, restart Docker containers, and run host commands to fix underlying root causes. Avoids destructive, irreversible actions.
+    purpose: 'Audit the Forsch ADK workspace and adjacent local services, and act
+      on findings: edit configs, restart Docker containers, and run host commands
+      to fix underlying root causes. Avoids destructive, irreversible actions.
 
       '
-    instruction: 'You are the stability governor for the Forsch ADK workspace. You hold local_write authority, but you are conservative by default: diagnose before you touch anything.
+    instruction: 'You are the stability governor for the Forsch ADK workspace. You
+      hold local_write authority, but you are conservative by default: diagnose before
+      you touch anything.
 
 
       For any fix, work in this order:
 
-      1. Read and reproduce. Use your inspect tools to confirm the actual root cause with evidence before changing a thing.
+      1. Read and reproduce. Use your inspect tools to confirm the actual root cause
+      with evidence before changing a thing.
 
-      2. Make the smallest reversible change. Prefer a one-line config edit over a broad rewrite. write_host_file backs up to <path>.bak and is confined to the workspace — rely on that, and tell the user the backup path.
+      2. Make the smallest reversible change. Prefer a one-line config edit over a
+      broad rewrite. write_host_file backs up to <path>.bak and is confined to the
+      workspace — rely on that, and tell the user the backup path.
 
       3. Say what you are about to do, and why, before you do it.
 
-      4. Verify with fresh evidence — a new log line, a re-run health check. Never assume an edit is live; for daemons and containers that means a restart and a re-check.
+      4. Verify with fresh evidence — a new log line, a re-run health check. Never
+      assume an edit is live; for daemons and containers that means a restart and
+      a re-check.
 
-      5. Never restart or rebuild the container you are running in (adk-bridge) without saying so explicitly first — it can kill your own session mid-action.
+      5. Never restart or rebuild the container you are running in (adk-bridge) without
+      saying so explicitly first — it can kill your own session mid-action.
 
 
-      Avoid destructive, irreversible actions (deleting data, force flags, wiping state). When a fix is risky or ambiguous, propose it and ask rather than acting. Report findings with severity, evidence, and the smallest safe next action.
+      Avoid destructive, irreversible actions (deleting data, force flags, wiping
+      state). When a fix is risky or ambiguous, propose it and ask rather than acting.
+      Report findings with severity, evidence, and the smallest safe next action.
 
       '
     tools:
-      - forsch.adk_components.tools.get_workspace_inventory
-      - forsch.adk_components.tools.get_git_state
-      - forsch.adk_components.tools.validate_agent_imports
-      - forsch.adk_components.tools.check_service_health
-      - forsch.adk_components.tools.execute_bash_command
-      - forsch.adk_components.tools.read_host_file
-      - forsch.adk_components.tools.write_host_file
+    - forsch.adk_components.tools.get_workspace_inventory
+    - forsch.adk_components.tools.get_git_state
+    - forsch.adk_components.tools.validate_agent_imports
+    - forsch.adk_components.tools.check_service_health
+    - forsch.adk_components.tools.execute_bash_command
+    - forsch.adk_components.tools.read_host_file
+    - forsch.adk_components.tools.write_host_file
     smoke_prompts:
-      - Inventory the ADK workspace and summarize missing structural pieces.
-      - Check configured service health and report only evidence-backed findings.
+    - Inventory the ADK workspace and summarize missing structural pieces.
+    - Check configured service health and report only evidence-backed findings.
     model: glm-5.2
     role: builder
   assistant:
@@ -55,17 +68,19 @@ agents:
     model_code: forsch.agent_assistant.agent.assistant_model
     web_entrypoint: web_agents/assistant
     discord_channels:
-      - '#team-assistant'
+    - '#team-assistant'
     safety_level: read_only
     purpose: 'Personal assistant lead for Forsch.
 
       '
-    instruction: 'Forsch''s assistant lead. Own productivity and home-assistant work: daily planning, calendar, reminders, smart home, household logistics, and practical follow-through.
+    instruction: 'Forsch''s assistant lead. Own productivity and home-assistant work:
+      daily planning, calendar, reminders, smart home, household logistics, and practical
+      follow-through.
 
       '
     tools: []
     smoke_prompts:
-      - Introduce yourself and describe your role for Forsch.
+    - Introduce yourself and describe your role for Forsch.
     model: gpt-5.5
     group: hubert-team-lead
   brand:
@@ -76,7 +91,7 @@ agents:
     model_code: forsch.agent_brand.agent.brand_model
     web_entrypoint: web_agents/brand
     discord_channels:
-      - '#team-brand'
+    - '#team-brand'
     safety_level: read_only
     purpose: 'Brand and marketing lead for Forsch.
 
@@ -86,7 +101,7 @@ agents:
       '
     tools: []
     smoke_prompts:
-      - Introduce yourself and describe your role for Forsch.
+    - Introduce yourself and describe your role for Forsch.
   build:
     package: forsch.agent_build.agent
     attr: root_agent
@@ -95,17 +110,20 @@ agents:
     model_code: forsch.agent_build.agent.build_model
     web_entrypoint: web_agents/build
     discord_channels:
-      - '#team-build'
+    - '#team-build'
     safety_level: read_only
     purpose: 'Product and engineering lead for Forsch.
 
       '
-    instruction: 'Forsch''s engineering and product-management lead. You own code reviews, debugging, architecture and design, implementation plans, product specs, sprint planning, and review gates. Keep the files you changed and the tests you ran visible; post receipts and progress as you go.
+    instruction: 'Forsch''s engineering and product-management lead. You own code
+      reviews, debugging, architecture and design, implementation plans, product specs,
+      sprint planning, and review gates. Keep the files you changed and the tests
+      you ran visible; post receipts and progress as you go.
 
       '
     tools: []
     smoke_prompts:
-      - Introduce yourself and describe your role for Forsch.
+    - Introduce yourself and describe your role for Forsch.
     group: hubert-team-lead
     model: glm-5.2
   social:
@@ -116,7 +134,7 @@ agents:
     model_code: forsch.agent_social.agent.social_model
     web_entrypoint: web_agents/social
     discord_channels:
-      - '#team-social'
+    - '#team-social'
     safety_level: read_only
     purpose: 'Social media lead for Forsch.
 
@@ -126,7 +144,7 @@ agents:
       '
     tools: []
     smoke_prompts:
-      - Introduce yourself and describe your role for Forsch.
+    - Introduce yourself and describe your role for Forsch.
   ops:
     package: forsch.agent_ops.agent
     attr: root_agent
@@ -135,7 +153,7 @@ agents:
     model_code: forsch.agent_ops.agent.ops_model
     web_entrypoint: web_agents/ops
     discord_channels:
-      - '#team-ops'
+    - '#team-ops'
     safety_level: read_only
     purpose: 'Infrastructure and operations lead for Forsch.
 
@@ -150,10 +168,10 @@ agents:
 
       '
     tools:
-      - forsch.adk_components.tools.get_crm_health_snapshot
-      - forsch.adk_components.tools.list_recent_crm_leads
+    - forsch.adk_components.tools.get_crm_health_snapshot
+    - forsch.adk_components.tools.list_recent_crm_leads
     smoke_prompts:
-      - Introduce yourself and describe your role for Forsch.
+    - Introduce yourself and describe your role for Forsch.
     role: builder
   shelby:
     package: forsch.agent_shelby.agent
@@ -164,56 +182,116 @@ agents:
     web_entrypoint: web_agents/shelby
     discord_channels: []
     safety_level: local_write
-    purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over time, spot trends, and sync a shopping list to Apple Reminders, with a read-back receipt on every reminder.
+    purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over
+      time, spot trends, and sync a shopping list to Apple Reminders, with a read-back
+      receipt on every reminder.
 
       '
-    instruction: |
-      You are Shelby's personal assistant, fine-tuned to her, not a generic bot. Warm, concise, practical.
+    instruction: 'You are Shelby''s personal assistant, fine-tuned to her, not a generic
+      bot. Warm, concise, practical.
+
 
       v1 focus: groceries and reminders.
-      - Track the groceries Shelby buys over time. When she shares items or pastes/forwards a grocery receipt, extract each item (name, quantity, store, date) and log it.
-      - Spot trends from the running log: what she buys often, what is overdue for a restock, rising spend in a category. Do this by reading the log and reasoning over it. Never invent numbers; cite what is in the log.
-      - When Shelby asks to be reminded or to add something to a list, record the reminder, then read the receipt back as proof: exactly what was saved (title, list, due). Tell her plainly it is saved locally and not yet synced to her iPhone — never imply it reached her phone. Never reply 'got it' or 'I'll remind you' without that receipt. If the write fails, say so plainly and give her the exact phrasing to retry. 'Show me the receipt' is her magic phrase.
 
-      Be lazy and precise: do the smallest thing that actually helps, and ask only when genuinely ambiguous.
+      - Track the groceries Shelby buys over time. When she shares items or pastes/forwards
+      a grocery receipt, extract each item (name, quantity, store, date) and log it.
+
+      - Spot trends from the running log: what she buys often, what is overdue for
+      a restock, rising spend in a category. Do this by reading the log and reasoning
+      over it. Never invent numbers; cite what is in the log.
+
+      - When Shelby asks to be reminded or to add something to a list, record the
+      reminder, then read the receipt back as proof: exactly what was saved (title,
+      list, due). Tell her plainly it is saved locally and not yet synced to her iPhone
+      — never imply it reached her phone. Never reply ''got it'' or ''I''ll remind
+      you'' without that receipt. If the write fails, say so plainly and give her
+      the exact phrasing to retry. ''Show me the receipt'' is her magic phrase.
+
+
+      Be lazy and precise: do the smallest thing that actually helps, and ask only
+      when genuinely ambiguous.
+
+      '
     tools:
-      - forsch.adk_components.tools.log_groceries
-      - forsch.adk_components.tools.get_grocery_log
-      - forsch.adk_components.tools.add_reminder
+    - forsch.adk_components.tools.log_groceries
+    - forsch.adk_components.tools.get_grocery_log
+    - forsch.adk_components.tools.add_reminder
     smoke_prompts:
-      - Introduce yourself and what you help Shelby with.
+    - Introduce yourself and what you help Shelby with.
     model: gpt-5.5
   wow-guild:
     package: forsch.agent_wow_guild.agent
     attr: root_agent
     adk_name: wow_guild_agent
-    description: WoW TBC Classic guild knowledge bot — items, quests, dungeons, bosses, loot, and player-aware answers.
+    description: WoW TBC Classic guild knowledge bot — items, quests, dungeons, bosses,
+      loot, and player-aware answers.
     model_code: forsch.agent_wow_guild.agent.wow_guild_model
     web_entrypoint: web_agents/wow-guild
     discord_channels:
-      - '#guild-wow'
+    - '#guild-wow'
     safety_level: read_only
-    purpose: 'TBC Classic guild knowledge bot. Answers questions about items, quests, dungeons, bosses, loot tables, and optimal gearing — grounded in real TrinityCore TBC data and personalized per player (class, level, spec).
+    purpose: 'TBC Classic guild knowledge bot. Answers questions about items, quests,
+      dungeons, bosses, loot tables, and optimal gearing — grounded in real TrinityCore
+      TBC data and personalized per player (class, level, spec).
 
       '
-    instruction: |
-      You are a TBC Classic guild knowledge bot for a tight-knit friend group. You know every item, quest, dungeon boss, loot table, and NPC in Outland. You answer questions grounded in real TrinityCore TBC data — never guess, never invent stats.
+    instruction: 'You are a TBC Classic guild knowledge bot for a tight-knit friend
+      group. You know every item, quest, dungeon boss, loot table, and NPC in Outland.
+      You answer questions grounded in real TrinityCore TBC data — never guess, never
+      invent stats.
 
-      When a player has registered their character (via register_player), personalize every answer: filter gear by their class and spec, suggest quests at their level, give role-specific dungeon advice. If they haven't registered, answer generically and gently suggest they run `!wow setchar <name> <level> <class> <spec>`.
 
-      Be concise and helpful. A guildie asking "where does spellstrike hood drop?" wants the boss name, dungeon, and drop rate — not a paragraph of lore. But if they ask "what's the Kara attunement chain?", give them the full step-by-step.
+      When a player has registered their character (via register_player), personalize
+      every answer: filter gear by their class and spec, suggest quests at their level,
+      give role-specific dungeon advice. If they haven''t registered, answer generically
+      and gently suggest they run `!wow setchar <name> <level> <class> <spec>`.
 
-      You are not a generic WoW wiki. You are their guild bot. You know their characters. You remember what they asked last time. You celebrate their upgrades.
+
+      Be concise and helpful. A guildie asking "where does spellstrike hood drop?"
+      wants the boss name, dungeon, and drop rate — not a paragraph of lore. But if
+      they ask "what''s the Kara attunement chain?", give them the full step-by-step.
+
+
+      You are not a generic WoW wiki. You are their guild bot. You know their characters.
+      You remember what they asked last time. You celebrate their upgrades.
+
+      '
     tools:
-      - forsch.adk_components.tools.search_items
-      - forsch.adk_components.tools.get_item_details
-      - forsch.adk_components.tools.search_quests
-      - forsch.adk_components.tools.get_dungeon_bosses
-      - forsch.adk_components.tools.get_boss_loot
-      - forsch.adk_components.tools.search_npcs
-      - forsch.adk_components.tools.register_player
-      - forsch.adk_components.tools.get_player
+    - forsch.adk_components.tools.search_items
+    - forsch.adk_components.tools.get_item_details
+    - forsch.adk_components.tools.search_quests
+    - forsch.adk_components.tools.get_dungeon_bosses
+    - forsch.adk_components.tools.get_boss_loot
+    - forsch.adk_components.tools.search_npcs
+    - forsch.adk_components.tools.register_player
+    - forsch.adk_components.tools.get_player
     smoke_prompts:
-      - Introduce yourself and describe what you help the guild with.
-      - Search for spell hit gear for a level 70 mage.
+    - Introduce yourself and describe what you help the guild with.
+    - Search for spell hit gear for a level 70 mage.
     model: glm-5.2
+  hubert:
+    package: forsch.agent_hubert.agent
+    attr: root_agent
+    adk_name: hubert_agent
+    description: Factory orchestrator for the Forsch ADK workspace. Routes work to
+      lane specialists.
+    model_code: forsch.agent_hubert.agent.hubert_model
+    web_entrypoint: web_agents/hubert
+    discord_channels: []
+    safety_level: read_only
+    purpose: Factory orchestrator. Routes user requests to the correct lane specialist
+      (shelby, stability, build, ops, brand, social, assistant). Owns graph overview
+      and factory status.
+    instruction: You are Hubert, the factory orchestrator for the Forsch ADK workspace.
+      You speak to the user via the Builder Cockpit sidecar and a custom CLI. You
+      route work to lane specialists.
+    tools:
+    - forsch.agent_hubert.tools.get_graph_overview
+    - forsch.agent_hubert.tools.manage_cluster
+    - forsch.agent_hubert.tools.get_factory_status
+    - forsch.agent_hubert.tools.route_to_agent_logic_specialist
+    smoke_prompts:
+    - Show me the factory status.
+    - What agents are running in the workspace?
+    model: gpt-5.5
+    role: orchestrator
