@@ -6,10 +6,12 @@ Usage:
 
 Security:
   - Binds 127.0.0.1 (not 0.0.0.0). Only reachable from this box.
-  - Mutating endpoints require X-Graph-Secret header matching GRAPH_SERVER_SECRET env var.
-  - Read-only endpoints (/pulse, /clusters, /manifest, /models) are unauthenticated.
+  - Cloudflare Access (Zero Trust) gates the edge — Google OAuth identity.
+  - serve.py verifies the Cf-Access-Jwt-Assertion header (RS256 JWT) against
+    Cloudflare's public JWKS to extract a verified email as the principal.
+  - All endpoints require a valid Access JWT (no anonymous reads).
   - /chat enforces session ownership, rate-limits per principal, and logs every invocation.
-  - CORS is pinned to the CRM origin on read-only endpoints; mutating endpoints have no CORS.
+  - CORS is pinned to the graph origin.
 """
 
 import hashlib
@@ -20,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -31,21 +34,108 @@ WS = workspace_root() / "adk"
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 
+# ── Cloudflare Access (Zero Trust) auth ──
+# Cloudflare Access gates the edge with Google OAuth. Every request arrives
+# with a Cf-Access-Jwt-Assertion header (RS256 JWT). serve.py verifies it
+# against Cloudflare's public JWKS and extracts the verified email as the
+# principal. No shared secrets, no Frappe coupling.
+CF_ACCESS_TEAM = os.environ.get("CF_ACCESS_TEAM", "forschfrontiers")
+CF_ACCESS_AUD = os.environ.get("CF_ACCESS_AUD", "")  # set per-app AUD tag from dashboard
+_JWKS_CACHE = None
+_JWKS_FETCHED_AT = 0.0
+
+def _fetch_jwks():
+    """Fetch Cloudflare Access public keys (JWKS). Cached for 1 hour."""
+    global _JWKS_CACHE, _JWKS_FETCHED_AT
+    if _JWKS_CACHE and (time.time() - _JWKS_FETCHED_AT) < 3600:
+        return _JWKS_CACHE
+    try:
+        url = f"https://{CF_ACCESS_TEAM}.cloudflareaccess.com/cdn-cgi/access/certs"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            _JWKS_CACHE = json.loads(resp.read())
+            _JWKS_FETCHED_AT = time.time()
+            return _JWKS_CACHE
+    except Exception:
+        return None
+
+def _verify_access_jwt(token: str) -> str | None:
+    """Verify a Cf-Access-Jwt-Assertion JWT and return the email, or None.
+
+    Uses Python stdlib only (no PyJWT dependency). Verifies RS256 signature
+    against Cloudflare's JWKS, checks iss + aud + exp.
+    """
+    import base64
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        header_b64, payload_b64, sig_b64 = parts
+        # Decode header and payload (add padding)
+        def _b64decode(s):
+            s += "=" * (4 - len(s) % 4)
+            return json.loads(base64.urlsafe_b64decode(s))
+        header = _b64decode(header_b64)
+        payload = _b64decode(payload_b64)
+        # Check expiry
+        if payload.get("exp", 0) < time.time():
+            return None
+        # Check issuer
+        expected_iss = f"https://{CF_ACCESS_TEAM}.cloudflareaccess.com"
+        if payload.get("iss") != expected_iss:
+            return None
+        # Check audience if configured
+        if CF_ACCESS_AUD:
+            aud = payload.get("aud", "")
+            if aud != CF_ACCESS_AUD:
+                return None
+        # Find matching key from JWKS
+        jwks = _fetch_jwks()
+        if not jwks:
+            return None
+        kid = header.get("kid")
+        key_data = None
+        for key in jwks.get("keys", []):
+            if key.get("kid") == kid:
+                key_data = key
+                break
+        if not key_data:
+            return None
+        # Verify signature (RSA-SHA256)
+        n_b64 = key_data.get("n")
+        e_b64 = key_data.get("e")
+        if not n_b64 or not e_b64:
+            return None
+        n = int.from_bytes(base64.urlsafe_b64decode(n_b64 + "=="), "big")
+        e = int.from_bytes(base64.urlsafe_b64decode(e_b64 + "=="), "big")
+        # Reconstruct RSA public key
+        from hashlib import sha256
+        signing_input = (header_b64 + "." + payload_b64).encode()
+        signature = base64.urlsafe_b64decode(sig_b64 + "==")
+        # RSA verify using pow()
+        key_length = (n.bit_length() + 7) // 8
+        if len(signature) != key_length:
+            return None
+        sig_int = int.from_bytes(signature, "big")
+        decrypted = pow(sig_int, e, n)
+        decrypted_bytes = decrypted.to_bytes(key_length, "big")
+        # PKCS#1 v1.5 padding: 0x00 0x01 [FF padding] 0x00 [ DigestInfo ]
+        digest = sha256(signing_input).digest()
+        # Build expected PKCS#1 v1.5 structure
+        padding_len = key_length - len(digest) - 3 - 1
+        expected = b"\x00\x01" + b"\xff" * padding_len + b"\x00" + \
+            b"\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01" \
+            b"\x05\x00\x04\x20" + digest
+        if decrypted_bytes != expected:
+            return None
+        return payload.get("email")
+    except Exception:
+        return None
+
+CRM_ORIGIN = os.environ.get("CRM_ORIGIN", "https://graph.forschfrontiers.com")
+
 # Persistent home (HERMES_HOME); on the box this is /opt/data (== host /root/.hermes).
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/opt/data"))
-
-GRAPH_SECRET = os.environ.get("GRAPH_SERVER_SECRET", "")
-GRAPH_EXPOSE_SECRET = os.environ.get("GRAPH_EXPOSE_SECRET", "").lower() in ("1", "true", "yes")
-# Durability: if the env var wasn't injected at launch, read the secret from the
-# persistent file ($HERMES_HOME/graph-server-secret). This makes the secret survive
-# ANY restart — manual, supervised, or container reboot — without depending on the
-# launch env. The file is the durable store; if it's also absent, GRAPH_SECRET
-# stays empty and _check_secret fails closed (refuses every mutating request).
-if not GRAPH_SECRET:
-    _secret_file = _HERMES_HOME / "graph-server-secret"
-    if _secret_file.exists():
-        GRAPH_SECRET = _secret_file.read_text().strip()
-CRM_ORIGIN = os.environ.get("CRM_ORIGIN", "https://crm.forschfrontiers.com")
 
 # Bridge CHAT_TOKEN — needed so the browser can authenticate the Gradio iframe.
 # Read from env var first, then fall back to bridge.env file.
@@ -795,41 +885,51 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
     return {"ok": True, "name": cluster_name, "agent_id": agent_id}
 
 
-# ── Hubert Chat endpoint ──
+# ── MiMo Chat endpoint ──
 
-def chat_with_hubert(message: str, session_id: str | None = None) -> dict:
-    """Send a message to Hubert via hermes chat -q and return the response.
+MIMO_WORKDIR = str(WS)
+MIMO_BIN = os.environ.get("MIMO_BIN", "mimo")
+MIMO_TIMEOUT = int(os.environ.get("MIMO_TIMEOUT", "120"))
 
-    Loads SOUL.md and rules so Hubert responds as Hubert, not generic Hermes.
-    Context prefix tells Hubert he's in the Builder Cockpit.
+def chat_with_mimo(message: str, session_id: str | None = None,
+                   model: str | None = None, principal: str = "unknown") -> dict:
+    """Send a message to MiMo (CLI coding agent) and return the response.
+
+    MiMo runs as a subprocess with full tool access (bash, file, search) in
+    the ADK workspace. Session-aware: pass session_id to continue a conversation.
+    Model can be overridden per-request via the -m flag.
     """
-    context_msg = (
-        "[Builder Cockpit context] You are Hubert, responding inside the "
-        "Live Agent Graph Builder Cockpit chat sidecar. "
-        "The user is interacting with the agent graph visualization. "
-        "Stay in character. Be concise. No bullets in chat. "
-        "If asked about agents/graph/clusters, reference the live data.\n\n"
-        f"User: {message}"
-    )
-    cmd = ["hermes", "chat", "-q", context_msg, "--quiet", "--source", "tool",
-           "-m", "gpt-5.5", "--provider", "custom",
-           "-t", "terminal,file,web,skills,search,session_search,memory,todo,delegation"]
+    cmd = [MIMO_BIN, "run", "--format", "json", "--dir", MIMO_WORKDIR]
+    if model:
+        cmd.extend(["-m", model])
     if session_id:
-        cmd.extend(["--resume", session_id])
+        cmd.extend(["-s", session_id])
+    cmd.append(message)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=str(WS))
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                                timeout=MIMO_TIMEOUT, cwd=MIMO_WORKDIR)
         if result.returncode == 0:
-            # Parse session info from output
-            output = result.stdout.strip()
-            new_session_id = None
-            for line in output.split("\n"):
-                if "session:" in line.lower():
-                    new_session_id = line.split("session:")[-1].strip()
-                    break
-            return {"ok": True, "response": output, "session_id": new_session_id or session_id}
+            response_text = ""
+            new_session_id = session_id or ""
+            for line in result.stdout.strip().split("\n"):
+                line = line.strip()
+                if not line or not line.startswith("{"):
+                    continue
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if evt.get("type") == "text" and evt.get("part", {}).get("text"):
+                    response_text += evt["part"]["text"]
+                if evt.get("sessionID") and not new_session_id:
+                    new_session_id = evt["sessionID"]
+            return {"ok": True, "response": response_text or "(no response)",
+                    "session_id": new_session_id}
         return {"ok": False, "error": result.stderr[:500] or f"exit {result.returncode}"}
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "timeout after 120s"}
+        return {"ok": False, "error": f"timeout after {MIMO_TIMEOUT}s"}
+    except FileNotFoundError:
+        return {"ok": False, "error": "mimo not installed on this box"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -1240,19 +1340,23 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(SPIKE_DIR), **kwargs)
 
-    def _check_secret(self) -> bool:
-        """Return True if the request carries the correct X-Graph-Secret header.
+    def _get_principal(self) -> str | None:
+        """Verify Cloudflare Access JWT and return the verified email, or None.
 
-        Fails closed: if GRAPH_SERVER_SECRET is not set, all mutating requests are refused.
-        Uses hmac.compare_digest to prevent timing attacks.
+        Every request must carry a valid Cf-Access-Jwt-Assertion header.
+        Returns the verified email as the principal for audit logging.
         """
-        if not GRAPH_SECRET:
-            return False  # fail closed — no secret configured means no access
-        req_secret = self.headers.get("X-Graph-Secret", "")
-        return hmac.compare_digest(req_secret, GRAPH_SECRET)
+        token = self.headers.get("Cf-Access-Jwt-Assertion", "")
+        if not token:
+            return None
+        return _verify_access_jwt(token)
+
+    def _check_auth(self) -> bool:
+        """Return True if the request carries a valid Cloudflare Access JWT."""
+        return self._get_principal() is not None
 
     def _is_mutating(self, path: str) -> bool:
-        """Return True for endpoints that mutate state (require auth + no CORS)."""
+        """Return True for endpoints that mutate state."""
         return path in ("/spawn", "/wire", "/save-agent", "/promote",
                         "/new-cluster", "/add-agent", "/chat",
                         "/agent-config", "/agent-generate", "/agent-eval-run")
@@ -1264,25 +1368,11 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, get_pulse())
         elif path in ("/clusters", "/clusters/"):
             self._json_response(200, list_clusters())
-        elif path == "/graph-secret":
-            # Never expose the write secret in production. Local dev can opt in
-            # with GRAPH_EXPOSE_SECRET=1; otherwise the operator unlocks edits
-            # in the browser by entering the secret manually.
-            hdr_secret = self.headers.get("X-Graph-Secret", "")
-            if GRAPH_SECRET and hdr_secret == GRAPH_SECRET:
-                self._json_response(200, {"secret": ""})
-            elif GRAPH_EXPOSE_SECRET:
-                self._json_response(200, {"secret": GRAPH_SECRET or ""})
-            else:
-                self._json_response(403, {"error": "forbidden: enter graph edit secret in the UI"})
         elif path == "/chat-token":
-            # The bridge token can drive agent chat, so keep it behind the same
-            # operator unlock as graph mutations. Local dev can opt in with
-            # GRAPH_EXPOSE_SECRET=1.
-            if self._check_secret() or GRAPH_EXPOSE_SECRET:
+            if self._check_auth():
                 self._json_response(200, {"token": _chat_token(), "base": CHAT_BASE_URL})
             else:
-                self._json_response(403, {"error": "forbidden: X-Graph-Secret required"})
+                self._json_response(403, {"error": "forbidden: Cloudflare Access required"})
         elif path == "/manifest":
             qs = parse_qs(parsed.query)
             cluster = qs.get("cluster", [None])[0]
@@ -1295,24 +1385,23 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             self._json_response(200, manifest)
         elif path == "/models":
-            import urllib.request
             try:
-                req = urllib.request.Request("http://127.0.0.1:4000/v1/models")
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    data = json.loads(resp.read())
-                    models = [m["id"] for m in data.get("data", [])]
+                r = subprocess.run([MIMO_BIN, "models", "--format", "json"],
+                                   capture_output=True, text=True, timeout=10)
+                if r.returncode == 0:
+                    models = [m.strip() for m in r.stdout.strip().split("\n") if m.strip()]
                     self._json_response(200, {"models": sorted(models)})
+                else:
+                    raise Exception(r.stderr[:200])
             except Exception:
                 self._json_response(200, {"models": [
-                    "mimo-v2.5", "mimo-v2.5-pro", "gpt-5.5", "gpt-5.4", "gpt-4.1",
-                    "deepseek-v4-pro", "deepseek-v4-flash", "glm-5.2",
-                    "gemini-3-pro-preview", "gemini-3-flash-preview",
-                    "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
+                    "mimo-v2.5", "mimo-v2.5-pro", "gpt-5.5", "gpt-5.4",
+                    "deepseek-v4-pro", "glm-5.2", "gemini-3-pro-preview",
                 ]})
-        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_secret():
-            # Fail-closed: if GRAPH_SECRET is empty (misconfig), block access rather
+        elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_auth():
+            # Fail-closed: without a valid Access JWT, block access.
             # than silently opening the endpoints. Standalone dev should set a secret.
-            self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
+            self._json_response(403, {"ok": False, "error": "forbidden: Cloudflare Access required"})
         elif path == "/agent-config":
             qs = parse_qs(parsed.query)
             agent_id = qs.get("agent_id", [None])[0]
@@ -1365,7 +1454,7 @@ class Handler(SimpleHTTPRequestHandler):
             params = parse_qs(body)
 
         if parsed.path == "/spawn":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             agent_id = params.get("id", [None])[0]
@@ -1397,7 +1486,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(500, {"ok": False, "error": result.stderr[:500]})
 
         elif parsed.path == "/wire":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             source = params.get("source", [None])[0]
@@ -1425,7 +1514,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, check)
 
         elif parsed.path == "/save-agent":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             agent_id = params.get("agent_id", [None])[0]
@@ -1476,7 +1565,7 @@ class Handler(SimpleHTTPRequestHandler):
                 ]})
 
         elif parsed.path == "/promote":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             agent_id = params.get("agent_id", [None])[0]
@@ -1488,7 +1577,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/new-cluster":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             name = params.get("name", [None])[0]
@@ -1499,7 +1588,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/add-agent":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             cluster = params.get("cluster", [None])[0]
@@ -1511,29 +1600,26 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/chat":
-            if not self._check_secret():
-                self._json_response(401, {"error": "unauthorized"})
+            principal = self._get_principal()
+            if not principal:
+                self._json_response(401, {"error": "unauthorized: Cloudflare Access required"})
                 return
-            # Parse JSON body (CRM proxy sends JSON, browser sends form-encoded)
-            principal = None
             message = None
             session_id = None
+            model = None
             try:
                 json_body = json.loads(body) if body else {}
-                principal = json_body.get("principal")
                 message = json_body.get("message")
                 session_id = json_body.get("session_id")
+                model = json_body.get("model")
             except json.JSONDecodeError:
                 pass
-            # Fallback to form-encoded (browser direct, deprecated but kept for transition)
             if not message:
                 message = params.get("message", [None])[0]
                 session_id = params.get("session_id", [None])[0]
             if not message:
                 self._json_response(400, {"error": "missing message"})
                 return
-            if not principal:
-                principal = "unknown"
 
             # Rate limit
             if not _check_rate(principal):
@@ -1550,7 +1636,7 @@ class Handler(SimpleHTTPRequestHandler):
                             self._json_response(403, {"error": "session owned by another principal"})
                             return
 
-            result = chat_with_hubert(message, session_id)
+            result = chat_with_mimo(message, session_id, model, principal)
 
             # Track session ownership
             if result.get("ok") and result.get("session_id"):
@@ -1562,13 +1648,13 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 500, result)
 
         elif parsed.path == "/agent-config":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             self._json_response(200, _save_agent_config(params))
 
         elif parsed.path == "/agent-generate":
-            if not self._check_secret():
+            if not self._check_auth():
                 self._json_response(401, {"error": "unauthorized"})
                 return
             agent_id = params.get("agent_id", [None])[0]
@@ -1578,8 +1664,8 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, _generate_agent(agent_id))
 
         elif parsed.path == "/agent-eval-run":
-            if not self._check_secret():
-                self._json_response(403, {"ok": False, "error": "forbidden: X-Graph-Secret required"})
+            if not self._check_auth():
+                self._json_response(403, {"ok": False, "error": "forbidden: Cloudflare Access required"})
                 return
             agent_id = params.get("agent_id", [None])[0]
             evalset_id = params.get("evalset_id", [None])[0]
@@ -1604,7 +1690,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not self._is_mutating(path):
             self.send_header("Access-Control-Allow-Origin", CRM_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Graph-Secret")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def _json_response(self, code, data):

@@ -340,8 +340,15 @@
     align-self: center; color: #8b949e; font-size: 11px; font-style: italic;
   }
   #hubert-input-row {
-    display: flex; gap: 8px; padding: 10px 12px;
-    border-top: 1px solid #30363d; background: #0d1117;
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid #30363d;
+    align-items: flex-end;
+  }
+  #chat-model-select {
+    background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
+    border-radius: 6px; padding: 4px 6px; font-size: 12px; max-width: 140px;
   }
   #hubert-input {
     flex: 1; background: #0d1117; border: 1px solid #30363d;
@@ -414,9 +421,8 @@
 
   <div class="sep"></div>
   <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
-  <button class="action-btn" id="unlock-edits" style="margin-top:4px;">Unlock edits</button>
-  <div id="edit-auth-status">Edits locked</div>
-  <button class="action-btn" id="chat-toggle" style="margin-top:4px;background:#1a1a2e;border-color:#d29922;color:#d29922;">💬 Hubert chat</button>
+  <div id="edit-auth-status" class="unlocked">Authenticated via Cloudflare Access</div>
+  <button class="action-btn" id="chat-toggle" style="margin-top:4px;background:#1a1a2e;border-color:#d29922;color:#d29922;">💬 MiMo chat</button>
 
   <div class="sep"></div>
   <div class="legend">
@@ -466,9 +472,10 @@
   </div>
   <div id="sidecar-panel-hubert" class="sidecar-panel">
     <div id="hubert-messages">
-      <div class="hubert-msg system">Connected to Hubert. Ask anything about the graph, agents, or what to build next.</div>
+      <div class="hubert-msg system">Connected to MiMo. Ask anything about the graph, agents, or what to build next. Full tool access — it can read, write, and run code in the workspace.</div>
     </div>
     <div id="hubert-input-row">
+      <select id="chat-model-select" title="Model"></select>
       <textarea id="hubert-input" placeholder="Describe what you want..." rows="1"></textarea>
       <button id="hubert-send">Send</button>
     </div>
@@ -656,66 +663,20 @@ function apiUrl(path){
   return path;
 }
 
-// ── Graph secret for workbench API calls ──
-// Mutating graph calls require an operator secret. Production never exposes it;
-// local dev may opt in via GRAPH_EXPOSE_SECRET=1, otherwise the user unlocks
-// edits manually and the secret stays in sessionStorage only.
+// ── Auth: Cloudflare Access handles identity at the edge ──
+// No client-side secret management needed. Access JWT is injected by the edge.
 let __graphSecret = '';
-const GRAPH_SECRET_STORAGE_KEY = 'live-agent-graph:graph-secret';
-function graphSecretHeaders() {
-  const h = {};
-  if (__graphSecret) h['X-Graph-Secret'] = __graphSecret;
-  return h;
+function graphSecretHeaders() { return {}; }
+function mutationHeaders(extra = {}) {
+  return { 'Content-Type': 'application/x-www-form-urlencoded', ...extra };
 }
+function updateEditAuthStatus() {}
+async function unlockGraphEdits() { return true; }
+async function ensureGraphSecret() { return true; }
 function mutationHeaders(extra = {}) {
   return { 'Content-Type': 'application/x-www-form-urlencoded', ...graphSecretHeaders(), ...extra };
 }
-function updateEditAuthStatus() {
-  const status = document.getElementById('edit-auth-status');
-  const btn = document.getElementById('unlock-edits');
-  if (!status || !btn) return;
-  status.textContent = __graphSecret ? 'Edits unlocked for this browser session' : 'Edits locked';
-  status.classList.toggle('unlocked', !!__graphSecret);
-  btn.textContent = __graphSecret ? 'Lock edits' : 'Unlock edits';
-}
-function setGraphSecret(secret) {
-  __graphSecret = (secret || '').trim();
-  try {
-    if (__graphSecret) sessionStorage.setItem(GRAPH_SECRET_STORAGE_KEY, __graphSecret);
-    else sessionStorage.removeItem(GRAPH_SECRET_STORAGE_KEY);
-  } catch(_) {}
-  updateEditAuthStatus();
-  if (__graphSecret) fetchChatToken();
-}
-function initGraphSecretFromStorage() {
-  try { setGraphSecret(sessionStorage.getItem(GRAPH_SECRET_STORAGE_KEY) || ''); }
-  catch(_) { updateEditAuthStatus(); }
-}
-async function unlockGraphEdits() {
-  if (__graphSecret) {
-    setGraphSecret('');
-    return false;
-  }
-  const secret = prompt('Graph edit secret');
-  if (!secret) return false;
-  setGraphSecret(secret);
-  return true;
-}
-async function ensureGraphSecret() {
-  if (__graphSecret) return true;
-  await fetchGraphSecret();
-  if (__graphSecret) return true;
-  return unlockGraphEdits();
-}
-async function fetchGraphSecret() {
-  try {
-    const r = await fetch(apiUrl('/graph-secret'));
-    if (r.ok) {
-      const d = await r.json();
-      if (d.secret) setGraphSecret(d.secret);
-    }
-  } catch(_) {}
-}
+async function ensureGraphSecret() { return true; }
 
 // ── State ──
 let graphData, currentLens = 'padi', lineageRoot = null, showDepRail = false, showInfraRail = false;
@@ -2210,7 +2171,7 @@ function renderLaneLibraries() {
 
 // ── Refresh ──
 document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
-document.getElementById('unlock-edits').addEventListener('click', unlockGraphEdits);
+// unlock-edits button removed — Cloudflare Access handles auth at the edge
 
 // ── Chat toggle ── (wired after toggleSidecar is defined, see sidecar widget section)
 
@@ -2711,6 +2672,21 @@ function toggleSidecar() {
 }
 document.getElementById('chat-toggle').addEventListener('click', toggleSidecar);
 
+// Load models for the chat model selector
+async function loadChatModels() {
+  try {
+    const r = await fetch(apiUrl('/models'));
+    if (r.ok) {
+      const d = await r.json();
+      const sel = document.getElementById('chat-model-select');
+      if (sel) {
+        sel.innerHTML = d.models.map(m => `<option value="${m}">${m}</option>`).join('');
+      }
+    }
+  } catch(_) {}
+}
+loadChatModels();
+
 // Hubert chat tab
 function renderHubertMessages() {
   const el = document.getElementById('hubert-messages');
@@ -2742,13 +2718,13 @@ async function sendHubertMessage() {
   if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
 
   try {
-    const hdrs = mutationHeaders({ 'Content-Type': 'application/json' });
-    // Try to get real CRM username; fall back to 'graph-ui' for standalone mode.
-    const principal = 'graph-ui';
+    const hdrs = { 'Content-Type': 'application/json' };
+    const modelSel = document.getElementById('chat-model-select');
+    const model = modelSel ? modelSel.value : null;
     const body = JSON.stringify({
       message: context + text,
       session_id: hubertSessionId,
-      principal
+      model
     });
     const r = await fetch(apiUrl('/chat'), { method: 'POST', headers: hdrs, body });
     const data = await r.json();
@@ -2986,7 +2962,6 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Init ──
-initGraphSecretFromStorage();
 loadClusters();
 loadRegistryAgents();
 loadModels();
