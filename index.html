@@ -656,17 +656,6 @@ function apiUrl(path){
   return path;
 }
 
-// CSRF token for CRM proxy POST requests.
-// When loaded through graph_embed, the page inherits window.frappe.csrf_token
-// from the parent Frappe frame. All POSTs through the proxy need this header.
-function csrfHeaders() {
-  const h = { 'Content-Type': 'application/x-www-form-urlencoded' };
-  if (window.frappe?.csrf_token) {
-    h['X-Frappe-CSRF-Token'] = window.frappe.csrf_token;
-  }
-  return h;
-}
-
 // ── Graph secret for workbench API calls ──
 // Mutating graph calls require an operator secret. Production never exposes it;
 // local dev may opt in via GRAPH_EXPOSE_SECRET=1, otherwise the user unlocks
@@ -679,7 +668,7 @@ function graphSecretHeaders() {
   return h;
 }
 function mutationHeaders(extra = {}) {
-  return { ...csrfHeaders(), ...graphSecretHeaders(), ...extra };
+  return { 'Content-Type': 'application/x-www-form-urlencoded', ...graphSecretHeaders(), ...extra };
 }
 function updateEditAuthStatus() {
   const status = document.getElementById('edit-auth-status');
@@ -2755,7 +2744,7 @@ async function sendHubertMessage() {
   try {
     const hdrs = mutationHeaders({ 'Content-Type': 'application/json' });
     // Try to get real CRM username; fall back to 'graph-ui' for standalone mode.
-    const principal = window.frappe?.session?.user || 'graph-ui';
+    const principal = 'graph-ui';
     const body = JSON.stringify({
       message: context + text,
       session_id: hubertSessionId,
@@ -2792,7 +2781,7 @@ document.getElementById('hubert-input').addEventListener('input', function() {
 // ── Fetch focused agent data ──
 function loadFocusedAgentData(agentId) {
   const clean = cleanAgentId(agentId);
-  const hdrs = { ...csrfHeaders(), ...graphSecretHeaders() };
+  const hdrs = mutationHeaders();
   Promise.allSettled([
     fetch(apiUrl(`/agent-config?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
     fetch(apiUrl('/agent-tools'), { headers: hdrs }).then(r => r.json()),
