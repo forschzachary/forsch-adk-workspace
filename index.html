@@ -755,6 +755,12 @@ function loadGraph(clusterName) {
   fetch(url)
     .then(r => r.json())
     .then(data => {
+      if (!data || !data.nodes) {
+        info.textContent = `Failed to load${clusterName ? ' cluster ' + clusterName : ''}: ${data?.error || 'no graph data'}`;
+        graphData = { nodes: [], links: [], node_count: 0, link_count: 0, version: 0 };
+        if (fg) { fg.graphData(graphData); }
+        return;
+      }
       const hosted = data.nodes.find(n => n.id === 'ui:bridge');
       if (hosted) hosted.name = 'Hosted Chat';
       collapseIntake(data);

@@ -29,7 +29,12 @@ from urllib.parse import parse_qs, urlparse
 
 from workspace_resolver import workspace_root
 
-SPIKE_DIR = Path(__file__).resolve().parent
+# live-agent-graph: canonical home for the agent control surface.
+# This is no longer a spike — it's the engine for AI consulting projects.
+# Production path: /root/.hermes/workspace/adk/live-agent-graph (box)
+#                  ~/Dev/live-agent-graph                       (Mac dev)
+# All paths below are derived from LAG_HOME — no hardcoded locations.
+LAG_HOME = Path(__file__).resolve().parent
 WS = workspace_root() / "adk"
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
@@ -167,11 +172,11 @@ RATE_LIMIT = 30       # max requests
 RATE_WINDOW = 60.0    # per 60 seconds
 
 # ── Audit log ──
-AUDIT_LOG = SPIKE_DIR / "chat_audit.log"
+AUDIT_LOG = LAG_HOME / "chat_audit.log"
 
 # ── Eval paths ──
-EVALSETS_DIR = SPIKE_DIR / "evalsets"
-EVAL_RUNS_DIR = SPIKE_DIR / ".eval_runs"
+EVALSETS_DIR = LAG_HOME / "evalsets"
+EVAL_RUNS_DIR = LAG_HOME / ".eval_runs"
 
 def _evict_stale():
     """Periodic cleanup: evict stale sessions and rate-limit windows."""
@@ -280,7 +285,7 @@ def fetch_manifest_from_crm(cluster_id: str) -> dict | None:
 def promote_agent(agent_id: str, target_role: str) -> dict:
     py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
     result = subprocess.run(
-        [py, str(SPIKE_DIR / "promote_agent.py"), agent_id, target_role],
+        [py, str(LAG_HOME / "promote_agent.py"), agent_id, target_role],
         capture_output=True, text=True, timeout=30,
     )
     if result.returncode == 0:
@@ -369,7 +374,7 @@ def get_pulse():
     except Exception:
         litellm_alive = False
 
-    graph_path = SPIKE_DIR / "agent-graph-v2.json"
+    graph_path = LAG_HOME / "agent-graph-v2.json"
     if graph_path.exists():
         graph = json.loads(graph_path.read_text())
         for link in graph.get("links", []):
@@ -397,7 +402,7 @@ def get_pulse():
         live_nodes = list(live_set)
 
     roundtrip = {}
-    cache_file = SPIKE_DIR / ".roundtrip_cache.json"
+    cache_file = LAG_HOME / ".roundtrip_cache.json"
     try:
         if cache_file.exists():
             roundtrip = json.loads(cache_file.read_text())
@@ -423,7 +428,7 @@ def list_clusters() -> list:
         return crm_clusters
 
     # Fallback to local YAML files
-    clusters_dir = SPIKE_DIR / "clusters"
+    clusters_dir = LAG_HOME / "clusters"
     if not clusters_dir.exists():
         return []
     result = []
@@ -487,7 +492,7 @@ def build_manifest(cluster_name: str) -> dict | None:
     # Fallback to local build
     if not manifest:
         result = subprocess.run(
-            [BUILDER_PY, str(SPIKE_DIR / "build_live_graph.py"), "--cluster", cluster_name],
+            [BUILDER_PY, str(LAG_HOME / "build_live_graph.py"), "--cluster", cluster_name],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
@@ -534,14 +539,14 @@ def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
     existing_links = crm_data.get("links", [])
 
     # Load tool_connections from components.yaml
-    components_yaml = SPIKE_DIR / "shared" / "components.yaml"
+    components_yaml = LAG_HOME / "shared" / "components.yaml"
     tool_connections = {}
     if components_yaml.exists():
         comp = _load_yaml(components_yaml)
         tool_connections = comp.get("tool_connections", {})
 
     # Load infra topology
-    infra_yaml = SPIKE_DIR / "shared" / "infra.yaml"
+    infra_yaml = LAG_HOME / "shared" / "infra.yaml"
     infra = _load_yaml(infra_yaml) if infra_yaml.exists() else {}
 
     # If CRM returned a pre-built manifest (nodes already exist), enrich it
@@ -703,14 +708,14 @@ def _enrich_manifest(cluster_name: str, manifest: dict) -> dict:
     Adds dependency rail (cred nodes + tool→cred links) and infrastructure rail.
     """
     # Load tool_connections
-    components_yaml = SPIKE_DIR / "shared" / "components.yaml"
+    components_yaml = LAG_HOME / "shared" / "components.yaml"
     tool_connections = {}
     if components_yaml.exists():
         comp = _load_yaml(components_yaml)
         tool_connections = comp.get("tool_connections", {})
 
     # Load infra topology
-    infra_yaml = SPIKE_DIR / "shared" / "infra.yaml"
+    infra_yaml = LAG_HOME / "shared" / "infra.yaml"
     infra = _load_yaml(infra_yaml) if infra_yaml.exists() else {}
 
     nodes = []
@@ -835,7 +840,7 @@ def new_cluster(name: str) -> dict:
     """Scaffold a new cluster directory with cluster.yaml + project.md."""
     if not name or not name.replace("-", "").replace("_", "").isalnum():
         return {"ok": False, "error": "invalid cluster name (a-z, 0-9, -, _)"}
-    cluster_dir = SPIKE_DIR / "clusters" / name
+    cluster_dir = LAG_HOME / "clusters" / name
     if cluster_dir.exists():
         return {"ok": False, "error": f"cluster '{name}' already exists"}
     cluster_dir.mkdir(parents=True, exist_ok=True)
@@ -846,10 +851,10 @@ def new_cluster(name: str) -> dict:
 
 def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
     """Append an agent id to a cluster's membership list (reference, not copy)."""
-    cluster_yaml = SPIKE_DIR / "clusters" / cluster_name / "cluster.yaml"
+    cluster_yaml = LAG_HOME / "clusters" / cluster_name / "cluster.yaml"
     if not cluster_yaml.exists():
         return {"ok": False, "error": f"cluster '{cluster_name}' not found"}
-    registry_yaml = SPIKE_DIR / "registry" / "agents" / "agents.yaml"
+    registry_yaml = LAG_HOME / "registry" / "agents" / "agents.yaml"
     if registry_yaml.exists():
         import yaml
         registry = (yaml.safe_load(registry_yaml.read_text()) or {}).get("agents", {})
@@ -1055,7 +1060,7 @@ def _save_agent_config(params: dict) -> dict:
     if not agent_exists:
         py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
         spawn_result = subprocess.run(
-            [py, str(SPIKE_DIR / "spawn_agent.py"), agent_id,
+            [py, str(LAG_HOME / "spawn_agent.py"), agent_id,
              "--model", model or "gpt-5.5",
              "--description", description or f"{agent_id} agent"],
             capture_output=True, text=True, cwd=str(WS), timeout=30,
@@ -1308,7 +1313,7 @@ def _list_agent_evalsets(agent_id: str) -> dict:
                 cases = 0
             evalsets.append({
                 "id": path.stem.replace(".evalset", ""),
-                "path": str(path.relative_to(SPIKE_DIR)),
+                "path": str(path.relative_to(LAG_HOME)),
                 "cases": cases,
             })
     last_path = EVAL_RUNS_DIR / agent_id / "last.json"
@@ -1338,7 +1343,7 @@ def _run_agent_eval(agent_id: str, evalset_id: str | None = None) -> dict:
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(SPIKE_DIR), **kwargs)
+        super().__init__(*args, directory=str(LAG_HOME), **kwargs)
 
     def _get_principal(self) -> str | None:
         """Verify Cloudflare Access JWT and return the verified email, or None.
@@ -1467,7 +1472,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
             result = subprocess.run(
-                [py, str(SPIKE_DIR / "spawn_agent.py"), agent_id,
+                [py, str(LAG_HOME / "spawn_agent.py"), agent_id,
                  "--model", model, "--description", description],
                 capture_output=True, text=True, cwd=str(WS),
             )
@@ -1496,7 +1501,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             # Fallback to local contract_check.py
             result = subprocess.run(
-                [sys.executable, str(SPIKE_DIR / "contract_check.py"), source, target],
+                [sys.executable, str(LAG_HOME / "contract_check.py"), source, target],
                 capture_output=True, text=True,
             )
             if result.returncode in (0, 1):

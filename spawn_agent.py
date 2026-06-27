@@ -10,8 +10,6 @@ Creates:
   agent_specs/agents.yaml entry (appended)
 
 Then re-runs build_live_graph.py to show the new node in the graph.
-
-This is D3 of the Live Agent Graph spike: prove graph→code works.
 """
 
 import json
@@ -320,7 +318,7 @@ def main():
     print(f"  state:    blank → building (agent.py exists, gates pending)")
 
     # ── Rebuild graph ──
-    graph_builder = WS / "spikes" / "live-agent-graph" / "build_live_graph.py"
+    graph_builder = WS / "live-agent-graph" / "build_live_graph.py"
     factory_python = WS / "factory" / ".venv" / "bin" / "python"
     if graph_builder.exists():
         import subprocess
@@ -330,7 +328,7 @@ def main():
             capture_output=True, text=True, cwd=str(WS),
         )
         if result.returncode == 0:
-            out_path = WS / "spikes" / "live-agent-graph" / "agent-graph-v2.json"
+            out_path = WS / "live-agent-graph" / "agent-graph-v2.json"
             out_path.write_text(result.stdout)
             print(f"  graph:    regenerated ({out_path})")
         else:

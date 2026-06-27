@@ -16,7 +16,7 @@ import yaml
 from workspace_resolver import workspace_root
 
 WS = Path(sys.argv[1]) if len(sys.argv) > 3 else workspace_root() / "adk"
-SPIKE_DIR = WS / "spikes" / "live-agent-graph"
+LAG_HOME = WS / "live-agent-graph"
 
 
 def promote(agent_id: str, target_role: str) -> dict:
@@ -45,7 +45,7 @@ def promote(agent_id: str, target_role: str) -> dict:
     agents_yaml.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
 
     # Log
-    log_file = SPIKE_DIR / ".promotion_log.jsonl"
+    log_file = LAG_HOME / ".promotion_log.jsonl"
     entry = {
         "agent_id": agent_id,
         "from_role": current_role,
@@ -58,7 +58,7 @@ def promote(agent_id: str, target_role: str) -> dict:
 
     # Rebuild graph
     result = subprocess.run(
-        [sys.executable, str(SPIKE_DIR / "build_live_graph.py")],
+        [sys.executable, str(LAG_HOME / "build_live_graph.py")],
         capture_output=True, text=True, cwd=str(WS),
     )
     if result.returncode != 0:

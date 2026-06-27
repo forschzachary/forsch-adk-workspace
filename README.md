@@ -1,9 +1,34 @@
-# Live Agent Graph — force-graph control surface for the ADK bridge
+# Live Agent Graph — canonical control surface for the ADK engine
 
-**Status:** D1 ✅ D2 ✅ D3 ✅ | D4 ✅ D5 ✅  
+> **Production engine** for AI consulting projects. Force-graph UI + chat + specialist delegation + Cloudflare Access auth + full MiMo CLI backend. Not a spike.
+
+**Status:** D1 ✅ D2 ✅ D3 ✅ | D4 ✅ D5 ✅ | MiMo swap ✅ | Cloudflare Access ✅  
 **Project ID:** live-agent-graph  
 **Started:** 2026-06-23  
 **Repo:** https://github.com/forschzachary/live-agent-graph (private)
+
+### Production paths
+
+| Environment | Path |
+|---|---|
+| Box (canonical) | `/root/.hermes/workspace/adk/live-agent-graph` |
+| Mac (dev mirror) | `~/Dev/live-agent-graph` |
+
+### Live services (box)
+
+| Service | Port | Process | Auth |
+|---|---|---|---|
+| `serve.py` (graph + MiMo chat) | 8888 | systemd `live-agent-graph.service` | Cloudflare Access JWT |
+| `adk api_server` (specialist REST) | 8001 | systemd `adk-api.service` | localhost only |
+| LiteLLM (model gateway) | 4000 | systemd | localhost only |
+| cloudflared (edge tunnel) | — | docker | — |
+
+### URLs
+
+| URL | Purpose |
+|---|---|
+| https://graph.forschfrontiers.com | Operator UI (Cloudflare Access → Google OAuth → serve.py) |
+| https://graph.forschfrontiers.com/chat/ | ADK bridge chat (Gradio iframe, proxied) |
 
 ## D1: Node Schema + Manifest Format ✅
 
