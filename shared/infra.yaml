@@ -1,6 +1,14 @@
 # Infrastructure topology for the ADK workspace
 # Describes where agents run and what services support them.
 # This is descriptive metadata, not live config — update when topology changes.
+#
+# Edge topology (post-2026-06-27 collapse):
+#   browser -> https://graph.forschfrontiers.com (Cloudflare edge, orange-cloud)
+#           -> cloudflared named tunnel (token mode, PID-managed on box)
+#           -> 127.0.0.1:8888 (serve.py, localhost-only bind)
+#   The tunnel is the SOLE inbound path. No Cloudflare Worker, no public port
+#   on serve.py, no CRM graph_embed secret-injection proxy. Auth is X-Graph-Secret
+#   on mutating endpoints; reads are unauthed with CORS pinned to CRM_ORIGIN.
 
 hosts:
   - id: hetzner-vps
@@ -35,12 +43,25 @@ services:
     url: crm.forschfrontiers.com
     role: crm_backend
 
+  - id: serve-py
+    name: "Live Agent Graph server (serve.py)"
+    host: hetzner-vps
+    bind: 127.0.0.1
+    port: 8888
+    role: graph_control_surface
+    auth: x-graph-secret
+
 networks:
   - id: tailscale
     name: "Tailscale mesh"
     type: mesh_vpn
+    role: operator_access_only
 
 tunnels:
-  - id: cloudflare
-    name: "Cloudflare tunnel"
+  - id: cloudflare-named
+    name: "Cloudflare named tunnel (cloudflared, token mode)"
     type: reverse_proxy
+    routes:
+      - hostname: graph.forschfrontiers.com
+        target: 127.0.0.1:8888
+    note: "Sole inbound path. Managed via Cloudflare dashboard ingress config + on-box cloudflared daemon (PID-managed, not systemd)."
