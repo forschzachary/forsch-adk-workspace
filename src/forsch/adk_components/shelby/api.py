@@ -19,6 +19,7 @@ from .store import (
     log_groceries,
 )
 from . import remindctl
+from .trends import get_chore_summary
 
 app = FastAPI(title="Shelby", version="0.1.0")
 
@@ -150,3 +151,11 @@ def api_check_chore(chore_id: int) -> dict[str, Any]:
     if not result["ok"]:
         raise HTTPException(status_code=404, detail=result.get("error", "not found"))
     return result
+
+
+# ── Trends endpoint ────────────────────────────────────────────────────────
+
+
+@app.get("/api/trends")
+def api_get_trends() -> dict[str, Any]:
+    return get_chore_summary()
