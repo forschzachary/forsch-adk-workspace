@@ -60,6 +60,7 @@ def init_db() -> dict[str, Any]:
                     due TEXT,
                     note TEXT,
                     synced INTEGER DEFAULT 0,
+                    completed_at TEXT,
                     created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS chores (
@@ -312,5 +313,25 @@ def check_chore(chore_id: int) -> dict[str, Any]:
         updated = conn.execute("SELECT * FROM chores WHERE id = ?", (chore_id,)).fetchone()
         conn.close()
         return {"ok": True, "chore": dict(updated) if updated else {}}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+def check_reminder(reminder_id: int) -> dict[str, Any]:
+    """Mark a reminder as completed -- updates completed_at to now."""
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        if not row:
+            conn.close()
+            return {"ok": False, "error": f"reminder {reminder_id} not found"}
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE reminders SET completed_at = :now WHERE id = :id",
+            {"now": now, "id": reminder_id},
+        )
+        conn.commit()
+        updated = conn.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        conn.close()
+        return {"ok": True, "reminder": dict(updated) if updated else {}}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}

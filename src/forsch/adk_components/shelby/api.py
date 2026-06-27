@@ -12,14 +12,13 @@ from pydantic import BaseModel
 
 from .store import (
     add_chore,
-    add_reminder,
     check_chore,
     get_chores,
     get_groceries,
-    get_reminders,
     init_db,
     log_groceries,
 )
+from . import remindctl
 
 app = FastAPI(title="Shelby", version="0.1.0")
 
@@ -94,11 +93,11 @@ def api_log_groceries(body: GroceryLogRequest) -> dict[str, Any]:
 @app.get("/api/reminders")
 def api_get_reminders(
     list_name: Optional[str] = None,
-    due_before: Optional[str] = None,
-    synced: Optional[bool] = None,
-    limit: Optional[int] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> dict[str, Any]:
-    result = get_reminders(list_name=list_name, due_before=due_before, synced=synced, limit=limit)
+    result = remindctl.list_reminders(list_name=list_name, since=since, until=until, status=status)
     if not result["ok"]:
         raise HTTPException(status_code=500, detail=result.get("error", "unknown error"))
     return result
@@ -106,7 +105,7 @@ def api_get_reminders(
 
 @app.post("/api/reminders")
 def api_add_reminder(body: ReminderRequest) -> dict[str, Any]:
-    result = add_reminder(title=body.title, list_name=body.list_name, due=body.due, note=body.note)
+    result = remindctl.add_reminder(title=body.title, list_name=body.list_name, due=body.due, note=body.note)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result.get("error", "bad request"))
     return result
