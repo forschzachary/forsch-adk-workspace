@@ -23,6 +23,11 @@ tool_families:
     - log_groceries
     - get_grocery_log
     - add_reminder
+    - add_grocery_email_sender
+    - remove_grocery_email_sender
+    - list_grocery_email_senders
+    - is_grocery_email_sender_allowed
+    - log_grocery_email_receipt
 
 # Legacy flat list (deprecated — kept for backward compat, builder prefers tool_families)
 tools: []

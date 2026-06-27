@@ -74,11 +74,17 @@ agents:
     discord_channels: []
     safety_level: local_write
     purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over
-      time, spot trends, and sync a shopping list to Apple Reminders.'
+      time, spot trends, manage reminders with honest read-back receipts, and ingest
+      grocery-receipt emails from a sender whitelist.'
     tools:
     - log_groceries
     - get_grocery_log
     - add_reminder
+    - add_grocery_email_sender
+    - remove_grocery_email_sender
+    - list_grocery_email_senders
+    - is_grocery_email_sender_allowed
+    - log_grocery_email_receipt
     model: gpt-5.5
   developer:
     description: LinkedIn developer — builds posting tools, scheduling, and automation.
