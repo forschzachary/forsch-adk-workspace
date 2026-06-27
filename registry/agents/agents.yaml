@@ -76,6 +76,10 @@ agents:
     purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over
       time, spot trends, manage reminders with honest read-back receipts, and ingest
       grocery-receipt emails from a sender whitelist.'
+    patterns:
+    - jsonl_store
+    - whitelist
+    - receipt_tool
     tools:
     - log_groceries
     - get_grocery_log
