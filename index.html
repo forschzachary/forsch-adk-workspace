@@ -1568,20 +1568,18 @@ function handlePadiControlClick(node) {
 }
 
 // ── Custom live particles along visible link segments ──
-let liveEdgeKeys = new Set();
+let liveNodeIds = new Set();
 let particlePhase = 0;
 
 function drawLiveParticles(ctx, scale) {
-  if (!liveEdgeKeys.size || currentLens !== 'padi') return;
+  if (!liveNodeIds.size || currentLens !== 'padi') return;
   const gLinks = fg.graphData().links || [];
   const now = Date.now();
   particlePhase = (now % 4000) / 4000;
   gLinks.forEach(link => {
     const s = link.source, t = link.target;
     if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
-    const key = `${s.id || s}→${t.id || t}`;
-    const revKey = `${t.id || t}→${s.id || s}`;
-    if (!liveEdgeKeys.has(key) && !liveEdgeKeys.has(revKey)) return;
+    if (!liveNodeIds.has(s.id) && !liveNodeIds.has(t.id)) return;
     const pts = padiLinkPath(s, t);
     if (pts.length < 2) return;
     const totalLen = pathLength(pts);
@@ -2235,11 +2233,26 @@ function startPulse() {
       .then(r => r.json())
       .then(p => {
         if (fg && p.active_edges) {
-          liveEdgeKeys = new Set(p.active_edges.map(e => `${e.source}→${e.target}`));
-          const activeSet = liveEdgeKeys;
-          const key = l => `${lid(l.source)}→${lid(l.target)}`;
-          fg.linkColor(l => activeSet.has(key(l)) ? '#2ea043' : '#30363d');
-          fg.linkWidth(l => activeSet.has(key(l)) ? 2 : 1);
+          liveNodeIds = new Set();
+          p.active_edges.forEach(e => { liveNodeIds.add(e.source); liveNodeIds.add(e.target); });
+          // Map collapsed intake nodes: if any member channel is live, the collapsed iface node is live too
+          if (graphData && graphData.nodes) {
+            graphData.nodes.forEach(n => {
+              if (n.type === 'intake' && n.members) {
+                if (n.members.some(m => liveNodeIds.has('chan:' + m) || liveNodeIds.has(m))) {
+                  liveNodeIds.add(n.id);
+                }
+              }
+            });
+          }
+          fg.linkColor(l => {
+            const s = lid(l.source), t = lid(l.target);
+            return liveNodeIds.has(s) || liveNodeIds.has(t) ? '#2ea043' : '#30363d';
+          });
+          fg.linkWidth(l => {
+            const s = lid(l.source), t = lid(l.target);
+            return liveNodeIds.has(s) || liveNodeIds.has(t) ? 2 : 1;
+          });
           const pulseStr = p.bridge_alive ? '🌉' : '';
           const authStr = p.authsome_alive ? '🔐' : '';
           const llmStr = p.litellm_alive ? '🧠' : '';
