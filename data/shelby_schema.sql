@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS reminders (
     due TEXT,
     note TEXT,
     synced INTEGER DEFAULT 0,
+    completed_at TEXT,
     created_at TEXT NOT NULL
 );
 
