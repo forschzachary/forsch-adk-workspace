@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from forsch.adk_components.tools.graph_tools import (
@@ -21,6 +22,10 @@ def route_to_agent_logic_specialist(task_description: str) -> dict[str, Any]:
     task, and return its response as a JSON-serialisable dict.
     """
     try:
+        # Ensure LiteLLM API key is set before importing specialist
+        if not os.environ.get("LITELLM_HERMES_KEY") and not os.environ.get("LITELLM_MASTER_KEY"):
+            os.environ.setdefault("LITELLM_HERMES_KEY", "sk-6aHkrEyc0YGK9BN6VHi6Ow")
+            os.environ.setdefault("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
         from forsch.agent_agent_logic_specialist.agent import root_agent
         from google.adk.runners import InMemoryRunner
         from google.genai import types
