@@ -3,7 +3,7 @@
  *
  * Routes:
  *   /chat/*  → http://87.99.149.222:8800  (ADK bridge / Gradio)
- *   /*        → http://87.99.149.222:8888  (Live Agent Graph server)
+ *   /*        → http://87.99.149.222:8898  (Live Agent Graph server)
  *
  * CHAT_TOKEN is injected server-side (Worker env var) — the browser never sees it.
  * WebSocket passthrough is native to Cloudflare Workers — no special handling needed.
@@ -25,7 +25,7 @@ export default {
     }
 
     // Everything else → graph server
-    const target = new URL(url.pathname + url.search, 'http://87.99.149.222:8888');
+    const target = new URL(url.pathname + url.search, 'http://87.99.149.222:8898');
     return fetch(target.toString(), request);
   }
 };
