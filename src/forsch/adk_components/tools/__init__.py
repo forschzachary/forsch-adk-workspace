@@ -4,6 +4,7 @@ from . import household, stability_tools
 from .authsome_client import AuthsomeHTTPClient, AuthsomeHTTPError
 from .crm_tools import get_crm_health_snapshot, list_recent_crm_leads
 from .frappe_client import FrappeClient
+from .graph_tools import get_factory_status, get_graph_overview, manage_cluster
 from .household import add_reminder, get_grocery_log, log_groceries
 from .stability_tools import check_service_health, get_git_state, get_workspace_inventory
 from .stability_tools import validate_agent_imports
@@ -27,15 +28,19 @@ __all__ = [
     "check_service_health",
     "get_boss_loot",
     "get_dungeon_bosses",
+    "get_factory_status",
     "get_git_state",
     "get_grocery_log",
+    "get_graph_overview",
     "get_item_details",
     "get_player",
     "get_workspace_inventory",
     "get_crm_health_snapshot",
+    "graph_tools",
     "household",
     "list_recent_crm_leads",
     "log_groceries",
+    "manage_cluster",
     "register_player",
     "search_items",
     "search_npcs",
