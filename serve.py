@@ -307,6 +307,7 @@ def fetch_clusters_from_crm() -> list:
     data = _crm_get("forsch_frontiers.sync.agent_graph.list_clusters")
     if data and "message" in data:
         return data["message"]
+    sys.stderr.write("fetch_clusters_from_crm: CRM unreachable, falling back to local\n")
     return []
 
 
@@ -316,6 +317,7 @@ def fetch_manifest_from_crm(cluster_id: str) -> dict | None:
                      {"cluster_id": cluster_id})
     if data and "message" in data:
         return data["message"]
+    sys.stderr.write(f"fetch_manifest_from_crm({cluster_id}): CRM unreachable, falling back to local\n")
     return None
 
 
