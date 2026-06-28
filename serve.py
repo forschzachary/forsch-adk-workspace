@@ -75,73 +75,46 @@ def _fetch_jwks():
 def _verify_access_jwt(token: str) -> str | None:
     """Verify a Cf-Access-Jwt-Assertion JWT and return the email, or None.
 
-    Uses Python stdlib only (no PyJWT dependency). Verifies RS256 signature
-    against Cloudflare's JWKS, checks iss + aud + exp.
+    Uses PyJWT. Verifies RS256 signature against Cloudflare's JWKS,
+    checks iss + aud + exp.
     """
-    import base64
     try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        header_b64, payload_b64, sig_b64 = parts
-        # Decode header and payload (add padding)
-        def _b64decode(s):
-            s += "=" * (4 - len(s) % 4)
-            return json.loads(base64.urlsafe_b64decode(s))
-        header = _b64decode(header_b64)
-        payload = _b64decode(payload_b64)
-        # Check expiry
-        if payload.get("exp", 0) < time.time():
-            return None
-        # Check issuer
-        expected_iss = f"https://{CF_ACCESS_TEAM}.cloudflareaccess.com"
-        if payload.get("iss") != expected_iss:
-            return None
-        # Check audience if configured
-        if CF_ACCESS_AUD:
-            aud = payload.get("aud", "")
-            if aud != CF_ACCESS_AUD:
-                return None
-        # Find matching key from JWKS
+        import jwt as _jwt
+    except ImportError:
+        return None
+    try:
         jwks = _fetch_jwks()
         if not jwks:
             return None
-        kid = header.get("kid")
-        key_data = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                key_data = key
+        try:
+            unverified_header = _jwt.get_unverified_header(token)
+        except _jwt.InvalidTokenError:
+            return None
+        kid = unverified_header.get("kid")
+        key = None
+        for k in jwks.get("keys", []):
+            if k.get("kid") == kid:
+                key = k
                 break
-        if not key_data:
+        if not key:
             return None
-        # Verify signature (RSA-SHA256)
-        n_b64 = key_data.get("n")
-        e_b64 = key_data.get("e")
-        if not n_b64 or not e_b64:
-            return None
-        n = int.from_bytes(base64.urlsafe_b64decode(n_b64 + "=="), "big")
-        e = int.from_bytes(base64.urlsafe_b64decode(e_b64 + "=="), "big")
-        # Reconstruct RSA public key
-        from hashlib import sha256
-        signing_input = (header_b64 + "." + payload_b64).encode()
-        signature = base64.urlsafe_b64decode(sig_b64 + "==")
-        # RSA verify using pow()
-        key_length = (n.bit_length() + 7) // 8
-        if len(signature) != key_length:
-            return None
-        sig_int = int.from_bytes(signature, "big")
-        decrypted = pow(sig_int, e, n)
-        decrypted_bytes = decrypted.to_bytes(key_length, "big")
-        # PKCS#1 v1.5 padding: 0x00 0x01 [FF padding] 0x00 [ DigestInfo ]
-        digest = sha256(signing_input).digest()
-        # Build expected PKCS#1 v1.5 structure
-        padding_len = key_length - len(digest) - 3 - 1
-        expected = b"\x00\x01" + b"\xff" * padding_len + b"\x00" + \
-            b"\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01" \
-            b"\x05\x00\x04\x20" + digest
-        if decrypted_bytes != expected:
-            return None
-        return payload.get("email")
+        # Build a PEM-encoded RSA public key from the JWK's n/e components.
+        import base64 as _b64
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
+        from cryptography.hazmat.primitives import serialization as _ser
+        n_int = int.from_bytes(_b64.urlsafe_b64decode(key["n"] + "=="), "big")
+        e_int = int.from_bytes(_b64.urlsafe_b64decode(key["e"] + "=="), "big")
+        pub = RSAPublicNumbers(e_int, n_int).public_key()
+        pem = pub.public_bytes(
+            encoding=_ser.Encoding.PEM,
+            format=_ser.PublicFormat.SubjectPublicKeyInfo,
+        )
+        decode_kwargs = {"algorithms": ["RS256"]}
+        if CF_ACCESS_AUD:
+            decode_kwargs["audience"] = CF_ACCESS_AUD
+        else:
+            decode_kwargs["options"] = {"verify_aud": False}
+        return _jwt.decode(token, pem, **decode_kwargs).get("email")
     except Exception:
         return None
 
