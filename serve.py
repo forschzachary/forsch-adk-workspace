@@ -1236,13 +1236,12 @@ def new_cluster(name: str) -> dict:
     return {"ok": True, "name": name, "git": checkpoint}
 
 
-def _yaml_inline(value: str) -> str:
-    dumped = yaml.safe_dump(value or "", default_flow_style=True, width=1000).strip()
-    return dumped.replace("\n...", "")
-
-
 def create_graph_agent(agent_id: str, model: str = "gpt-5.5", description: str = "") -> dict:
-    """Create a graph-local agent draft in registry/agents/agents.yaml."""
+    """Create a graph-local agent draft in registry/agents/agents.yaml.
+
+    Uses ruamel.yaml to preserve comments and key order in the existing
+    file (text-append can break comments and reorder keys).
+    """
     if not re.fullmatch(r"[a-z][a-z0-9_]*", agent_id or ""):
         return {"ok": False, "error": "invalid agent id (a-z, 0-9, _, starts with a letter)"}
 
@@ -1250,26 +1249,40 @@ def create_graph_agent(agent_id: str, model: str = "gpt-5.5", description: str =
     if not registry_yaml.exists():
         return {"ok": False, "error": "agent registry missing"}
 
-    registry_doc = yaml.safe_load(registry_yaml.read_text()) or {}
-    agents = registry_doc.get("agents", {}) or {}
+    try:
+        from ruamel.yaml import YAML as _RYAML
+    except ImportError:
+        return {"ok": False, "error": "ruamel.yaml not installed"}
+
+    _ry = _RYAML(typ="rt")
+    _ry.preserve_quotes = True
+    _ry.indent(mapping=2, sequence=4, offset=2)
+    try:
+        with registry_yaml.open("r") as fh:
+            doc = _ry.load(fh)
+    except Exception as exc:
+        return {"ok": False, "error": f"parse error: {exc}"}
+
+    agents = (doc.get("agents") if doc else None) or {}
     if agent_id in agents:
         return {"ok": True, "agent_id": agent_id, "already_exists": True}
 
     clean_description = (description or f"{agent_id} agent").strip()
-    entry = (
-        f"\n"
-        f"  {agent_id}:\n"
-        f"    description: {_yaml_inline(clean_description)}\n"
-        f"    discord_channels: []\n"
-        f"    safety_level: read_only\n"
-        f"    purpose: {_yaml_inline(clean_description)}\n"
-        f"    tools: []\n"
-        f"    model: {_yaml_inline(model or 'gpt-5.5')}\n"
-    )
-    text = registry_yaml.read_text()
-    if not text.endswith("\n"):
-        text += "\n"
-    _write_atomic(registry_yaml, text + entry)
+    safe_model = model or "gpt-5.5"
+    agents[agent_id] = {
+        "description": clean_description,
+        "discord_channels": [],
+        "safety_level": "read_only",
+        "purpose": clean_description,
+        "tools": [],
+        "model": safe_model,
+    }
+
+    # Atomic write back to the registry.
+    import io as _io
+    buf = _io.StringIO()
+    _ry.dump(doc, buf)
+    _write_atomic(registry_yaml, buf.getvalue())
 
     checkpoint = _git_checkpoint([registry_yaml], f"Create graph agent {agent_id}")
     if not checkpoint.get("ok"):
