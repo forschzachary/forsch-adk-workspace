@@ -165,6 +165,19 @@ _session_owners: dict[str, tuple[str, float]] = {}  # session_id → (principal,
 _session_lock = threading.Lock()
 SESSION_MAX_AGE = 3600.0  # evict sessions older than 1 hour
 
+# ── Factory overview: source files referenced in the inventory payload ──
+# Used by both _build_factory_overview() and the CRM-manifest path so a new
+# file gets declared in one place.
+FACTORY_OVERVIEW_SOURCES = [
+    "registry/agents/agents.yaml",
+    "shared/components.yaml",
+    "shared/infra.yaml",
+    "serve.py",
+    "index.html",
+    "home.html",
+    "chat.html",
+]
+
 # ── Rate limiting ──
 _rate_state: dict[str, tuple[int, float]] = {}  # principal → (count, window_start)
 _rate_lock = threading.Lock()
@@ -458,22 +471,14 @@ def list_clusters() -> list:
 
 
 def yaml_safe_load(text: str) -> dict:
-    """Minimal YAML front-matter parser — avoids full yaml import for simple cases."""
-    result = {}
-    for line in text.strip().split("\n"):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if val.startswith("[") and val.endswith("]"):
-                val = [v.strip().strip('"').strip("'") for v in val[1:-1].split(",") if v.strip()]
-            elif val.isdigit():
-                val = int(val)
-            result[key] = val
-    return result
+    """Parse a YAML string. Wraps yaml.safe_load for backwards compat.
+
+    Replaces an earlier hand-rolled mini-parser that broke on multi-line values,
+    nested dicts, and anything beyond flat `key: value`. PyYAML is in the
+    runtime (verified at startup), so deferring to it is correct.
+    """
+    import yaml as _yaml
+    return _yaml.safe_load(text) or {}
 
 
 def build_manifest(cluster_name: str) -> dict | None:
@@ -685,6 +690,12 @@ def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
         "infrastructure": [n["id"] for n in nodes if n.get("rail") == "infrastructure"],
     }
 
+    source_files = list(FACTORY_OVERVIEW_SOURCES)
+    for cluster in cluster_specs:
+        source_files.append(f"clusters/{cluster['name']}/cluster.yaml")
+        if cluster.get("goal") or cluster.get("project_summary"):
+            source_files.append(f"clusters/{cluster['name']}/project.md")
+
     return {
         "version": 2,
         "cluster": cluster_name,
@@ -834,6 +845,254 @@ def _append_infra_nodes(nodes: list, links: list, infra: dict) -> tuple:
                        "artifact": tunnel.get("type", "")})
 
     return nodes, links
+
+
+def _load_agent_registry() -> dict:
+    registry_yaml = LAG_HOME / "registry" / "agents" / "agents.yaml"
+    if not registry_yaml.exists():
+        return {"defaults": {}, "agents": {}}
+    return _load_yaml(registry_yaml)
+
+
+def _load_cluster_specs() -> list[dict]:
+    clusters_dir = LAG_HOME / "clusters"
+    if not clusters_dir.exists():
+        return []
+
+    cluster_specs = []
+    for cluster_dir in sorted(clusters_dir.iterdir()):
+        if not cluster_dir.is_dir():
+            continue
+
+        cluster_yaml = cluster_dir / "cluster.yaml"
+        if not cluster_yaml.exists():
+            continue
+
+        cluster_data = _load_yaml(cluster_yaml)
+        project_path = cluster_dir / "project.md"
+        project_meta = {}
+        project_summary = ""
+        if project_path.exists():
+            text = project_path.read_text()
+            if text.startswith("---"):
+                end = text.find("---", 3)
+                if end > 0:
+                    project_meta = yaml_safe_load(text[3:end])
+                    project_summary = text[end + 3:].strip()
+            else:
+                project_summary = text.strip()
+
+        cluster_specs.append({
+            "name": cluster_data.get("name", cluster_dir.name),
+            "description": cluster_data.get("description", ""),
+            "members": cluster_data.get("members", []) or [],
+            "config": cluster_data.get("config", {}) or {},
+            "goal": project_meta.get("goal", ""),
+            "status": project_meta.get("status", ""),
+            "handoff_pct": project_meta.get("handoff_pct", 0),
+            "data_connectors": project_meta.get("data_connectors", []) or [],
+            "project_summary": project_summary,
+        })
+
+    return cluster_specs
+
+
+def _build_building_blocks_index() -> dict:
+    """Walk the patterns library on the box and return a flat index for the UI.
+
+    The patterns library lives outside this repo (adk-components repo). To
+    avoid coupling, we probe a small set of conventional paths and gracefully
+    degrade to an empty index when the library isn't reachable from this
+    service's process. Operators get an honest "library unreachable" message
+    rather than a misleading empty card.
+    """
+    candidates = [
+        ("patterns", "/root/.hermes/workspace/adk/components/src/forsch/adk_components/patterns/inventory.yaml"),
+        ("agents",   "/root/.hermes/workspace/adk/components/src/forsch/adk_components/agents/inventory.yaml"),
+        ("uis",      "/root/.hermes/workspace/adk/components/src/forsch/adk_components/uis/inventory.yaml"),
+        ("routers",  "/root/.hermes/workspace/adk/components/src/forsch/adk_components/routers/inventory.yaml"),
+        ("datasources", "/root/.hermes/workspace/adk/components/src/forsch/adk_components/datasources/inventory.yaml"),
+    ]
+    blocks: list[dict] = []
+    reachable = False
+    for kind, path in candidates:
+        p = Path(path)
+        if not p.exists():
+            continue
+        reachable = True
+        data = _load_yaml(p)
+        if not isinstance(data, dict):
+            continue
+        items = data.get(kind, data) if isinstance(data.get(kind), dict) else data
+        for name, meta in (items or {}).items():
+            if not isinstance(meta, dict):
+                continue
+            blocks.append({
+                "kind": kind,
+                "id": name,
+                "intention": meta.get("intention", ""),
+                "function": meta.get("function", ""),
+                "keywords": meta.get("keywords", []) or [],
+            })
+    return {
+        "reachable": reachable,
+        "location": "/root/.hermes/workspace/adk/components/src/forsch/adk_components/",
+        "count": len(blocks),
+        "blocks": sorted(blocks, key=lambda b: (b["kind"], b["id"])),
+    }
+
+
+def _build_factory_overview() -> dict:
+    registry = _load_agent_registry()
+    components = _load_yaml(LAG_HOME / "shared" / "components.yaml")
+    infra = _load_yaml(LAG_HOME / "shared" / "infra.yaml")
+    cluster_specs = _load_cluster_specs()
+
+    defaults = registry.get("defaults", {}) or {}
+    registry_agents = registry.get("agents", {}) or {}
+    cluster_map: dict[str, list[str]] = {}
+    for cluster in cluster_specs:
+        for agent_id in cluster["members"]:
+            cluster_map.setdefault(agent_id, []).append(cluster["name"])
+
+    agent_rows = []
+    for agent_id in sorted(registry_agents):
+        spec = {**defaults, **(registry_agents.get(agent_id) or {})}
+        tools = spec.get("tools", []) or []
+        agent_rows.append({
+            "id": agent_id,
+            "description": spec.get("description", ""),
+            "purpose": spec.get("purpose", ""),
+            "model": spec.get("model", ""),
+            "role": spec.get("role") or spec.get("group") or "—",
+            "group": spec.get("group", ""),
+            "safety_level": spec.get("safety_level", defaults.get("safety_level", "read_only")),
+            "discord_channels": spec.get("discord_channels", []) or [],
+            "tool_count": len(tools),
+            "tools": tools,
+            "clusters": sorted(cluster_map.get(agent_id, [])),
+        })
+
+    tool_families = []
+    shared_tool_names = set()
+    for family_name, family_tools in sorted((components.get("tool_families") or {}).items()):
+        items = family_tools or []
+        shared_tool_names.update(items)
+        tool_families.append({
+            "name": family_name,
+            "count": len(items),
+            "tools": items,
+        })
+
+    all_agent_tools = sorted({tool for agent in agent_rows for tool in agent["tools"]})
+    custom_tools = [tool for tool in all_agent_tools if tool not in shared_tool_names]
+
+    # Inventory-by-intent, not inventory-by-truth. These name surfaces/flows
+    # that the operator can reach; if a route here no longer exists in
+    # do_GET/do_POST, the linter won't catch it. Run `patterns lint` (which
+    # already walks patterns/agents/uis/routers/datasources inventories) and
+    # extend it to also walk this list if drift becomes a problem.
+    ui_surfaces = [
+        {
+            "name": "Factory Front Page",
+            "path": "/",
+            "kind": "inventory",
+            "description": "Operational overview of clusters, agents, shared tools, infrastructure, and custom surfaces.",
+        },
+        {
+            "name": "Live Graph Workspace",
+            "path": "/graph",
+            "kind": "graph",
+            "description": "The existing graph-first control surface with lanes, inspect panel, focus mode, and spawn and wire actions.",
+        },
+        {
+            "name": "Operator Sidecar Chat",
+            "path": "/chat.html",
+            "kind": "chat",
+            "description": "Standalone lightweight operator chat shell for the MiMo CLI bridge.",
+        },
+        {
+            "name": "Agent Bridge Chat",
+            "path": "/chat/",
+            "kind": "bridge",
+            "description": "Reverse proxied ADK bridge chat running on the same hostname.",
+        },
+    ]
+
+    custom_flows = [
+        {
+            "name": "Spawn agent",
+            "endpoint": "/spawn",
+            "description": "Scaffolds a new agent package and rebuilds the graph.",
+        },
+        {
+            "name": "Wire contract",
+            "endpoint": "/wire",
+            "description": "Runs contract checks between nodes before wiring changes.",
+        },
+        {
+            "name": "Save agent config",
+            "endpoint": "/agent-config",
+            "description": "Persists manifest edits and can auto-spawn on first save.",
+        },
+        {
+            "name": "Generate agent",
+            "endpoint": "/agent-generate",
+            "description": "Runs factory apply plus import verification for an agent.",
+        },
+        {
+            "name": "Verify agent",
+            "endpoint": "/agent-verify",
+            "description": "Checks package existence, import health, and built status.",
+        },
+        {
+            "name": "Promote agent",
+            "endpoint": "/promote",
+            "description": "Moves an agent up the plain, builder, orchestrator ladder.",
+        },
+        {
+            "name": "MiMo operator chat",
+            "endpoint": "/chat",
+            "description": "Session-aware operator chat bridged into the shared coding agent.",
+        },
+    ]
+
+    source_files = list(FACTORY_OVERVIEW_SOURCES)
+    for cluster in cluster_specs:
+        source_files.append(f"clusters/{cluster['name']}/cluster.yaml")
+        if cluster.get("goal") or cluster.get("project_summary"):
+            source_files.append(f"clusters/{cluster['name']}/project.md")
+
+    return {
+        "summary": {
+            "cluster_count": len(cluster_specs),
+            "agent_count": len(agent_rows),
+            "tool_family_count": len(tool_families),
+            "shared_tool_count": len(shared_tool_names),
+            "custom_tool_count": len(custom_tools),
+            "connection_count": len((components.get("connections") or {})),
+            "infra_host_count": len(infra.get("hosts", []) or []),
+            "infra_service_count": len(infra.get("services", []) or []),
+            "ui_surface_count": len(ui_surfaces),
+        },
+        "clusters": cluster_specs,
+        "agents": agent_rows,
+        "tool_families": tool_families,
+        "custom_tools": custom_tools,
+        "connections": components.get("connections", {}) or {},
+        "tool_connections": components.get("tool_connections", {}) or {},
+        "infra": {
+            "hosts": infra.get("hosts", []) or [],
+            "containers": infra.get("containers", []) or [],
+            "services": infra.get("services", []) or [],
+            "networks": infra.get("networks", []) or [],
+            "tunnels": infra.get("tunnels", []) or [],
+        },
+        "ui_surfaces": ui_surfaces,
+        "custom_flows": custom_flows,
+        "sources": source_files,
+        "building_blocks": _build_building_blocks_index(),
+    }
 
 
 def new_cluster(name: str) -> dict:
@@ -1369,7 +1628,15 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
-        if path in ("/pulse", "/pulse/"):
+        if path == "/":
+            self.path = "/home.html"
+            super().do_GET()
+        elif path == "/graph":
+            self.path = "/index.html"
+            super().do_GET()
+        elif path == "/factory-overview":
+            self._json_response(200, _build_factory_overview())
+        elif path in ("/pulse", "/pulse/"):
             self._json_response(200, get_pulse())
         elif path in ("/clusters", "/clusters/"):
             self._json_response(200, list_clusters())

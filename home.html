@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory Overview</title>
+<style>
+  :root {
+    --bg: #081018;
+    --panel: #101b27;
+    --panel-soft: #0d1621;
+    --panel-strong: #162435;
+    --border: rgba(148, 163, 184, 0.16);
+    --text: #e5eef8;
+    --muted: #8ca0b8;
+    --accent: #6ee7c8;
+    --accent-strong: #8bf2d8;
+    --accent-dim: rgba(110, 231, 200, 0.14);
+    --warn: #f6c177;
+    --chip: #0a1320;
+    --shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(110, 231, 200, 0.12), transparent 28%),
+      radial-gradient(circle at top right, rgba(93, 188, 252, 0.12), transparent 26%),
+      linear-gradient(180deg, #071018 0%, #081018 100%);
+    color: var(--text);
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  .shell {
+    width: min(1380px, calc(100vw - 40px));
+    margin: 0 auto;
+    padding: 24px 0 64px;
+  }
+
+  .masthead {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.95fr);
+    gap: 20px;
+    margin-bottom: 22px;
+  }
+
+  .hero, .rail {
+    border: 1px solid var(--border);
+    background: rgba(16, 27, 39, 0.82);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--shadow);
+  }
+
+  .hero {
+    border-radius: 24px;
+    padding: 26px 26px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: auto -80px -110px auto;
+    width: 280px;
+    height: 280px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(110, 231, 200, 0.24), transparent 62%);
+    pointer-events: none;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--accent-strong);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 28px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.72;
+  }
+
+  h1 {
+    margin: 16px 0 12px;
+    max-width: 15ch;
+    font-size: clamp(2.4rem, 5vw, 4.4rem);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+  }
+
+  .hero-copy {
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.65;
+    margin-bottom: 20px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 700;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  }
+
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary {
+    background: var(--accent);
+    color: #062018;
+    border-color: transparent;
+  }
+  .btn.secondary {
+    background: rgba(10, 19, 32, 0.66);
+    color: var(--text);
+  }
+
+  .rail {
+    border-radius: 24px;
+    padding: 18px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .rail-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .rail-item {
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: rgba(10, 19, 32, 0.82);
+  }
+
+  .rail-item strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  .rail-item p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 26px;
+  }
+
+  .stat {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(13, 22, 33, 0.88);
+    padding: 14px 16px 16px;
+  }
+
+  .stat span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 10px;
+  }
+
+  .stat strong {
+    display: block;
+    font-size: 28px;
+    letter-spacing: -0.04em;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    gap: 18px;
+  }
+
+  .main-column, .side-column {
+    display: grid;
+    gap: 18px;
+    align-content: start;
+  }
+
+  .section {
+    border: 1px solid var(--border);
+    background: rgba(16, 27, 39, 0.82);
+    border-radius: 22px;
+    padding: 20px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .section-head h2 {
+    margin: 0;
+    font-size: 21px;
+    letter-spacing: -0.04em;
+  }
+
+  .section-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .surface-list,
+  .flow-list,
+  .cluster-list,
+  .agent-list,
+  .family-list,
+  .infra-list,
+  .connection-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .surface,
+  .flow,
+  .cluster,
+  .agent,
+  .family,
+  .infra,
+  .connection {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(10, 19, 32, 0.76);
+    padding: 16px;
+  }
+
+  .surface-top,
+  .flow-top,
+  .cluster-top,
+  .agent-top,
+  .family-top,
+  .infra-top,
+  .connection-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .surface-title,
+  .flow-title,
+  .cluster-title,
+  .agent-title,
+  .family-title,
+  .infra-title,
+  .connection-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--accent-strong);
+  }
+
+  .copy {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .chip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--chip);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .chip.muted { color: var(--muted); }
+  .chip.accent { color: var(--accent-strong); border-color: rgba(110, 231, 200, 0.28); background: var(--accent-dim); }
+  .chip.warn { color: var(--warn); border-color: rgba(246, 193, 119, 0.28); }
+
+  .progress {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.1);
+    overflow: hidden;
+    margin-top: 12px;
+  }
+
+  .progress > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #4dc7ee 0%, #6ee7c8 100%);
+  }
+
+  .inline-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .search {
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(8, 16, 24, 0.9);
+    color: var(--text);
+    padding: 12px 14px;
+    font-size: 14px;
+    margin-bottom: 14px;
+  }
+
+  .search:focus { outline: none; border-color: rgba(110, 231, 200, 0.4); }
+
+  .status {
+    color: var(--muted);
+    font-size: 14px;
+    padding: 18px 0;
+  }
+
+  .source-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .source-list a {
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(10, 19, 32, 0.76);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 1180px) {
+    .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .layout, .masthead { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 720px) {
+    .shell { width: min(100vw - 24px, 1380px); padding-top: 16px; }
+    .hero { padding: 22px 18px 18px; }
+    .section { padding: 18px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    h1 { max-width: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <section class="masthead">
+      <div class="hero">
+        <div class="eyebrow">Factory Inventory</div>
+        <h1>The front door for what the factory actually runs.</h1>
+        <p class="hero-copy">
+          This replaces the graph as the default landing surface. It inventories the clusters, agents, shared tool families, infrastructure rails, operator flows, and custom UI surfaces that make up the live factory.
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" href="/graph">Open Live Graph</a>
+          <a class="btn secondary" href="/chat/">Open Agent Bridge</a>
+          <a class="btn secondary" href="/chat.html">Open Operator Chat</a>
+        </div>
+      </div>
+
+      <aside class="rail">
+        <p class="rail-title">What This Page Covers</p>
+        <div class="rail-item">
+          <strong>Factory surfaces</strong>
+          <p>Every custom UI entrypoint that operators can open without diving into the graph canvas first.</p>
+        </div>
+        <div class="rail-item">
+          <strong>Registry and runtime shape</strong>
+          <p>Cluster membership, agent roles, tool families, connectors, and infrastructure come from the same source files the graph already uses.</p>
+        </div>
+        <div class="rail-item">
+          <strong>Operational flows</strong>
+          <p>Spawn, verify, generate, promote, wire, and chat remain one click away instead of being hidden behind node exploration.</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="layout">
+      <div class="main-column">
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Custom Surfaces</h2>
+              <p>UI entrypoints built specifically for this factory.</p>
+            </div>
+          </div>
+          <div class="surface-list" id="surfaces"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Clusters</h2>
+              <p>Project and operator workspaces with live membership and handoff context.</p>
+            </div>
+          </div>
+          <div class="cluster-list" id="clusters"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Agents</h2>
+              <p>Registry-backed agent inventory, including model, safety level, clusters, and tool loadout.</p>
+            </div>
+          </div>
+          <input class="search" id="agent-search" type="search" placeholder="Filter agents by id, purpose, tool, model, or cluster">
+          <div class="agent-list" id="agents"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Building Blocks</h2>
+              <p>Reusable patterns from the adk-components library — every block has the same frontmatter (keywords + intention + function + dependencies) so AI keyword search and future web pages render them identically.</p>
+            </div>
+            <span class="badge" id="blocks-count"></span>
+          </div>
+          <input class="search" id="blocks-search" type="search" placeholder="Filter blocks by id, kind, keyword, or intention">
+          <div id="blocks-status" class="status"></div>
+          <div class="block-list" id="blocks"></div>
+        </section>
+      </div>
+
+      <aside class="side-column">
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Factory Flows</h2>
+              <p>Custom endpoints and actions wired into the operator surface.</p>
+            </div>
+          </div>
+          <div class="flow-list" id="flows"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Tool Families</h2>
+              <p>Shared components available across clusters, plus tool connections into external systems.</p>
+            </div>
+          </div>
+          <div class="family-list" id="families"></div>
+          <div class="connection-list" id="connections"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Infrastructure</h2>
+              <p>Hosts, containers, services, networks, and tunnels behind the factory.</p>
+            </div>
+          </div>
+          <div class="infra-list" id="infra"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Sources</h2>
+              <p>The files backing this inventory.</p>
+            </div>
+          </div>
+          <div class="source-list" id="sources"></div>
+        </section>
+      </aside>
+    </section>
+  </div>
+
+<script>
+  let overview = null;
+
+  const statsEl = document.getElementById('stats');
+  const surfacesEl = document.getElementById('surfaces');
+  const flowsEl = document.getElementById('flows');
+  const clustersEl = document.getElementById('clusters');
+  const agentsEl = document.getElementById('agents');
+  const familiesEl = document.getElementById('families');
+  const connectionsEl = document.getElementById('connections');
+  const infraEl = document.getElementById('infra');
+  const sourcesEl = document.getElementById('sources');
+  const searchEl = document.getElementById('agent-search');
+
+  const statDefs = [
+    ['cluster_count', 'Clusters'],
+    ['agent_count', 'Agents'],
+    ['shared_tool_count', 'Shared tools'],
+    ['custom_tool_count', 'Custom tools'],
+    ['infra_service_count', 'Services'],
+    ['ui_surface_count', 'Surfaces'],
+  ];
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char]));
+  }
+
+  function chip(text, extraClass = '') {
+    return `<span class="chip ${extraClass}">${escapeHtml(text)}</span>`;
+  }
+
+  function renderStats(summary) {
+    statsEl.innerHTML = statDefs.map(([key, label]) => `
+      <article class="stat">
+        <span>${label}</span>
+        <strong>${summary[key] ?? 0}</strong>
+      </article>
+    `).join('');
+  }
+
+  function renderSurfaces(items) {
+    surfacesEl.innerHTML = items.map((item) => `
+      <article class="surface">
+        <div class="surface-top">
+          <div>
+            <div class="surface-title">${escapeHtml(item.name)}</div>
+            <div class="mono">${escapeHtml(item.path)}</div>
+          </div>
+          ${chip(item.kind, 'accent')}
+        </div>
+        <p class="copy">${escapeHtml(item.description)}</p>
+      </article>
+    `).join('');
+  }
+
+  function renderFlows(items) {
+    flowsEl.innerHTML = items.map((item) => `
+      <article class="flow">
+        <div class="flow-top">
+          <div>
+            <div class="flow-title">${escapeHtml(item.name)}</div>
+            <div class="mono">${escapeHtml(item.endpoint)}</div>
+          </div>
+        </div>
+        <p class="copy">${escapeHtml(item.description)}</p>
+      </article>
+    `).join('');
+  }
+
+  function renderClusters(items) {
+    clustersEl.innerHTML = items.map((item) => `
+      <article class="cluster">
+        <div class="cluster-top">
+          <div>
+            <div class="cluster-title">${escapeHtml(item.name)}</div>
+            <p class="copy">${escapeHtml(item.description || item.goal || 'No cluster description yet.')}</p>
+          </div>
+          ${chip(item.status || 'unknown', item.status === 'building' ? 'warn' : 'accent')}
+        </div>
+        <div class="inline-meta">
+          <span>${escapeHtml(String(item.members.length))} members</span>
+          <span>${escapeHtml(String(item.data_connectors.length))} connectors</span>
+          <span>default model: ${escapeHtml(item.config.default_model || 'n/a')}</span>
+        </div>
+        <div class="chips">
+          ${(item.members || []).map((member) => chip(member)).join('')}
+          ${(item.config.tool_families || []).map((family) => chip(`family:${family}`, 'muted')).join('')}
+        </div>
+        <div class="progress"><span style="width:${Math.max(0, Math.min(100, Number(item.handoff_pct || 0)))}%"></span></div>
+      </article>
+    `).join('');
+  }
+
+  function renderAgents(items) {
+    const query = (searchEl.value || '').trim().toLowerCase();
+    const filtered = !query ? items : items.filter((item) => {
+      const haystack = [
+        item.id,
+        item.description,
+        item.purpose,
+        item.model,
+        item.group,
+        item.role,
+        item.safety_level,
+        ...(item.tools || []),
+        ...(item.clusters || []),
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    });
+
+    agentsEl.innerHTML = filtered.length ? filtered.map((item) => `
+      <article class="agent">
+        <div class="agent-top">
+          <div>
+            <div class="agent-title">${escapeHtml(item.id)}</div>
+            <p class="copy">${escapeHtml(item.description || item.purpose || 'No agent description yet.')}</p>
+          </div>
+          ${chip(item.model || 'no-model', 'accent')}
+        </div>
+        <div class="inline-meta">
+          <span>role: ${escapeHtml(item.role || 'plain')}</span>
+          <span>safety: ${escapeHtml(item.safety_level || 'read_only')}</span>
+          <span>${escapeHtml(String(item.tool_count || 0))} tools</span>
+        </div>
+        <div class="chips">
+          ${(item.clusters || []).map((cluster) => chip(`cluster:${cluster}`, 'accent')).join('')}
+          ${(item.discord_channels || []).map((channel) => chip(channel, 'muted')).join('')}
+          ${(item.tools || []).slice(0, 10).map((tool) => chip(tool)).join('')}
+          ${item.tools && item.tools.length > 10 ? chip(`+${item.tools.length - 10} more`, 'muted') : ''}
+        </div>
+      </article>
+    `).join('') : '<div class="status">No agents match this filter.</div>';
+  }
+
+  function renderFamilies(families, connections, toolConnections, customTools) {
+    familiesEl.innerHTML = families.map((item) => `
+      <article class="family">
+        <div class="family-top">
+          <div class="family-title">${escapeHtml(item.name)}</div>
+          ${chip(`${item.count} tools`, 'accent')}
+        </div>
+        <div class="chips">
+          ${(item.tools || []).map((tool) => chip(tool)).join('')}
+        </div>
+      </article>
+    `).join('') + (customTools.length ? `
+      <article class="family">
+        <div class="family-top">
+          <div class="family-title">Cluster specific tools</div>
+          ${chip(`${customTools.length} tools`, 'warn')}
+        </div>
+        <div class="chips">
+          ${customTools.map((tool) => chip(tool, 'warn')).join('')}
+        </div>
+      </article>
+    ` : '');
+
+    const registryEntries = Object.entries(connections || {});
+    const connectionEntries = Object.entries(toolConnections || {});
+    connectionsEl.innerHTML = (registryEntries.length || connectionEntries.length) ? `
+      <div class="section-head" style="margin-top:18px; margin-bottom:12px;">
+        <div>
+          <h2 style="font-size:18px; margin:0;">Connection Registry</h2>
+          <p style="margin:4px 0 0;">Shared external systems and the tools wired into them.</p>
+        </div>
+      </div>
+      ${registryEntries.map(([key, value]) => `
+        <article class="connection">
+          <div class="connection-top">
+            <div>
+              <div class="connection-title">${escapeHtml(value)}</div>
+              <div class="mono">${escapeHtml(key)}</div>
+            </div>
+          </div>
+        </article>
+      `).join('')}
+      ${connectionEntries.map(([tool, connection]) => `
+        <article class="connection">
+          <div class="connection-top">
+            <div>
+              <div class="connection-title">${escapeHtml(tool)}</div>
+              <div class="mono">maps to ${escapeHtml(connection)}</div>
+            </div>
+          </div>
+        </article>
+      `).join('')}
+    ` : '';
+  }
+
+  function renderInfra(infra) {
+    const sections = [
+      ['Hosts', infra.hosts || [], (item) => item.name || item.id],
+      ['Containers', infra.containers || [], (item) => item.name || item.id],
+      ['Services', infra.services || [], (item) => item.name || item.id],
+      ['Networks', infra.networks || [], (item) => item.name || item.id],
+      ['Tunnels', infra.tunnels || [], (item) => item.name || item.id],
+    ];
+
+    infraEl.innerHTML = sections.map(([label, items, nameGetter]) => `
+      <article class="infra">
+        <div class="infra-top">
+          <div class="infra-title">${escapeHtml(label)}</div>
+          ${chip(String(items.length), 'accent')}
+        </div>
+        <div class="chips">
+          ${items.map((item) => chip(nameGetter(item))).join('') || chip('none', 'muted')}
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function renderSources(items) {
+    sourcesEl.innerHTML = items.map((item) => `<a href="/${escapeHtml(item)}">${escapeHtml(item)}</a>`).join('');
+  }
+
+  function renderBlocks(blocksData) {
+    const countEl = document.getElementById('blocks-count');
+    const statusEl = document.getElementById('blocks-status');
+    const blocksEl = document.getElementById('blocks');
+    const searchEl = document.getElementById('blocks-search');
+    if (!blocksEl) return;
+
+    const query = (searchEl && searchEl.value || '').trim().toLowerCase();
+    const all = (blocksData && blocksData.blocks) || [];
+    const filtered = !query ? all : all.filter((b) => {
+      const hay = [b.id, b.kind, ...(b.keywords || []), b.intention, b.function].join(' ').toLowerCase();
+      return hay.includes(query);
+    });
+
+    if (countEl) {
+      countEl.textContent = blocksData && blocksData.reachable
+        ? `${blocksData.count} blocks`
+        : 'unreachable';
+    }
+    if (statusEl) {
+      if (!blocksData || !blocksData.reachable) {
+        statusEl.innerHTML = `<div class="status warn">Patterns library not reachable from this server's filesystem. Expected at <code>${escapeHtml((blocksData && blocksData.location) || '')}</code> — if this is a Mac dev box, run the library setup. The rest of the inventory still works.</div>`;
+      } else {
+        statusEl.innerHTML = '';
+      }
+    }
+
+    blocksEl.innerHTML = filtered.map((b) => `
+      <article class="block">
+        <div class="block-top">
+          <div>
+            <span class="block-id">${escapeHtml(b.id)}</span>
+            <span class="kind-chip">${escapeHtml(b.kind)}</span>
+          </div>
+        </div>
+        <p class="copy intention">${escapeHtml(b.intention || '')}</p>
+        <p class="copy function">${escapeHtml(b.function || '')}</p>
+        ${b.keywords && b.keywords.length ? `<div class="keywords">${b.keywords.slice(0, 8).map((k) => `<span class="keyword">${escapeHtml(k)}</span>`).join('')}</div>` : ''}
+      </article>
+    `).join('');
+  }
+
+  function renderAll(data) {
+    overview = data;
+    renderStats(data.summary || {});
+    renderSurfaces(data.ui_surfaces || []);
+    renderFlows(data.custom_flows || []);
+    renderClusters(data.clusters || []);
+    renderAgents(data.agents || []);
+    renderFamilies(data.tool_families || [], data.connections || {}, data.tool_connections || {}, data.custom_tools || []);
+    renderInfra(data.infra || {});
+    renderSources(data.sources || []);
+    renderBlocks(data.building_blocks || {});
+  }
+
+  async function loadOverview() {
+    const res = await fetch('/factory-overview');
+    if (!res.ok) {
+      throw new Error(`factory overview failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  searchEl.addEventListener('input', () => {
+    if (overview) renderAgents(overview.agents || []);
+  });
+
+  document.getElementById('blocks-search').addEventListener('input', () => {
+    if (overview) renderBlocks(overview.building_blocks || {});
+  });
+
+  loadOverview()
+    .then(renderAll)
+    .catch((error) => {
+      statsEl.innerHTML = `<div class="status">${escapeHtml(error.message)}</div>`;
+      surfacesEl.innerHTML = '<div class="status">Failed to load inventory.</div>';
+    });
+</script>
+</body>
+</html>
