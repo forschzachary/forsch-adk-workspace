@@ -231,12 +231,57 @@ def check_python_floor() -> list[str]:
     return v
 
 
+
+REPO_MANIFEST = ROOT / "repo_manifest.yaml"
+
+
+def _load_allowlist() -> set[str]:
+    """Parse the flat allowlist list from repo_manifest.yaml (trailing / stripped)."""
+    if not REPO_MANIFEST.exists():
+        return set()
+    out: set[str] = set()
+    in_list = False
+    for ln in REPO_MANIFEST.read_text().splitlines():
+        s = ln.strip()
+        if s.startswith("#") or not s:
+            continue
+        if s == "allowlist:":
+            in_list = True
+            continue
+        if in_list and s.startswith("- "):
+            out.add(s[2:].strip().rstrip("/"))
+        elif in_list and not ln.startswith(" "):
+            in_list = False
+    return out
+
+
+def check_manifest_allowlist() -> list[str]:
+    """No-fluff guard (R-STRUCT-9): every non-dotfile top-level entry must be
+    allowlisted (else fluff), and every non-dotfile allowlist entry must exist.
+    Dotfiles are skipped in both directions."""
+    if not REPO_MANIFEST.exists():
+        return ["repo_manifest.yaml missing"]
+    allowed = _load_allowlist()
+    if not allowed:
+        return ["repo_manifest.yaml has an empty/unparseable allowlist"]
+    v: list[str] = []
+    actual = {p.name for p in ROOT.iterdir() if not p.name.startswith(".")}
+    for name in sorted(actual):
+        if name not in allowed:
+            v.append(f"top-level {name!r} not in repo_manifest.yaml allowlist (fluff?)")
+    for a in sorted(x for x in allowed if not x.startswith(".")):
+        if a not in actual:
+            v.append(f"repo_manifest.yaml allowlists {a!r} but it is absent at root")
+    return v
+
+
 def main() -> int:
     checks = [
         ("R-STRUCT-1  no embedded repo / gitignore hygiene", check_no_embedded_repo),
         ("R-STRUCT-7  members glob == pyproject dirs == release-please", check_members_match),
         ("R-STRUCT-11 intra-dep == pins + workspace source", check_intra_dep_pins),
         ("R-STRUCT-12 single python floor", check_python_floor),
+        ("R-STRUCT-9b manifest allowlist", check_manifest_allowlist),
     ]
     failures = 0
     for label, fn in checks:

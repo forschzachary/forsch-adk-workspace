@@ -51,6 +51,7 @@ jobs:
             "^release-please-config\\.json$"
             "^repo_manifest\\.yaml$"
             "^packages/live-agent-graph/registry/"
+            "^factory/"
           )
 
           HIT=0
