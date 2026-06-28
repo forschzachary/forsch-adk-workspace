@@ -1,0 +1,23 @@
+# Native ADK bridge — the launch artifact (reproducible, the thing that was missing).
+# Build:    docker compose -f compose.yaml build
+# Up:       docker compose -f compose.yaml up -d
+# Deploy:   docker restart adk-bridge   (the cockpit Deploy button — unchanged)
+services:
+  adk-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: adk-bridge:native
+    container_name: adk-bridge
+    network_mode: host          # reach litellm 127.0.0.1:4000 + authsome 127.0.0.1:7998
+    restart: unless-stopped
+    working_dir: /workspace/bridge
+    env_file:
+      - bridge.env              # the ~2 secrets (Discord token + LiteLLM key); gitignored
+    environment:
+      PYTHONUNBUFFERED: "1"
+      # forsch namespace merges across each package's src dir
+      PYTHONPATH: /workspace/bridge/src:/workspace/components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src
+      FORSCH_ADK_WORKSPACE: /workspace   # stability tools inventory the live mount, not the dead /opt/data path
+    volumes:
+      - /root/.hermes/workspace/adk:/workspace   # live agent code + bridge_config.yaml + sessions

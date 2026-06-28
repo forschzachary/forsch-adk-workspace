@@ -1,0 +1,50 @@
+# Native ADK bridge — the launch artifact (reproducible, the thing that was missing).
+# Build:    docker compose -f compose.yaml build
+# Up:       docker compose -f compose.yaml up -d
+# Deploy:   docker restart adk-bridge   (the cockpit Deploy button — unchanged)
+services:
+  adk-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: adk-bridge:native
+    container_name: adk-bridge
+    network_mode: host          # reach litellm 127.0.0.1:4000 + authsome 127.0.0.1:7998
+    restart: unless-stopped
+    working_dir: /workspace/bridge
+    env_file:
+      - bridge.env              # the ~2 secrets (Discord token + LiteLLM key); gitignored
+    environment:
+      PYTHONUNBUFFERED: "1"
+      BRIDGE_HTTP_HOST: "0.0.0.0"
+      # forsch namespace merges across each package's src dir
+      PYTHONPATH: /workspace/bridge/src:/workspace/components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src:/workspace/agents/wow-guild/src:/workspace/agents/shelby/src:/workspace/agents/hubert/src:/workspace/agents/agent_logic_specialist/src
+      FORSCH_ADK_WORKSPACE: /workspace   # stability tools inventory the live mount, not the dead /opt/data path
+      AGENT_PROFILES_ROOT: /profiles     # per-agent profile homes (creds, config, state)
+    volumes:
+      - /root/.hermes/workspace/adk:/workspace   # live agent code + bridge_config.yaml + sessions
+      - /root/.hermes/profiles:/profiles         # per-agent profile homes
+
+  # Discord leads + CRM webhook (:8765). SEPARATE container from hermes/Hubert (token ...Th7w,
+  # a different Discord bot than Hubert's ...YpRo). Same image, runs the bridge entrypoint instead
+  # of http. --restart unless-stopped = Docker owns its lifecycle, so a hermes/container restart
+  # can no longer wipe it (the bug that took it down).
+  adk-leads:
+    profiles: ["future-leads"]   # STOOD DOWN: forward infra for future ADK leads. rowboatx owns the Memory Lead token (...Th7w). Re-enable: docker compose --profile future-leads up -d adk-leads
+    image: adk-bridge:native
+    container_name: adk-leads
+    command: ["python", "-m", "forsch.adk_bridge.bridge"]
+    network_mode: host
+    restart: unless-stopped
+    working_dir: /workspace/bridge
+    env_file:
+      - bridge.env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /workspace/bridge/src:/workspace/components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src:/workspace/agents/wow-guild/src:/workspace/agents/shelby/src:/workspace/agents/hubert/src:/workspace/agents/agent_logic_specialist/src
+      FORSCH_ADK_WORKSPACE: /workspace
+      FORSCH_ADK_MODEL: openai/gpt-5.5
+      LITELLM_BASE_URL: http://127.0.0.1:4000/v1
+      HOME: /workspace
+    volumes:
+      - /root/.hermes/workspace/adk:/workspace

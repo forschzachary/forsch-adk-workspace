@@ -1,0 +1,113 @@
+# ADK Discord Bridge — channel → agent routing
+# One bot token, one process, five agents.
+
+discord:
+  # Bot token from env var DISCORD_BOT_TOKEN
+  # (same bot as Hermes — bridge replaces team memory role)
+  token_env: DISCORD_BOT_TOKEN
+
+agents:
+  stability:
+    agent_package: forsch.agent_stability.agent
+    agent_attr: root_agent
+    profile_home: /profiles/stability
+    channels:
+      - "#team-stability"
+  ops:
+    agent_package: forsch.agent_ops.agent
+    agent_attr: root_agent
+    profile_home: /profiles/ops
+    channels:
+      - "#team-ops"
+  social:
+    agent_package: forsch.agent_social.agent
+    agent_attr: agent
+    profile_home: /profiles/social
+    channels:
+      - "#team-social"
+  brand:
+    agent_package: forsch.agent_brand.agent
+    agent_attr: agent
+    profile_home: /profiles/brand
+    channels:
+      - "#team-brand"
+  assistant:
+    agent_package: forsch.agent_assistant.agent
+    agent_attr: agent
+    profile_home: /profiles/assistant
+    channels:
+      - "#team-assistant"
+      - "#team-memory"
+  build:
+    agent_package: forsch.agent_build.agent
+    agent_attr: agent
+    profile_home: /profiles/build
+    channels:
+      - "#team-build"
+  wow-guild:
+    agent_package: forsch.agent_wow_guild.agent
+    agent_attr: root_agent
+    profile_home: /profiles/wow-guild
+    channels:
+      - "#guild-wow"
+
+  shelby:
+    agent_package: forsch.agent_shelby.agent
+    agent_attr: root_agent
+    profile_home: /profiles/shelby
+    channels: []
+
+  # Any DM (no guild/channel) routes here
+  dm_fallback: assistant
+
+# Spectrum iMessage integration. The adk-sms-shelby TS service runs the
+# Spectrum SDK, receives iMessages via Photon Cloud, and POSTs each message
+# to /spectrum/webhook on this bridge. Auth via SPECTRUM_SECRET env var.
+spectrum:
+  # Per-sender routing: iMessage sender (phone/email) → agent name
+  routing:
+    # Add Shelby's number here once confirmed
+    # "+15551234567": shelby
+  # Default agent for unmatched iMessage senders
+  default_agent: shelby
+
+session:
+  # SQLite session store — survives restarts
+  db_path: data/adk_sessions.db
+
+crm:
+  # Minimal outbound Frappe CRM webhook receiver.
+  enabled: true
+  host: 127.0.0.1
+  port: 8765
+  secret_env: CRM_BRIDGE_SECRET
+  max_body_bytes: 65536
+  timeout_sec: 5.0
+  assignees:
+    ops: ops
+    build: build
+    assistant: assistant
+    brand: brand
+    social: social
+    stability: stability
+
+streaming:
+  # Flush buffer to Discord every N seconds or on sentence break
+  flush_interval_sec: 0.5
+  # Max chars per Discord message (Discord limit is 2000)
+  max_message_chars: 1900
+
+logging:
+  level: INFO
+  file: ""
+
+# Team Rooms (Gameplan) PULL integration. enabled:false until the bot user + keys exist.
+teamrooms:
+  enabled: false
+  base_url: https://crm.forschfrontiers.com
+  bot_user: agent-bot@forschfrontiers.com
+  poll_interval_seconds: 10
+  ledger_db: data/teamrooms_ledger.db
+  reply_signature: "— {agent} (ADK agent)"
+  mention_routing: true
+  spaces: {}
