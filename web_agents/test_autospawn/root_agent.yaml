@@ -1,9 +1,0 @@
-agent_class: LlmAgent
-name: test_autospawn_agent
-description: test_autospawn agent
-instruction: |
-  test
-model_code:
-  name: forsch.agent_test_autospawn.agent.test_autospawn_model
-tools:
-  - name: forsch.adk_components.tools.get_crm_health_snapshot

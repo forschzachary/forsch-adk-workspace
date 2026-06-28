@@ -1,8 +1,0 @@
-agent_class: LlmAgent
-name: test_ui_spawn_agent
-description: UI spawned test
-instruction: |
-      You are a blank agent spawned from the Live Agent Graph. You can receive messages and reply. Your capabilities will grow as tools and instructions are added.
-model_code:
-  name: forsch.agent_test_ui_spawn.agent.test_ui_spawn_model
-tools:
