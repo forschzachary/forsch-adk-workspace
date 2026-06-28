@@ -349,6 +349,8 @@ def _proxy_to_bridge(handler, method):
     if not parsed.path.startswith("/chat"):
         return False
     target = ADK_BRIDGE_URL + handler.path
+    principal = handler._get_principal() or ("smoke-test" if handler._has_mutation_secret() else "anonymous")
+    sys.stderr.write(f"proxy {method} {handler.path} principal={principal}\n")
     try:
         content_length = int(handler.headers.get("Content-Length", 0))
         body = handler.rfile.read(content_length) if content_length > 0 else None
@@ -2183,7 +2185,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/chat":
-            principal = self._get_principal()
+            principal = self._check_auth() and (self._get_principal() or "smoke-test")
             if not principal:
                 self._json_response(401, {"error": "unauthorized: Cloudflare Access required"})
                 return
