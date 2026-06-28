@@ -97,4 +97,4 @@ jobs:
 
       - name: Pytest (all packages)
         if: steps.detect.outputs.is_control_plane == '1'
-        run: uv run python -m pytest agents -q || { rc=$?; [ "$rc" = "5" ] && exit 0 || exit $rc; }
+        run: uv run python -m pytest agents --import-mode=importlib -q || { rc=$?; [ "$rc" = "5" ] && exit 0 || exit $rc; }
