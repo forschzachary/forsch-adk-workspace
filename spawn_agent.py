@@ -14,6 +14,7 @@ Then re-runs build_live_graph.py to show the new node in the graph.
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -163,6 +164,60 @@ AGENTS_YAML_ENTRY = """
 DEFAULT_INSTRUCTION = """You are a blank agent spawned from the Live Agent Graph. You can receive messages and reply. Your capabilities will grow as tools and instructions are added."""
 
 
+def _git_run(repo: Path, args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _repo_rel(repo: Path, path: Path) -> str:
+    return path.resolve().relative_to(repo.resolve()).as_posix()
+
+
+def _ensure_clean_targets(repo: Path, paths: list[Path]) -> None:
+    rels = [_repo_rel(repo, path) for path in paths if path.exists()]
+    if not rels:
+        return
+    status = _git_run(repo, ["status", "--porcelain", "--", *rels])
+    if status.returncode != 0:
+        detail = status.stderr.strip() or status.stdout.strip() or "git status failed"
+        raise RuntimeError(f"cannot inspect git state in {repo}: {detail}")
+    if status.stdout.strip():
+        raise RuntimeError(
+            "refusing to spawn because target files are already dirty:\n"
+            + status.stdout.strip()
+        )
+
+
+def _git_checkpoint(repo: Path, paths: list[Path], message: str) -> str | None:
+    rels = [_repo_rel(repo, path) for path in paths]
+    add = _git_run(repo, ["add", "--", *rels])
+    if add.returncode != 0:
+        detail = add.stderr.strip() or add.stdout.strip() or "git add failed"
+        raise RuntimeError(f"git add failed in {repo}: {detail}")
+
+    diff = _git_run(repo, ["diff", "--cached", "--quiet", "--", *rels])
+    if diff.returncode == 0:
+        return None
+    if diff.returncode != 1:
+        detail = diff.stderr.strip() or diff.stdout.strip() or "git diff failed"
+        raise RuntimeError(f"git diff failed in {repo}: {detail}")
+
+    commit = _git_run(repo, ["commit", "-m", message, "--", *rels])
+    if commit.returncode != 0:
+        detail = commit.stderr.strip() or commit.stdout.strip() or "git commit failed"
+        raise RuntimeError(f"git commit failed in {repo}: {detail}")
+
+    rev = _git_run(repo, ["rev-parse", "--short", "HEAD"])
+    if rev.returncode != 0:
+        return ""
+    return rev.stdout.strip()
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python3 spawn_agent.py <agent_id> [--model MODEL] [--description DESC]", file=sys.stderr)
@@ -206,6 +261,15 @@ def main():
     content = agents_yaml.read_text()
     if f"  {agent_id}:" in content:
         print(f"Error: agent '{agent_id}' already in agents.yaml", file=sys.stderr)
+        sys.exit(1)
+
+    live_graph_dir = WS / "live-agent-graph"
+    graph_json = live_graph_dir / "agent-graph-v2.json"
+    try:
+        _ensure_clean_targets(WS, [agents_yaml])
+        _ensure_clean_targets(live_graph_dir, [graph_json])
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
     title = agent_id.replace("_", " ").title()
@@ -321,7 +385,6 @@ def main():
     graph_builder = WS / "live-agent-graph" / "build_live_graph.py"
     factory_python = WS / "factory" / ".venv" / "bin" / "python"
     if graph_builder.exists():
-        import subprocess
         py = str(factory_python) if factory_python.exists() else sys.executable
         result = subprocess.run(
             [py, str(graph_builder)],
@@ -333,6 +396,34 @@ def main():
             print(f"  graph:    regenerated ({out_path})")
         else:
             print(f"  graph:    rebuild failed — {result.stderr[:200]}", file=sys.stderr)
+            try:
+                root_commit = _git_checkpoint(
+                    WS,
+                    [agent_dir, web_dir, agents_yaml],
+                    f"Spawn graph agent {agent_id}",
+                )
+                print(f"  git:      adk workspace committed ({root_commit or 'no changes'})")
+            except Exception as e:
+                print(f"  git:      checkpoint failed — {e}", file=sys.stderr)
+            sys.exit(1)
+
+    try:
+        root_commit = _git_checkpoint(
+            WS,
+            [agent_dir, web_dir, agents_yaml],
+            f"Spawn graph agent {agent_id}",
+        )
+        print(f"  git:      adk workspace committed ({root_commit or 'no changes'})")
+        if graph_json.exists():
+            graph_commit = _git_checkpoint(
+                live_graph_dir,
+                [graph_json],
+                f"Regenerate graph after spawning {agent_id}",
+            )
+            print(f"  git:      live graph committed ({graph_commit or 'no changes'})")
+    except Exception as e:
+        print(f"  git:      checkpoint failed — {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
