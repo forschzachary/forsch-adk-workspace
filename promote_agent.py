@@ -33,6 +33,8 @@ def promote(agent_id: str, target_role: str) -> dict:
     current_role = agent.get("role", "plain")
 
     valid_promotions = {"plain": "builder", "builder": "orchestrator"}
+    if current_role == target_role:
+        return {"ok": True, "noop": True, "agent_id": agent_id, "role": current_role}
     expected_next = valid_promotions.get(current_role)
     if target_role != expected_next:
         return {"ok": False, "error": f"invalid promotion: {current_role} → {target_role} (expected {current_role} → {expected_next})"}
