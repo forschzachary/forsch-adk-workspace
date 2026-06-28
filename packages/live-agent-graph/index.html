@@ -433,6 +433,15 @@
   }
   .hubert-tool-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hubert-tool-row span { color: #7d8997; font-size: 11px; }
+  .hubert-tool-row.tool-failed strong, .hubert-tool-row.tool-failed span { color: #ff7b72; }
+  details.hubert-run-card > summary { cursor: pointer; list-style: none; font-size: 11px; color: #8b949e; padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+  details.hubert-run-card > summary::-webkit-details-marker { display: none; }
+  details.hubert-run-card > summary:hover { color: #c9d1d9; }
+  details.hubert-run-card[open] > summary { margin-bottom: 6px; }
+  details.hubert-run-card.run-failed > summary { color: #ffb4a8; }
+  .hubert-run-card .run-fail { color: #ff7b72; font-weight: 650; margin-left: auto; }
+  #hubert-tools-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #8b949e; cursor: pointer; user-select: none; white-space: nowrap; }
+  #hubert-tools-toggle input { width: auto; margin: 0; }
   .hubert-error-detail {
     display: grid; gap: 6px; margin-top: 10px; padding: 10px;
     border: 1px solid rgba(255,123,114,0.24); border-radius: 10px;
@@ -641,6 +650,7 @@
         <label for="chat-model-select">Model</label>
         <select id="chat-model-select" title="Chat model"></select>
         <div id="chat-model-status">Loading MiMo models...</div>
+        <label id="hubert-tools-toggle" title="Show tool calls in the transcript"><input type="checkbox" id="hubert-show-tools" checked> tools</label>
       </div>
       <div id="hubert-mode-pill">workspace access</div>
     </div>
@@ -912,6 +922,7 @@ function renderTabs() {
 }
 
 function selectCluster(name) {
+  if (currentCluster && currentCluster !== name) saveClusterChat(currentCluster);
   currentCluster = name;
   renderTabs();
   // Update panel indicator
@@ -922,6 +933,7 @@ function selectCluster(name) {
   ci.style.color = c ? '#58a6ff' : '#8b949e';
   loadGraph(name);
   writeHashState();
+  loadClusterChat(name);
 }
 
 function loadGraph(clusterName) {
@@ -2812,10 +2824,37 @@ let sidecarOpen = false;
 let sidecarTab = 'agent';
 let sidecarAgentId = null;
 let hubertSessionId = null;
-let hubertMessages = [{
-  role: 'system',
-  text: 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.'
-}];
+const HUBERT_WELCOME_TEXT = 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.';
+let hubertMessages = [{ role: 'system', text: HUBERT_WELCOME_TEXT }];
+let showToolCalls = localStorage.getItem('hubert-show-tools') !== 'off';
+// ── Per-cluster chat persistence (localStorage). Each cluster keeps its own
+// transcript + MiMo session_id so a refresh / tab-switch restores it. ──
+const CHAT_STORE_VERSION = 'lag-chat-v1';
+const CHAT_MSG_CAP = 200;
+function chatKey(cluster) { return `${CHAT_STORE_VERSION}:${cluster || '_none'}`; }
+function loadClusterChat(cluster) {
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(chatKey(cluster)) || 'null'); } catch (_) {}
+  if (stored && Array.isArray(stored.messages) && stored.messages.length) {
+    hubertMessages = stored.messages;
+    hubertSessionId = stored.session_id || null;
+  } else {
+    hubertMessages = [{ role: 'system', text: HUBERT_WELCOME_TEXT }];
+    hubertSessionId = null;
+  }
+  clearPendingHubertRun();
+  hubertSending = false;
+  renderHubertMessages();
+}
+function saveClusterChat(cluster) {
+  if (!cluster) return;
+  try {
+    localStorage.setItem(chatKey(cluster), JSON.stringify({
+      session_id: hubertSessionId,
+      messages: hubertMessages.slice(-CHAT_MSG_CAP)
+    }));
+  } catch (_) {}
+}
 let hubertSending = false;
 let chatModelHealth = {};
 let chatModelSource = 'fallback';
@@ -3073,6 +3112,16 @@ document.getElementById('chat-model-select')?.addEventListener('change', (ev) =>
   localStorage.setItem('hubert-chat-model', ev.target.value || 'default');
   updateChatModelStatus();
 });
+(() => {
+  const tt = document.getElementById('hubert-show-tools');
+  if (!tt) return;
+  tt.checked = showToolCalls;
+  tt.addEventListener('change', (ev) => {
+    showToolCalls = ev.target.checked;
+    localStorage.setItem('hubert-show-tools', showToolCalls ? 'on' : 'off');
+    renderHubertMessages();
+  });
+})();
 
 // Hubert chat tab
 function renderHubertContext() {
@@ -3153,8 +3202,17 @@ function normalizeRunReceipt(data, fallbackModel, ok) {
   };
 }
 
+function runHasFailure(run) {
+  if (!run) return false;
+  if (run.state === 'error' || run.diagnostic) return true;
+  return (run.tools || []).some(t => /error|fail|denied|timeout/i.test(t.status || ''));
+}
 function renderRunPanel(run) {
   if (!run) return '';
+  const failed = runHasFailure(run);
+  // Tool-call display: hidden when the toggle is off — EXCEPT failures, which
+  // always surface (a red marker) so they're never silently hidden.
+  if (!showToolCalls && !failed) return '';
   const elapsed = run.elapsed_ms ? `${Math.max(1, Math.round(run.elapsed_ms / 1000))}s` : 'running';
   const stages = (run.stages || []).length ? run.stages : [{ label: 'working', state: run.state || 'active' }];
   const stageHtml = stages.map(stage => {
@@ -3165,12 +3223,14 @@ function renderRunPanel(run) {
   }).join('');
   const toolHtml = (run.tools || []).length ? `
     <div class="hubert-tool-list">
-      ${(run.tools || []).map(tool => `
-        <div class="hubert-tool-row" title="${esc(tool.preview || '')}">
+      ${(run.tools || []).map(tool => {
+        const bad = /error|fail|denied|timeout/i.test(tool.status || '');
+        return `
+        <div class="hubert-tool-row${bad ? ' tool-failed' : ''}" title="${esc(tool.preview || '')}">
           <strong>${esc(tool.name || 'tool')}</strong>
           <span>${esc(tool.status || 'used')}</span>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>` : '';
   const diagnosticHtml = run.diagnostic ? `
     <div class="hubert-error-detail">
@@ -3178,13 +3238,17 @@ function renderRunPanel(run) {
       <div>${esc(run.diagnostic.message || '')}</div>
       <div>${esc(run.diagnostic.next_action || '')}</div>
     </div>` : '';
+  const nTools = (run.tools || []).length;
+  const toolSummary = nTools ? ` · ${nTools} tool${nTools > 1 ? 's' : ''}` : '';
+  const failMark = failed ? '<span class="run-fail">✕ failed</span>' : '';
+  // Compact-by-default: a collapsed <details> summary; click to expand the full track.
   return `
-    <div class="hubert-run-card">
-      <div class="hubert-run-head"><span>${esc(chatModelLabel(run.model || 'default'))}</span><span>${esc(elapsed)}</span></div>
+    <details class="hubert-run-card${failed ? ' run-failed' : ''}">
+      <summary>🔧 ${esc(chatModelLabel(run.model || 'default'))} · ${esc(elapsed)}${esc(toolSummary)}${failMark}</summary>
       <div class="hubert-run-track">${stageHtml}</div>
       ${toolHtml}
       ${diagnosticHtml}
-    </div>
+    </details>
   `;
 }
 
@@ -3233,6 +3297,7 @@ async function sendHubertMessage() {
   }
   hubertSending = true;
   hubertMessages.push({ role: 'user', text });
+  saveClusterChat(currentCluster);
   input.value = '';
   input.style.height = '';
   document.getElementById('hubert-send').disabled = true;
@@ -3301,6 +3366,7 @@ async function sendHubertMessage() {
   clearPendingHubertRun();
   document.getElementById('hubert-send').disabled = false;
   updateChatModelStatus();
+  saveClusterChat(currentCluster);
   renderHubertMessages();
 }
 
