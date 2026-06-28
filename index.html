@@ -2749,25 +2749,30 @@ let hubertMessages = [{
   text: 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.'
 }];
 let hubertSending = false;
+// CHAT_MODEL_FALLBACKS: shown briefly while /models loads. Keep this in
+// sync with serve.py's CHAT_MODEL_FALLBACKS (live-agent-graph/serve.py
+// around line 1368). The sidecar will replace this list with the live
+// /models response as soon as the fetch returns. Add new models to BOTH
+// places until the patterns library is on the box and serves the list
+// from a single source.
 const CHAT_MODEL_FALLBACKS = [
   'default',
+  'mimo/mimo-auto',
   'openai/gpt-5.5',
   'openai/gpt-5.4',
   'openai/gpt-5.3-codex-spark',
-  'openai/gpt-5.3-codex',
   'ollama-cloud/deepseek-v4-flash',
   'ollama-cloud/deepseek-v4-pro',
   'ollama-cloud/minimax-m2.7',
   'ollama-cloud/kimi-k2.6',
   'ollama-cloud/qwen3-coder:480b',
+  'ollama-cloud/glm-5.1',
+  'ollama-cloud/glm-5.2',
   'google/gemini-3.1-pro-preview',
   'google/gemini-3-flash-preview',
   'minimax/MiniMax-M3',
   'minimax/MiniMax-M3-thinking',
   'cerebras/gpt-oss-120b',
-  'mimo-v2.5',
-  'mimo-v2.5-pro',
-  'mimo/mimo-auto'
 ];
 const CHAT_MODEL_LABELS = {
   'default': 'Default',
