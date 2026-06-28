@@ -90,6 +90,14 @@ agents:
     - is_grocery_email_sender_allowed
     - log_grocery_email_receipt
     model: gpt-5.5
+  screening:
+    description: Movie discovery, tracking, and recommendations lead.
+    discord_channels: []
+    safety_level: read_only
+    purpose: Own the ScreeningRoom cluster for movie discovery, tracking, recommendations,
+      and watchlist-oriented workflows.
+    tools: []
+    model: gpt-5.5
   developer:
     description: LinkedIn developer — builds posting tools, scheduling, and automation.
     discord_channels:

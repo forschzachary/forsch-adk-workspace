@@ -31,7 +31,7 @@ ADK_WS = workspace_root() / "adk"  # real ADK workspace for filesystem gate chec
 
 # ── Validation schemas (disk-first, CRM-second — gatekeeper before builder) ──
 
-VALID_STATUSES = ("blank", "planning", "building", "stable", "archived")
+VALID_STATUSES = ("blank", "planning", "building", "active", "stable", "archived")
 DEFAULT_MAX_DELEGATION_DEPTH = 3  # depth 0..3 (human → agent → agent → agent → escalate)
 
 
