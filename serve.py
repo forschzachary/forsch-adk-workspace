@@ -1951,6 +1951,21 @@ class Handler(SimpleHTTPRequestHandler):
         """Return True for verified Cloudflare Access requests or local secret tests."""
         return self._get_principal() is not None or self._has_mutation_secret()
 
+    def _principal_or_secret(self) -> str | None:
+        """Resolve the effective principal for a request.
+
+        Returns the verified email from Cloudflare Access when the JWT
+        is valid. Falls back to "smoke-test" if the local mutation secret
+        is in use (no email available, but the secret authenticates).
+        Returns None when neither path authenticates the request.
+        """
+        principal = self._get_principal()
+        if principal:
+            return principal
+        if self._has_mutation_secret():
+            return "smoke-test"
+        return None
+
     def _is_mutating(self, path: str) -> bool:
         """Return True for endpoints that mutate state."""
         return path in ("/spawn", "/wire", "/save-agent", "/promote",
