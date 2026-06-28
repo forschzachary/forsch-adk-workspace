@@ -1385,7 +1385,12 @@ CHAT_MODEL_FALLBACKS = [
     "mimo-v2.5-pro",
     "mimo/mimo-auto",
 ]
-LEGACY_CHAT_MODEL_ALIASES = {
+# Unified model aliases. Display label -> real provider/model id.
+# CHAT_MODEL_FALLBACKS is the canonical list of available model ids; each
+# entry also serves as a self-alias. LEGACY_CHAT_MODEL_ALIASES maps the
+# older display labels to the current names. Both sources merge into a
+# single MODEL_ALIASES dict so _normalise_chat_model has one lookup.
+_MODEL_LEGACY_ALIASES = {
     "mimo-v2.5": "mimo/mimo-auto",
     "mimo-v2.5-pro": "mimo/mimo-auto",
     "mimo-v2.5-pro-ultraspeed": "mimo/mimo-auto",
@@ -1403,13 +1408,16 @@ LEGACY_CHAT_MODEL_ALIASES = {
 }
 
 
+_MODEL_ALIASES = {**_MODEL_LEGACY_ALIASES, **{m: m for m in CHAT_MODEL_FALLBACKS}}
+
+
 def _normalise_chat_model(model: str | None) -> str | None:
     """Convert display/legacy model labels into MiMo CLI model ids."""
     clean = (model or "").strip()
     if not clean or clean == "default":
         return None
-    if clean in LEGACY_CHAT_MODEL_ALIASES:
-        return LEGACY_CHAT_MODEL_ALIASES[clean]
+    if clean in _MODEL_ALIASES:
+        return _MODEL_ALIASES[clean]
     if "/" not in clean:
         return None
     return clean
