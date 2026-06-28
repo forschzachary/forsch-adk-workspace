@@ -11,13 +11,14 @@
 allowlist:
   - packages/
   - agents/
-  - clusters/
-  - components/
   - bridge/
   - builder/
-  - live-agent-graph/
+  - chat/
   - factory/
   - scripts/
+  - docs/
+  - preambles/
+  - agent_specs/
   - .github/
   - repo_manifest.yaml
   - Makefile
