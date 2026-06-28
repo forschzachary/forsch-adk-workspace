@@ -1317,6 +1317,32 @@ CHAT_MODEL_FALLBACKS = [
     "mimo-v2.5",
     "mimo-v2.5-pro",
     "mimo/mimo-auto",
+    "codex/gpt-5.5",
+    "codex/gpt-5.4",
+    "codex/gpt-5.3-codex-spark",
+    "ollama-cloud/deepseek-v4-flash",
+    "ollama-cloud/deepseek-v4-pro",
+    "ollama-cloud/minimax-m2.7",
+    "ollama-cloud/kimi-k2.6",
+    "ollama-cloud/qwen3-coder-480b",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-4.1",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+    "glm-5.2",
+    "gemini-3-pro-preview",
+    "gemini-3-flash-preview",
+    "nvidia-deepseek-v4-flash",
+    "qwen3-coder:480b",
+    "groq-compound-mini",
+    "groq-gpt-oss-20b",
+    "groq-llama-4-scout",
+    "groq-llama-8b",
+    "nvidia-llama-vision-11b",
+    "nvidia-llama-vision-90b",
+    "nvidia-nemotron-30b",
+    "mistral-large",
 ]
 LEGACY_CHAT_MODEL_ALIASES = {
     "mimo-v2.5": "mimo/mimo-auto",
@@ -1329,6 +1355,7 @@ LEGACY_CHAT_MODEL_ALIASES = {
     "gpt-5.4": None,
     "gpt-4.1": None,
 }
+MIMO_CHAT_MODELS = {"mimo/mimo-auto"}
 SAFE_CHAT_MODELS = set(CHAT_MODEL_FALLBACKS)
 
 
@@ -1339,9 +1366,13 @@ def _normalise_chat_model(model: str | None) -> str | None:
         return None
     if clean in LEGACY_CHAT_MODEL_ALIASES:
         return LEGACY_CHAT_MODEL_ALIASES[clean]
+    if clean in MIMO_CHAT_MODELS:
+        return clean
+    if clean in SAFE_CHAT_MODELS:
+        return None
     if "/" not in clean:
         return None
-    return clean
+    return None
 
 
 def _list_chat_models() -> list[str]:
@@ -1879,6 +1910,9 @@ class Handler(SimpleHTTPRequestHandler):
             super().do_GET()
         elif path == "/graph":
             self.path = "/index.html"
+            super().do_GET()
+        elif path in ("/index.html", "/home.html"):
+            self.path = path
             super().do_GET()
         elif path == "/factory-overview":
             self._json_response(200, _build_factory_overview())

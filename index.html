@@ -2746,12 +2746,51 @@ let hubertMessages = [{
   text: 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.'
 }];
 let hubertSending = false;
-const CHAT_MODEL_FALLBACKS = ['default', 'mimo-v2.5', 'mimo-v2.5-pro', 'mimo/mimo-auto'];
+const CHAT_MODEL_FALLBACKS = [
+  'default',
+  'mimo-v2.5',
+  'mimo-v2.5-pro',
+  'mimo/mimo-auto',
+  'codex/gpt-5.5',
+  'codex/gpt-5.4',
+  'codex/gpt-5.3-codex-spark',
+  'ollama-cloud/deepseek-v4-flash',
+  'ollama-cloud/deepseek-v4-pro',
+  'ollama-cloud/minimax-m2.7',
+  'ollama-cloud/kimi-k2.6',
+  'ollama-cloud/qwen3-coder-480b',
+  'gpt-5.5',
+  'gpt-5.4',
+  'gpt-4.1',
+  'deepseek-v4-pro',
+  'deepseek-v4-flash',
+  'glm-5.2',
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
+  'nvidia-deepseek-v4-flash',
+  'qwen3-coder:480b',
+  'groq-compound-mini',
+  'groq-gpt-oss-20b',
+  'groq-llama-4-scout',
+  'groq-llama-8b',
+  'nvidia-llama-vision-11b',
+  'nvidia-llama-vision-90b',
+  'nvidia-nemotron-30b',
+  'mistral-large'
+];
 const CHAT_MODEL_LABELS = {
   'default': 'Default',
   'mimo-v2.5': 'MiMo v2.5',
   'mimo-v2.5-pro': 'MiMo v2.5 Pro',
-  'mimo/mimo-auto': 'MiMo auto'
+  'mimo/mimo-auto': 'MiMo auto',
+  'codex/gpt-5.5': 'Codex gpt-5.5',
+  'codex/gpt-5.4': 'Codex gpt-5.4',
+  'codex/gpt-5.3-codex-spark': 'Codex Spark',
+  'ollama-cloud/deepseek-v4-flash': 'Ollama Cloud DeepSeek flash',
+  'ollama-cloud/deepseek-v4-pro': 'Ollama Cloud DeepSeek pro',
+  'ollama-cloud/minimax-m2.7': 'Ollama Cloud MiniMax',
+  'ollama-cloud/kimi-k2.6': 'Ollama Cloud Kimi',
+  'ollama-cloud/qwen3-coder-480b': 'Ollama Cloud Qwen coder'
 };
 
 function chatModelLabel(model) {
