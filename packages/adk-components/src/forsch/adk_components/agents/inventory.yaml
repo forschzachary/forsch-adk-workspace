@@ -1,0 +1,22 @@
+# Agents inventory — keyword + intention index for all ADK agents.
+#
+# Frontmatter format is the SAME as patterns/inventory.yaml:
+#   keywords: [...]
+#   intention: "Plain English: what does this agent save you from rebuilding?"
+#   function: "One-line technical description."
+#   depends_on: [pattern_id, ...]
+#   used_by: [other_agent_id, ...]
+#   example: "agent_id(...) -> behavior"
+#
+# Each agent's Python file ALSO has frontmatter in its docstring matching this.
+# linter (_lint.py) walks both for drift detection.
+
+agents:
+  shelby:
+    file: shelby/agent.py
+    keywords: [groceries, reminders, household, personal, receipts, whitelist, shopping]
+    intention: "Saves you from rebuilding a personal-assistant that tracks groceries and reminders honestly. Pre-built with receipt-gated reminders and email-receipt whitelist."
+    function: "Shelby agent: groceries + reminders + grocery-email whitelist via OAuth."
+    depends_on: [jsonl_store, whitelist, receipt_tool, oauth_client]
+    used_by: []
+    example: "make_agent_files('shelby', ...) OR /apps/shelby/users/<u>/sessions"

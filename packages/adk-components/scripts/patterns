@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""patterns CLI entry point. Sets up PYTHONPATH before importing forsch."""
+import os
+import sys
+from pathlib import Path
+
+# Resolve components/src regardless of where the script is invoked from
+_HERE = Path(__file__).resolve().parent
+_COMPONENTS_SRC = _HERE.parent / "src"
+if str(_COMPONENTS_SRC) not in sys.path:
+    sys.path.insert(0, str(_COMPONENTS_SRC))
+
+from forsch.adk_components.patterns.cli import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,19 @@
+# UIs inventory — keyword + intention index for all operator-facing surfaces.
+
+uis:
+  graph_console:
+    file: live-agent-graph/index.html
+    keywords: [graph, console, operator, force-graph, padi, swim-lane, cluster, tabs]
+    intention: "Saves you from rebuilding the operator console every time we add a new cluster or lens. Drop-in HTML at the public URL, frontmatter-declared so the AI can introspect."
+    function: "Operator force-graph console with PADI swim-lanes, cluster tabs, model selector, Cloudflare Access auth."
+    depends_on: [oauth_client, agent_factory]
+    used_by: [live-agent-graph]
+    example: "https://graph.forschfrontiers.com"
+  chat_panel:
+    file: live-agent-graph/chat.html
+    keywords: [chat, sidecar, mimo, panel, conversation]
+    intention: "Saves you from rebuilding the chat sidecar when MiMo's response shape changes. One canonical chat surface, frontmatter-declared."
+    function: "Chat panel HTML served alongside the graph console."
+    depends_on: []
+    used_by: [live-agent-graph]
+    example: "https://graph.forschfrontiers.com/chat.html"

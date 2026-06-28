@@ -1,0 +1,109 @@
+# Patterns Library — keyword + intention inventory
+#
+# This file is the AI's first stop when spawning a new agent. Match user intent
+# against keywords: (lazy-load triggers) and intention: (plain English).
+# Then read the listed file: to see how to use it.
+#
+# Frontmatter format (in each pattern's .py header):
+#   keywords: [kw1, kw2, ...]
+#   intention: "Plain English: this saves you from rebuilding X."
+#   function: "One-line technical description."
+#   depends_on: [other_pattern_id, ...]
+#   used_by: [tool_name_in_registry, ...]
+#   example: "PatternName(arg) -> result"
+#
+# This file is generated/maintained by hand and linted by patterns/_lint.py
+# against the per-file frontmatter.
+
+patterns:
+  jsonl_store:
+    file: jsonl_store.py
+    class: JSONLStore
+    keywords: [storage, log, append, history, audit, jsonl, file-store, persist, record, ledger]
+    intention: "Saves you from re-writing the same append-then-read-then-append JSONL helper in every agent. One env-var-resolved data dir, one durable file, atomic writes."
+    function: "Append-only JSONL store with env-var path resolution and atomic writes."
+    depends_on: []
+    used_by: [household, email_groceries, wow_tools]
+    example: "store = JSONLStore(groceries.jsonl); store.append([{name: milk, qty: 1}])"
+
+  whitelist:
+    file: whitelist.py
+    class: WhitelistStore
+    keywords: [whitelist, allowlist, acl, trusted, sender, domain, user, approval, gate]
+    intention: "Saves you from hand-rolling 'add/remove/list/check' sets every time you need to gate something (senders, domains, users, file paths). Derived from JSONLStore, so persistence is free."
+    function: "Sender/ACL whitelist with add/remove/list/check, derived from JSONLStore."
+    depends_on: [jsonl_store]
+    used_by: [email_groceries]
+    example: "wl = WhitelistStore(grocery_senders.json); wl.add(receipts@wholefoods.com)"
+
+  oauth_client:
+    file: oauth_client.py
+    class: OAuthAPIClient
+    keywords: [oauth, gmail, calendar, drive, imap, api, auth, refresh-token, google, microsoft, github, slack]
+    intention: "Saves you from re-implementing OAuth flows (token fetch, refresh, persistence, scope handling) for every new external service. Subclass it, declare scopes, ship a working integration."
+    function: "Base OAuth2 client with auto-refresh, persistent token store, Authsome fallback for credential safety."
+    depends_on: [jsonl_store]
+    used_by: [crm_tools, email_groceries]
+    example: "client = GmailClient(scopes=[gmail.readonly]); msgs = client.fetch_recent()"
+
+  receipt_tool:
+    file: receipt_tool.py
+    class: receipt
+    keywords: [receipt, honest, save-locally, sync-pending, claim, readback, verification]
+    intention: "Saves you from agents lying about 'I reminded you' / 'I saved it' / 'I sent the email' when the write was local-only. Forces every state-mutating tool to return a structured receipt the agent MUST read back to the user."
+    function: "Decorator that wraps a write tool, forcing structured receipts with synced: <truth>."
+    depends_on: []
+    used_by: [add_reminder, log_groceries, log_grocery_email_receipt]
+    example: "@receipt(claim='synced to iPhone'); def add_reminder(...): ..."
+
+  agent_factory:
+    file: agent_factory.py
+    class: make_agent
+    keywords: [agent, adk, litellm, model, gpt-5.5, claude, gemini, factory, skeleton, boilerplate]
+    intention: "Saves you from copy-pasting the same 30 lines of LiteLlm env-var resolution + key fallback chain + Agent() constructor into every new agent. One call returns a configured Agent."
+    function: "make_agent(name, description, instruction, tools, model='gpt-5.5') -> google.adk.Agent."
+    depends_on: []
+    used_by: [shelby, assistant, ops, stability, all-new-agents]
+    example: "agent = make_agent('shelby', '...', '...', [log_groceries, add_reminder])"
+
+  tool_decorator:
+    file: tool_decorator.py
+    class: tool
+    keywords: [tool, decorator, functiontool, adk-tool, schema, declare]
+    intention: "Saves you from manually wiring FunctionTool + JSON schema for every Python function you want to expose as an agent tool. Decorate a function, it's callable."
+    function: "@tool decorator that auto-wraps a Python function as an ADK FunctionTool with extracted schema."
+    depends_on: []
+    used_by: [stability_tools, ops_tools, household, all-tools]
+    example: "@tool(family='stability', safety='read_only'); def get_workspace_inventory(): ..."
+
+  cluster_spawn:
+    file: cluster_spawn.py
+    class: make_agent_files
+    keywords: [spawn, create, new-agent, scaffold, init, factory, generate, blueprint]
+    intention: "Saves you from hand-editing three files (agents/<id>/agent.py, web_agents/<id>/root_agent.yaml, registry/agents/agents.yaml) every time you want to add an agent. One call writes all three, updates the manifest, runs the linter."
+    function: "make_agent_files(agent_id, description, instruction, tools, model) — writes all files needed for a new ADK agent."
+    depends_on: [agent_factory]
+    used_by: []
+    example: "make_agent_files('calendar_bot', 'Tracks events', 'You are a calendar assistant.', [gcal_fetch_events])"
+
+  mimo_stream_runner:
+    file: mimo_stream_runner.py
+    class: run
+    keywords: [mimo, cli, subprocess, stream, json-events, timeout, provider-error, model-selection, coding-agent]
+    intention: "Saves you from rebuilding brittle MiMo CLI subprocess handling. It streams JSON events, captures provider errors, kills stuck children, and returns structured chat results."
+    function: "run(cmd, cwd, timeout) -> structured MiMo CLI result with response/error/session_id."
+    depends_on: []
+    used_by: [live-agent-graph-chat]
+    example: "mimo_stream_run(['mimo', 'run', '--format', 'json', 'hello'], cwd=workspace, timeout=120)"
+
+external:
+  apple_reminders_sync:
+    location: /root/.hermes/workspace/adk/_ios-shelby-reminders/ShelbyRemindersCore/
+    type: swift-package
+    keywords: [ios, apple, reminders, iphone, eventkit, sync, native, swift]
+    intention: "Saves you from writing EventKit boilerplate on the iPhone side. Drop-in Swift package with EventKit + in-memory implementations + command handler + tests."
+    function: "iOS Apple Reminders sync layer (Swift, EventKit) with protocol-based service + command handler."
+    depends_on: []
+    used_by: [shelby]
+    example: "let svc = ShelbyEventKitReminderService(); try await svc.add(...)"
+    note: "Renamed from ShelbyRemindersCore — prefix removed since it's a generic utility, not shelby-specific."

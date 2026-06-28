@@ -1,0 +1,36 @@
+[project]
+name = "forsch-adk-components"
+version = "0.1.0"
+description = "Shared tools, models, and testing harness for Forsch ADK agents"
+requires-python = ">=3.10"
+dependencies = [
+    "google-adk[extensions]>=2.3.0",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+patterns = "forsch.adk_components.patterns.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forsch"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]  # make `forsch.adk_components` importable without an editable install (a stray `forsch` namespace on sys.path otherwise shadows it)

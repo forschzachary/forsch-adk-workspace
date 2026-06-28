@@ -1,0 +1,11 @@
+# Routers inventory — keyword + intention index for message-routing bridges.
+
+routers:
+  discord_bridge:
+    file: bridge/src/forsch/adk_bridge/__init__.py
+    keywords: [discord, bridge, router, bot, channel-routing, team-leads, inbound, outbound]
+    intention: "Saves you from rebuilding the Discord→ADK message router every time we add a new team-lead agent. One bridge, one bot, many agent apps behind it."
+    function: "Discord bot that routes channel messages to the right ADK agent via the bridge package."
+    depends_on: []
+    used_by: [stability, ops, social, brand, assistant, build]
+    example: "forsch-adk-bridge (pyproject.toml: forsch-agent-* deps)"
