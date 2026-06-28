@@ -1314,48 +1314,40 @@ MIMO_BIN = os.environ.get("MIMO_BIN", "mimo")
 MIMO_TIMEOUT = int(os.environ.get("MIMO_TIMEOUT", "120"))
 CHAT_MODEL_FALLBACKS = [
     "default",
-    "mimo-v2.5",
-    "mimo-v2.5-pro",
-    "mimo/mimo-auto",
-    "codex/gpt-5.5",
-    "codex/gpt-5.4",
-    "codex/gpt-5.3-codex-spark",
+    "openai/gpt-5.5",
+    "openai/gpt-5.4",
+    "openai/gpt-5.3-codex-spark",
+    "openai/gpt-5.3-codex",
     "ollama-cloud/deepseek-v4-flash",
     "ollama-cloud/deepseek-v4-pro",
     "ollama-cloud/minimax-m2.7",
     "ollama-cloud/kimi-k2.6",
-    "ollama-cloud/qwen3-coder-480b",
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-4.1",
-    "deepseek-v4-pro",
-    "deepseek-v4-flash",
-    "glm-5.2",
-    "gemini-3-pro-preview",
-    "gemini-3-flash-preview",
-    "nvidia-deepseek-v4-flash",
-    "qwen3-coder:480b",
-    "groq-compound-mini",
-    "groq-gpt-oss-20b",
-    "groq-llama-4-scout",
-    "groq-llama-8b",
-    "nvidia-llama-vision-11b",
-    "nvidia-llama-vision-90b",
-    "nvidia-nemotron-30b",
-    "mistral-large",
+    "ollama-cloud/qwen3-coder:480b",
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-3-flash-preview",
+    "minimax/MiniMax-M3",
+    "minimax/MiniMax-M3-thinking",
+    "cerebras/gpt-oss-120b",
+    "mimo-v2.5",
+    "mimo-v2.5-pro",
+    "mimo/mimo-auto",
 ]
 LEGACY_CHAT_MODEL_ALIASES = {
     "mimo-v2.5": "mimo/mimo-auto",
     "mimo-v2.5-pro": "mimo/mimo-auto",
     "mimo-v2.5-pro-ultraspeed": "mimo/mimo-auto",
-    "xiaomi/mimo-v2.5": "mimo/mimo-auto",
-    "xiaomi/mimo-v2.5-pro": "mimo/mimo-auto",
-    "xiaomi/mimo-v2.5-pro-ultraspeed": "mimo/mimo-auto",
-    "gpt-5.5": None,
-    "gpt-5.4": None,
-    "gpt-4.1": None,
+    "codex/gpt-5.5": "openai/gpt-5.5",
+    "codex/gpt-5.4": "openai/gpt-5.4",
+    "codex/gpt-5.3-codex-spark": "openai/gpt-5.3-codex-spark",
+    "gpt-5.5": "openai/gpt-5.5",
+    "gpt-5.4": "openai/gpt-5.4",
+    "deepseek-v4-pro": "ollama-cloud/deepseek-v4-pro",
+    "deepseek-v4-flash": "ollama-cloud/deepseek-v4-flash",
+    "glm-5.2": "ollama-cloud/glm-5.2",
+    "gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
+    "gemini-3-flash-preview": "google/gemini-3-flash-preview",
+    "qwen3-coder:480b": "ollama-cloud/qwen3-coder:480b",
 }
-MIMO_CHAT_MODELS = {"mimo/mimo-auto"}
 SAFE_CHAT_MODELS = set(CHAT_MODEL_FALLBACKS)
 
 
@@ -1366,13 +1358,9 @@ def _normalise_chat_model(model: str | None) -> str | None:
         return None
     if clean in LEGACY_CHAT_MODEL_ALIASES:
         return LEGACY_CHAT_MODEL_ALIASES[clean]
-    if clean in MIMO_CHAT_MODELS:
-        return clean
-    if clean in SAFE_CHAT_MODELS:
-        return None
     if "/" not in clean:
         return None
-    return None
+    return clean
 
 
 def _list_chat_models() -> list[str]:
@@ -1385,15 +1373,14 @@ def _list_chat_models() -> list[str]:
             cwd=MIMO_WORKDIR,
         )
         if result.returncode == 0:
-            models = [line.strip() for line in result.stdout.splitlines() if "/" in line.strip()]
-            ordered = list(CHAT_MODEL_FALLBACKS)
+            models = [line.strip() for line in result.stdout.splitlines()
+                      if "/" in line.strip() and not line.strip().startswith("\x1b")]
+            ordered = ["default"]
             for model in models:
-                safe = _normalise_chat_model(model)
-                if safe and safe in SAFE_CHAT_MODELS and safe not in ordered:
-                    ordered.append(safe)
-                elif model == "mimo/mimo-auto" and model not in ordered:
+                if model not in ordered:
                     ordered.append(model)
-            return ordered
+            if len(ordered) > 1:
+                return ordered
     except Exception:
         pass
     return CHAT_MODEL_FALLBACKS

@@ -2,3 +2,4 @@ chat_audit.log
 .gstack/
 ---
 __pycache__/
+.serve-env
