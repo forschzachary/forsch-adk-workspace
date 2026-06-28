@@ -288,8 +288,11 @@
 
   /* ── Unified sidecar widget ── */
   #sidecar-widget {
-    position: fixed; right: 24px; top: 56px; bottom: 24px;
-    width: clamp(620px, 52vw, 920px); min-height: 560px; z-index: 100;
+    position: fixed; right: 24px; top: 56px;
+    width: var(--sidecar-width, clamp(620px, 52vw, 920px));
+    height: var(--sidecar-height, calc(100vh - 80px));
+    min-width: 420px; max-width: calc(100vw - 48px);
+    min-height: 460px; max-height: calc(100vh - 80px); z-index: 100;
     background: #0b1016; border: 1px solid #303844; border-radius: 14px;
     box-shadow: 0 22px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(88,166,255,0.08);
     display: flex; flex-direction: column;
@@ -325,8 +328,19 @@
   .sidecar-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
   .sidecar-panel.active { display: flex; }
   #sidecar-agent-frame { flex: 1; border: 0; background: #f7f3ea; }
+  #sidecar-resize-handle {
+    position: absolute; left: 0; bottom: 0; width: 28px; height: 28px;
+    border: 0; background: transparent; cursor: nesw-resize; z-index: 3;
+  }
+  #sidecar-resize-handle::before {
+    content: ""; position: absolute; left: 8px; bottom: 8px; width: 13px; height: 13px;
+    border-left: 2px solid #566273; border-bottom: 2px solid #566273;
+    border-radius: 0 0 0 4px; opacity: 0.8;
+  }
+  #sidecar-resize-handle:hover::before { border-color: #58a6ff; opacity: 1; }
   #hubert-session-strip {
-    display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
+    gap: 12px; align-items: center;
     padding: 10px 16px; border-bottom: 1px solid rgba(48,56,68,0.8);
     background: #0f151d; color: #8b949e; font-size: 12px;
   }
@@ -384,10 +398,10 @@
   }
   #hubert-input-row {
     display: grid;
-    grid-template-columns: 170px 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "chips chips chips"
-      "model input send";
+      "chips chips"
+      "input send";
     gap: 10px;
     padding: 14px 16px 16px;
     border-top: 1px solid #303844;
@@ -402,14 +416,14 @@
     color: #a8b3c1; padding: 5px 10px; font-size: 12px; cursor: pointer;
   }
   .hubert-chip:hover { border-color: #58a6ff; color: #d8dee7; background: #17202b; }
-  #chat-model-wrap { grid-area: model; }
+  #chat-model-wrap { display: grid; grid-template-columns: auto minmax(120px, 1fr); gap: 8px; align-items: center; }
   #chat-model-wrap label {
     display: block; color: #788391; font-size: 10px; font-weight: 700;
-    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px;
+    letter-spacing: 0.08em; text-transform: uppercase;
   }
   #chat-model-select {
     width: 100%; background: #161d26; color: #c9d1d9; border: 1px solid #303a48;
-    border-radius: 8px; padding: 9px 10px; font-size: 13px; min-height: 42px;
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; min-height: 38px;
   }
   #hubert-input {
     grid-area: input; background: #0b1016; border: 1px solid #3b82f6;
@@ -455,13 +469,18 @@
       left: 10px; right: 10px; top: 48px; bottom: 10px;
       width: auto; height: auto; min-height: 0;
     }
+    #sidecar-resize-handle { display: none; }
     #sidecar-header { min-height: 54px; padding: 8px 10px; }
     .sidecar-tab { padding: 7px 12px; }
+    #hubert-session-strip {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    #chat-model-wrap { grid-template-columns: 54px minmax(0, 1fr); }
     #hubert-input-row {
       grid-template-columns: 1fr auto;
       grid-template-areas:
         "chips chips"
-        "model send"
         "input input";
     }
     #hubert-input { min-height: 96px; }
@@ -470,10 +489,7 @@
     .hubert-msg.user { max-width: 92%; }
   }
   @media (min-width: 1260px) {
-    #sidecar-widget.vibe-wide {
-      left: 360px;
-      width: auto;
-    }
+    #sidecar-widget.vibe-wide:not(.user-sized) { width: min(920px, calc(100vw - 408px)); }
   }
 </style>
 </head>
@@ -554,6 +570,10 @@
   <div id="sidecar-panel-hubert" class="sidecar-panel">
     <div id="hubert-session-strip">
       <div id="hubert-context-line">No cluster selected</div>
+      <div id="chat-model-wrap">
+        <label for="chat-model-select">Model</label>
+        <select id="chat-model-select" title="Chat model"></select>
+      </div>
       <div id="hubert-mode-pill">workspace access</div>
     </div>
     <div id="hubert-messages">
@@ -565,14 +585,11 @@
         <button class="hubert-chip" data-prompt="Debug the current failure. Give me the likely cause and the safest fix.">Debug failure</button>
         <button class="hubert-chip" data-prompt="Turn this idea into an implementation plan with files and tests.">Make plan</button>
       </div>
-      <div id="chat-model-wrap">
-        <label for="chat-model-select">Model</label>
-        <select id="chat-model-select" title="Model"></select>
-      </div>
       <textarea id="hubert-input" placeholder="Describe what you want..." rows="1"></textarea>
       <button id="hubert-send">Send</button>
     </div>
   </div>
+  <div id="sidecar-resize-handle" title="Drag to resize chat"></div>
 </div>
 <div id="wire-status">Select target node... <button class="cancel" id="wire-cancel">Cancel</button></div>
 <div id="view-crumb" class="view-crumb">
@@ -2729,6 +2746,82 @@ let hubertMessages = [{
   text: 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.'
 }];
 let hubertSending = false;
+const CHAT_MODEL_FALLBACKS = ['default', 'mimo-v2.5', 'mimo-v2.5-pro', 'mimo/mimo-auto'];
+const CHAT_MODEL_LABELS = {
+  'default': 'Default',
+  'mimo-v2.5': 'MiMo v2.5',
+  'mimo-v2.5-pro': 'MiMo v2.5 Pro',
+  'mimo/mimo-auto': 'MiMo auto'
+};
+
+function chatModelLabel(model) {
+  return CHAT_MODEL_LABELS[model] || model;
+}
+
+function renderChatModelOptions(models) {
+  const sel = document.getElementById('chat-model-select');
+  if (!sel) return;
+  const current = sel.value || localStorage.getItem('hubert-chat-model') || 'default';
+  const safeModels = Array.from(new Set((models && models.length ? models : CHAT_MODEL_FALLBACKS)
+    .filter(m => typeof m === 'string' && m.trim())
+    .filter(m => !m.startsWith('xiaomi/'))));
+  if (!safeModels.includes('default')) safeModels.unshift('default');
+  sel.innerHTML = safeModels.map(m => `<option value="${esc(m)}">${esc(chatModelLabel(m))}</option>`).join('');
+  sel.value = safeModels.includes(current) ? current : 'default';
+}
+
+function initSidecarResize() {
+  const box = document.getElementById('sidecar-widget');
+  const handle = document.getElementById('sidecar-resize-handle');
+  if (!box || !handle) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem('hubert-sidecar-size') || '{}');
+    if (Number.isFinite(saved.width) && Number.isFinite(saved.height)) {
+      box.style.setProperty('--sidecar-width', saved.width + 'px');
+      box.style.setProperty('--sidecar-height', saved.height + 'px');
+      box.classList.add('user-sized');
+    }
+  } catch (_) {}
+  handle.addEventListener('dblclick', () => {
+    box.style.removeProperty('--sidecar-width');
+    box.style.removeProperty('--sidecar-height');
+    box.classList.remove('user-sized');
+    localStorage.removeItem('hubert-sidecar-size');
+  });
+  handle.addEventListener('pointerdown', (ev) => {
+    if (window.matchMedia('(max-width: 720px)').matches) return;
+    ev.preventDefault();
+    handle.setPointerCapture(ev.pointerId);
+    const rect = box.getBoundingClientRect();
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    const onMove = (moveEv) => {
+      const maxWidth = Math.max(420, window.innerWidth - 48);
+      const maxHeight = Math.max(460, window.innerHeight - 80);
+      const width = Math.min(maxWidth, Math.max(420, startWidth - (moveEv.clientX - startX)));
+      const height = Math.min(maxHeight, Math.max(460, startHeight + (moveEv.clientY - startY)));
+      box.style.setProperty('--sidecar-width', Math.round(width) + 'px');
+      box.style.setProperty('--sidecar-height', Math.round(height) + 'px');
+      box.classList.add('user-sized');
+    };
+    const onUp = () => {
+      const next = {
+        width: Math.round(box.getBoundingClientRect().width),
+        height: Math.round(box.getBoundingClientRect().height)
+      };
+      localStorage.setItem('hubert-sidecar-size', JSON.stringify(next));
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.removeEventListener('pointercancel', onUp);
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+    handle.addEventListener('pointercancel', onUp);
+  });
+}
+initSidecarResize();
 
 // Tab switching
 document.querySelectorAll('.sidecar-tab').forEach(btn => {
@@ -2753,7 +2846,7 @@ function openSidecar(agentId, defaultTab) {
   sidecarAgentId = clean;
   document.getElementById('sidecar-agent-label').textContent = clean || '';
   if (clean) {
-    const url = new URL(ADK_CHAT_BASE);
+    const url = new URL(ADK_CHAT_BASE, window.location.origin);
     url.searchParams.set('agent', clean);
     if (__chatToken) url.searchParams.set('chat_token', __chatToken);
     document.getElementById('sidecar-agent-frame').src = url.toString();
@@ -2782,21 +2875,19 @@ document.getElementById('chat-toggle').addEventListener('click', toggleSidecar);
 
 // Load models for the chat model selector
 async function loadChatModels() {
+  renderChatModelOptions(CHAT_MODEL_FALLBACKS);
   try {
     const r = await fetch(apiUrl('/models'));
     if (r.ok) {
       const d = await r.json();
-      const sel = document.getElementById('chat-model-select');
-      if (sel) {
-        sel.innerHTML = d.models.map(m => {
-          const label = m === 'default' ? 'Default (MiMo auto)' : m;
-          return `<option value="${esc(m)}">${esc(label)}</option>`;
-        }).join('');
-      }
+      renderChatModelOptions(d.models || CHAT_MODEL_FALLBACKS);
     }
   } catch(_) {}
 }
 loadChatModels();
+document.getElementById('chat-model-select')?.addEventListener('change', (ev) => {
+  localStorage.setItem('hubert-chat-model', ev.target.value || 'default');
+});
 
 // Hubert chat tab
 function renderHubertContext() {

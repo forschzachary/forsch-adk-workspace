@@ -1314,18 +1314,22 @@ MIMO_BIN = os.environ.get("MIMO_BIN", "mimo")
 MIMO_TIMEOUT = int(os.environ.get("MIMO_TIMEOUT", "120"))
 CHAT_MODEL_FALLBACKS = [
     "default",
+    "mimo-v2.5",
+    "mimo-v2.5-pro",
     "mimo/mimo-auto",
-    "xiaomi/mimo-v2.5",
-    "xiaomi/mimo-v2.5-pro",
-    "xiaomi/mimo-v2.5-pro-ultraspeed",
 ]
 LEGACY_CHAT_MODEL_ALIASES = {
     "mimo-v2.5": "mimo/mimo-auto",
     "mimo-v2.5-pro": "mimo/mimo-auto",
+    "mimo-v2.5-pro-ultraspeed": "mimo/mimo-auto",
+    "xiaomi/mimo-v2.5": "mimo/mimo-auto",
+    "xiaomi/mimo-v2.5-pro": "mimo/mimo-auto",
+    "xiaomi/mimo-v2.5-pro-ultraspeed": "mimo/mimo-auto",
     "gpt-5.5": None,
     "gpt-5.4": None,
     "gpt-4.1": None,
 }
+SAFE_CHAT_MODELS = set(CHAT_MODEL_FALLBACKS)
 
 
 def _normalise_chat_model(model: str | None) -> str | None:
@@ -1351,12 +1355,14 @@ def _list_chat_models() -> list[str]:
         )
         if result.returncode == 0:
             models = [line.strip() for line in result.stdout.splitlines() if "/" in line.strip()]
-            ordered = ["default"]
+            ordered = list(CHAT_MODEL_FALLBACKS)
             for model in models:
-                if model not in ordered:
+                safe = _normalise_chat_model(model)
+                if safe and safe in SAFE_CHAT_MODELS and safe not in ordered:
+                    ordered.append(safe)
+                elif model == "mimo/mimo-auto" and model not in ordered:
                     ordered.append(model)
-            if len(ordered) > 1:
-                return ordered
+            return ordered
     except Exception:
         pass
     return CHAT_MODEL_FALLBACKS
@@ -1866,6 +1872,9 @@ class Handler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         if path == "/":
+            self.path = "/index.html"
+            super().do_GET()
+        elif path == "/home":
             self.path = "/home.html"
             super().do_GET()
         elif path == "/graph":
