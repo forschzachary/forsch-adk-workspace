@@ -1,0 +1,7 @@
+# ScreeningRoom cluster
+name: ScreeningRoom
+description: 'Movie discovery, tracking, and recommendations'
+members:
+  - screening
+config:
+  default_model: gpt-5.5

@@ -1,0 +1,10 @@
+{
+  "ok": false,
+  "agent_id": "ops",
+  "evalset_id": "smoke",
+  "trajectory_pass": false,
+  "final_response_pass": false,
+  "score": 0.0,
+  "error": "eval runner not wired \u2014 install ADK eval or roundtrip_check",
+  "ran_at": "2026-06-26T02:11:00Z"
+}

@@ -1,0 +1,127 @@
+version: 1
+defaults:
+  agent_class: LlmAgent
+agents:
+  stability:
+    description: Stability governor for the Forsch ADK workspace with local_write
+      authority to fix root causes.
+    discord_channels:
+    - '#team-stability'
+    safety_level: local_write
+    purpose: 'Audit the Forsch ADK workspace and adjacent local services, and act
+      on findings: edit configs, restart Docker containers, and run host commands
+      to fix underlying root causes.'
+    tools:
+    - get_workspace_inventory
+    - get_git_state
+    - validate_agent_imports
+    - check_service_health
+    - execute_bash_command
+    - read_host_file
+    - write_host_file
+    model: glm-5.2
+    role: builder
+  assistant:
+    description: Personal assistant lead for Forsch.
+    discord_channels:
+    - '#team-assistant'
+    safety_level: read_only
+    purpose: 'Forsch''s assistant lead. Own productivity and home-assistant work:
+      daily planning, calendar, reminders, smart home, household logistics, and practical
+      follow-through.'
+    tools: []
+    model: gpt-5.5
+    group: hubert-team-lead
+  brand:
+    description: Brand and marketing lead for Forsch.
+    discord_channels:
+    - '#team-brand'
+    safety_level: read_only
+    purpose: Brand and marketing lead for Forsch.
+    tools: []
+    model: gpt-5.5
+  build:
+    description: Product and engineering lead for Forsch.
+    discord_channels:
+    - '#team-build'
+    safety_level: read_only
+    purpose: Product and engineering lead for Forsch.
+    tools: []
+    model: glm-5.2
+    group: hubert-team-lead
+  social:
+    description: Social media lead for Forsch.
+    discord_channels:
+    - '#team-social'
+    safety_level: read_only
+    purpose: Social media lead for Forsch.
+    tools: []
+    model: gpt-5.5
+  ops:
+    description: Infrastructure and operations lead for Forsch.
+    discord_channels:
+    - '#team-ops'
+    safety_level: read_only
+    purpose: Infrastructure and operations lead for Forsch. Focus on infrastructure
+      health, deployment state, incident triage, and read-only business telemetry.
+    tools:
+    - get_crm_health_snapshot
+    - list_recent_crm_leads
+    model: gpt-5.5
+    role: builder
+  shelby:
+    description: Shelby's personal grocery + reminders assistant.
+    discord_channels: []
+    safety_level: local_write
+    purpose: 'A personal assistant fine-tuned to Shelby. v1: track groceries over
+      time, spot trends, manage reminders with honest read-back receipts, and ingest
+      grocery-receipt emails from a sender whitelist.'
+    patterns:
+    - jsonl_store
+    - whitelist
+    - receipt_tool
+    tools:
+    - log_groceries
+    - get_grocery_log
+    - add_reminder
+    - add_grocery_email_sender
+    - remove_grocery_email_sender
+    - list_grocery_email_senders
+    - is_grocery_email_sender_allowed
+    - log_grocery_email_receipt
+    model: gpt-5.5
+  screening:
+    description: Movie discovery, tracking, and recommendations lead.
+    discord_channels: []
+    safety_level: read_only
+    purpose: Own the ScreeningRoom cluster for movie discovery, tracking, recommendations,
+      and watchlist-oriented workflows.
+    tools: []
+    model: gpt-5.5
+  developer:
+    description: LinkedIn developer — builds posting tools, scheduling, and automation.
+    discord_channels:
+    - '#team-linkedin'
+    safety_level: read_only
+    purpose: Build and maintain LinkedIn posting tools, scheduling, and automation
+      for the linkedin-ops cluster.
+    tools: []
+    model: gpt-5.5
+  brand-specialist:
+    description: LinkedIn brand specialist — visual identity, voice, and content strategy.
+    discord_channels:
+    - '#team-linkedin'
+    safety_level: read_only
+    purpose: Own visual identity, brand voice, and content strategy for LinkedIn posts.
+    tools: []
+    model: gpt-5.5
+  copywriter:
+    description: LinkedIn copywriter — post drafts, hooks, captions, and engagement
+      copy.
+    discord_channels:
+    - '#team-linkedin'
+    safety_level: read_only
+    purpose: Write LinkedIn post drafts, hooks, captions, and engagement copy.
+    tools: []
+    model: gpt-5.5
+

@@ -1,0 +1,9 @@
+# shelby cluster
+name: shelby
+description: "Shelby's personal agent workspace — groceries, reminders, household tools."
+members:
+  - shelby
+config:
+  default_model: gpt-5.5
+  tool_families: [household]
+  exclude_tools: []

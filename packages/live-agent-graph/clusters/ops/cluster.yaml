@@ -1,0 +1,23 @@
+# Ops Cluster — first cluster migrated from the ADK workspace
+#
+# This is the canonical cluster definition. Agent ids are REFERENCES
+# to registry/agents/agents.yaml — never copies. Editing an agent
+# in the registry updates every cluster that references it.
+
+name: ops
+description: Infrastructure and operations cluster for the Forsch ADK workspace
+
+members:
+  - stability
+  - assistant
+  - brand
+  - build
+  - social
+  - ops
+  - shelby
+
+# Cluster-level config (overrides or additions beyond registry defaults)
+config:
+  default_model: gpt-5.5
+  tool_families: [terminal, crm, household]
+  exclude_tools: []

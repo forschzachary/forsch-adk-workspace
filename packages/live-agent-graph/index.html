@@ -1,0 +1,3565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Agent Graph — Cluster Tabs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+  #graph-wrap { width: 100vw; height: 100vh; position: relative; }
+  #graph { width: 100%; height: 100%; position: relative; z-index: 2; }
+  /* ── Swim-lane overlay: operator controls above the graph-space lane sheet ── */
+  #swimlane-overlay {
+    position: absolute; left: 0; top: 36px; right: 300px; bottom: 0;
+    pointer-events: none; z-index: 1;
+    display: none; flex-direction: column;
+  }
+  #swimlane-overlay.on { display: flex; }
+  .swimlane-row {
+    position: relative; flex: 1 1 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .swimlane-row:first-child { border-top: none; }
+  /* ── Interactive controls layer (above the canvas) ── */
+  #swimlane-controls {
+    position: absolute; left: 0; top: 0; right: 300px; bottom: 0;
+    z-index: 3; pointer-events: none;
+    display: none; overflow: visible;
+  }
+  #swimlane-controls.on { display: none; }
+  .swimlane-ctrl-row {
+    position: absolute; left: 0; top: 0; width: 0; height: 0;
+    pointer-events: none; transition: box-shadow 0.12s;
+  }
+  body.dragging .swimlane-ctrl-row { pointer-events: auto; }   /* graph-space drop targets only while dragging a chip */
+  .swimlane-ctrl-row.drop-ok { box-shadow: inset 0 0 0 1px var(--lane-hue); background: rgba(255,255,255,0.02); }
+  .swimlane-header {
+    position: absolute; top: 14px; left: 18px;
+    display: grid;
+    grid-template-columns: max-content max-content max-content 1fr;
+    align-items: center; column-gap: 12px; row-gap: 8px;
+    width: min(760px, calc(100vw - 380px));
+    pointer-events: none;
+  }
+  .swimlane-header > * { pointer-events: auto; }
+  .swimlane-header.disabled { opacity: 0.4; }
+  .swimlane-label {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 10px; font-weight: 600; letter-spacing: 2.5px;
+    text-transform: uppercase; color: rgba(150,170,190,0.5);
+    white-space: nowrap; user-select: none;
+  }
+  .swimlane-label::before {
+    content: ''; width: 3px; height: 18px; border-radius: 2px;
+    background: var(--lane-hue); opacity: 0.6;
+  }
+  .lane-spawn-btn {
+    font-size: 11px; color: var(--lane-hue); background: transparent;
+    border: 1px dashed rgba(140,160,180,0.3); border-radius: 5px;
+    padding: 3px 9px; cursor: pointer; white-space: nowrap;
+  }
+  .lane-spawn-btn:hover:not(:disabled) { background: rgba(255,255,255,0.05); border-color: var(--lane-hue); }
+  .lane-spawn-btn:disabled { opacity: 0.4; cursor: default; border-style: dotted; }
+  .lane-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .lane-form[hidden] { display: none; }
+  .lane-form input {
+    font-size: 11px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; padding: 3px 7px; width: 128px;
+  }
+  .lane-form input:focus { outline: none; border-color: var(--lane-hue); }
+  .lane-form button {
+    font-size: 11px; background: #1a3a1a; border: 1px solid #2ea043; color: #3fb950;
+    border-radius: 4px; padding: 3px 10px; cursor: pointer;
+  }
+  .lane-lib {
+    grid-column: 1 / -1;
+    display: flex; gap: 7px; flex-wrap: wrap; align-items: center;
+    min-height: 22px;
+  }
+  .lane-chip {
+    font-size: 10px; font-family: ui-monospace, 'SF Mono', monospace; color: #c9d1d9;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--lane-hue);
+    border-radius: 10px; padding: 2px 9px; cursor: grab; white-space: nowrap; opacity: 0.85;
+  }
+  .lane-chip:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+  .lane-chip:active { cursor: grabbing; }
+  .lane-chip.in-cluster { opacity: 0.3; cursor: default; border-style: dashed; }
+  .lane-msg { font-size: 10px; }
+  .lane-msg.ok { color: #3fb950; }
+  .lane-msg.err { color: #ff7b72; }
+  /* ── Tab bar ── */
+  #tab-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 15;
+    display: flex; align-items: center; gap: 0;
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 0 8px; height: 36px; overflow-x: auto;
+  }
+  #tab-bar .tab {
+    padding: 6px 14px; font-size: 12px; color: #8b949e;
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #tab-bar .tab:hover { color: #c9d1d9; }
+  #tab-bar .tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+  #tab-bar .tab .pct { font-size: 10px; color: #3fb950; margin-left: 4px; }
+  #tab-bar .tab-new {
+    padding: 6px 10px; font-size: 14px; color: #3fb950;
+    background: transparent; border: 1px dashed #30363d; border-radius: 4px;
+    cursor: pointer; flex-shrink: 0; margin-left: 4px;
+  }
+  #tab-bar .tab-new:hover { background: #1a3a1a; border-color: #2ea043; }
+  #tab-bar .tab-add-agent {
+    padding: 4px 8px; font-size: 11px; color: #d2a8ff;
+    background: transparent; border: 1px dashed #30363d; border-radius: 4px;
+    cursor: pointer; flex-shrink: 0; margin-left: 8px;
+  }
+  #tab-bar .tab-add-agent:hover { background: #1a1a2e; border-color: #d2a8ff; }
+  /* ── Panel (shifted down for tab bar) ── */
+  #panel {
+    position: fixed; top: 48px; right: 16px; z-index: 10;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 16px 16px; min-width: 220px; font-size: 13px; max-height: calc(100vh - 72px); overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  #panel h3 { margin: 12px 0 6px; color: #58a6ff; font-size: 14px; }
+  #panel h3:first-child { margin-top: 0; }
+  #panel .lens-btn, #panel .action-btn {
+    display: block; width: 100%; margin: 4px 0; padding: 6px 10px;
+    background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; cursor: pointer; text-align: left; font-size: 12px;
+  }
+  #panel .lens-btn:hover, #panel .action-btn:hover { background: #30363d; }
+  #panel .lens-btn.active { background: #1f6feb; border-color: #1f6feb; }
+  #panel .action-btn.spawn { background: #1a3a1a; border-color: #2ea043; color: #3fb950; }
+  #panel .action-btn.spawn:hover { background: #2ea043; color: #fff; }
+  #panel .action-btn.refresh { background: #1a2a3a; border-color: #1f6feb; color: #58a6ff; }
+  #panel .action-btn.refresh:hover { background: #1f6feb; color: #fff; }
+  #panel .action-btn.deps.on { background: #0f3a3d; border-color: #56d4dd; color: #56d4dd; }
+  #panel .action-btn.shared.on { background: #1a2a1a; border-color: #3fb950; color: #3fb950; }
+  #panel input, #panel select {
+    width: 100%; margin: 4px 0; padding: 5px 8px;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; font-size: 12px;
+  }
+  #panel input:focus, #panel select:focus { outline: none; border-color: #58a6ff; }
+  #panel .legend { margin-top: 12px; }
+  #panel .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
+  #panel .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  #panel .legend-icon { width: 12px; height: 12px; flex-shrink: 0; font-size: 11px; text-align: center; line-height: 12px; }
+  #panel .legend-note { font-size: 10px; color: #8b949e; margin-top: 4px; line-height: 1.35; max-width: 210px; white-space: normal; }
+  #panel .sep { border-top: 1px solid #30363d; margin: 10px 0; }
+  #panel .msg { font-size: 11px; margin-top: 4px; min-height: 16px; }
+  #panel .msg.ok { color: #3fb950; }
+  #panel .msg.err { color: #ff7b72; }
+  #info { position: fixed; bottom: 16px; left: 16px; z-index: 10; font-size: 12px; color: #8b949e; }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 20;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px 12px; font-size: 12px; max-width: 300px; display: none;
+  }
+  /* ── Inspect panel (right slide-in) ── */
+  #inspect {
+    position: fixed; top: 40px; right: 0; bottom: 0; width: 320px; z-index: 20;
+    background: #161b22; border-left: 1px solid #30363d;
+    transform: translateX(100%); transition: transform 0.2s ease;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #inspect.open { transform: translateX(0); }
+  #inspect-header {
+    padding: 12px 16px; border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #inspect-header .close-btn {
+    margin-left: auto; background: none; border: none; color: #8b949e;
+    cursor: pointer; font-size: 16px; padding: 2px 6px;
+  }
+  #inspect-header .close-btn:hover { color: #ff7b72; }
+  #inspect-header h3 { margin: 0; font-size: 14px; color: #58a6ff; }
+  #inspect-body { flex: 1; overflow-y: auto; padding: 12px 16px; font-size: 12px; }
+  #inspect-body .field { margin-bottom: 10px; }
+  #inspect-body .field label { display: block; color: #8b949e; margin-bottom: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  #inspect-body .field input, #inspect-body .field select, #inspect-body .field textarea {
+    width: 100%; padding: 5px 8px; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 4px; color: #c9d1d9; font-size: 12px; font-family: inherit;
+  }
+  #inspect-body .field textarea { min-height: 60px; resize: vertical; }
+  #inspect-body .field input:focus, #inspect-body .field select:focus, #inspect-body .field textarea:focus {
+    outline: none; border-color: #58a6ff;
+  }
+  #inspect-body .field .ro { color: #8b949e; padding: 5px 0; }
+  #inspect-body .field .contract-tag {
+    display: inline-block; padding: 2px 6px; margin: 2px; border-radius: 3px;
+    font-size: 10px; background: #21262d; border: 1px solid #30363d;
+  }
+  #inspect-body .field .contract-tag.accept { border-color: #3fb950; color: #3fb950; }
+  #inspect-body .field .contract-tag.emit { border-color: #58a6ff; color: #58a6ff; }
+  #inspect-body .gate-row { display: flex; gap: 6px; margin-top: 4px; }
+  #inspect-body .gate-pill {
+    padding: 3px 8px; border-radius: 3px; font-size: 10px; font-weight: 600;
+    background: #21262d; border: 1px solid #30363d; color: #8b949e;
+  }
+  #inspect-body .gate-pill.pass { border-color: #3fb950; color: #3fb950; }
+  #inspect-footer {
+    padding: 10px 16px; border-top: 1px solid #30363d;
+    display: flex; gap: 8px;
+  }
+  #inspect-footer button {
+    flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid #30363d;
+    cursor: pointer; font-size: 12px;
+  }
+  #inspect-footer .save-btn { background: #238636; border-color: #2ea043; color: #fff; }
+  #inspect-footer .save-btn:hover { background: #2ea043; }
+  #inspect-footer .wire-btn { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  #inspect-footer .wire-btn:hover { background: #388bfd; }
+  #inspect-footer .wire-btn.active { background: #da3633; border-color: #da3633; }
+  #inspect .save-msg { padding: 0 16px 8px; font-size: 11px; min-height: 16px; }
+  #inspect .save-msg.ok { color: #3fb950; }
+  #inspect .save-msg.err { color: #ff7b72; }
+  /* ── AI sidecar (bottom-left chat) ── */
+  #ai-sidecar {
+    position: fixed; bottom: 0; left: 0; width: 380px; height: 320px; z-index: 20;
+    background: #161b22; border-top: 1px solid #30363d; border-right: 1px solid #30363d;
+    border-radius: 0 8px 0 0; display: flex; flex-direction: column;
+    transform: translateY(100%); transition: transform 0.2s ease;
+  }
+  #ai-sidecar.open { transform: translateY(0); }
+  #ai-sidecar-header {
+    padding: 8px 12px; border-bottom: 1px solid #30363d;
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  #ai-sidecar-header .avatar { width: 20px; height: 20px; border-radius: 50%; background: #d29922; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  #ai-sidecar-header span { font-size: 12px; color: #8b949e; }
+  #ai-sidecar-header .close-btn { margin-left: auto; background: none; border: none; color: #8b949e; cursor: pointer; font-size: 14px; }
+  #ai-sidecar-header .close-btn:hover { color: #ff7b72; }
+  #ai-messages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12px; }
+  #ai-messages .msg { margin-bottom: 8px; padding: 6px 10px; border-radius: 6px; max-width: 90%; }
+  #ai-messages .msg.user { background: #1f6feb22; border: 1px solid #1f6feb44; margin-left: auto; }
+  #ai-messages .msg.hubert { background: #d2992222; border: 1px solid #d2992244; }
+  #ai-messages .msg .sender { font-size: 10px; color: #8b949e; margin-bottom: 2px; }
+  #ai-messages .msg.system { background: #21262d; border: 1px solid #30363d; color: #8b949e; font-style: italic; text-align: center; max-width: 100%; }
+  #ai-input-row { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid #30363d; flex-shrink: 0; }
+  #ai-input-row input { flex: 1; padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; }
+  #ai-input-row input:focus { outline: none; border-color: #58a6ff; }
+  #ai-input-row button { padding: 6px 12px; background: #238636; border: 1px solid #2ea043; border-radius: 4px; color: #fff; cursor: pointer; font-size: 12px; }
+  #ai-input-row button:hover { background: #2ea043; }
+  #ai-input-row button:disabled { background: #21262d; border-color: #30363d; color: #484f58; cursor: not-allowed; }
+  /* ── Wiring mode overlay ── */
+  #wire-status {
+    position: fixed; top: 44px; left: 50%; transform: translateX(-50%); z-index: 25;
+    background: #1f6feb; color: #fff; padding: 6px 16px; border-radius: 4px;
+    font-size: 12px; display: none;
+  }
+  #wire-status.active { display: block; }
+  #wire-status .cancel { margin-left: 8px; background: none; border: none; color: #fff; text-decoration: underline; cursor: pointer; }
+  /* ── View crumb ── */
+  .view-crumb {
+    position: absolute; top: 48px; left: 16px; z-index: 5;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border: 1px solid rgba(139,148,158,0.25);
+    border-radius: 8px; background: rgba(13,17,23,0.82);
+    color: #8b949e; font-size: 12px;
+  }
+  .view-crumb button {
+    border: 1px solid #30363d; border-radius: 6px;
+    background: #161b22; color: #c9d1d9; cursor: pointer;
+    padding: 3px 8px; font-size: 11px;
+  }
+  .view-crumb button:hover { border-color: #58a6ff; }
+  /* ── Focus workbench ── */
+  .focus-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .focus-tab, .small-action {
+    border: 1px solid #30363d; border-radius: 6px;
+    background: #161b22; color: #c9d1d9;
+    padding: 5px 8px; cursor: pointer; font-size: 11px;
+  }
+  .focus-tab:hover { border-color: #58a6ff; }
+  .focus-tab.active { border-color: #58a6ff; color: #58a6ff; }
+  .small-action.danger-light { border-color: rgba(248,81,73,0.45); }
+  .small-action:hover { border-color: #58a6ff; }
+  .json-block { white-space: pre-wrap; max-height: 220px; overflow: auto; font-size: 11px; background: #0d1117; padding: 6px 8px; border-radius: 4px; border: 1px solid #30363d; }
+  .tool-check { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 11px; }
+  .tool-check input { width: auto; }
+  .eval-status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+  .eval-status.pass { background: #1a3a1a; border: 1px solid #3fb950; color: #3fb950; }
+  .eval-status.fail { background: #3a1a1a; border: 1px solid #ff7b72; color: #ff7b72; }
+  .eval-status.unknown { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+
+  /* ── Unified sidecar widget ── */
+  #sidecar-widget {
+    position: fixed; right: 24px; top: 56px;
+    width: var(--sidecar-width, clamp(620px, 52vw, 920px));
+    height: var(--sidecar-height, calc(100vh - 80px));
+    min-width: 420px; max-width: calc(100vw - 48px);
+    min-height: 460px; max-height: calc(100vh - 80px); z-index: 100;
+    background: #0b1016; border: 1px solid #303844; border-radius: 14px;
+    box-shadow: 0 22px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(88,166,255,0.08);
+    display: flex; flex-direction: column;
+    transform: translateY(calc(100% + 40px)); opacity: 0;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    pointer-events: none; overflow: hidden;
+  }
+  #sidecar-widget.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  #sidecar-header {
+    min-height: 64px; display: grid; grid-template-columns: auto auto 1fr auto;
+    align-items: center; column-gap: 10px;
+    padding: 10px 14px; border-bottom: 1px solid #303844;
+    background: linear-gradient(180deg, #161d26 0%, #121821 100%);
+    border-radius: 14px 14px 0 0;
+    flex-shrink: 0;
+  }
+  .sidecar-tab {
+    padding: 8px 18px; font-size: 13px; font-weight: 700;
+    color: #8b949e; background: none; border: 1px solid transparent;
+    border-radius: 9px; cursor: pointer; transition: all 0.15s;
+  }
+  .sidecar-tab:hover { color: #c9d1d9; }
+  .sidecar-tab.active { color: #e6edf3; background: #222a35; border-color: #3a4554; }
+  #sidecar-agent-label {
+    font-size: 12px; color: #8b949e; margin-left: 8px;
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #sidecar-close {
+    background: none; border: 0; color: #8b949e;
+    font-size: 24px; cursor: pointer; padding: 4px 6px; line-height: 1;
+  }
+  #sidecar-close:hover { color: #c9d1d9; }
+  .sidecar-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+  .sidecar-panel.active { display: flex; }
+  #sidecar-agent-frame { flex: 1; border: 0; background: #f7f3ea; }
+  #sidecar-resize-handle {
+    position: absolute; left: 0; bottom: 0; width: 28px; height: 28px;
+    border: 0; background: transparent; cursor: nesw-resize; z-index: 3;
+  }
+  #sidecar-resize-handle::before {
+    content: ""; position: absolute; left: 8px; bottom: 8px; width: 13px; height: 13px;
+    border-left: 2px solid #566273; border-bottom: 2px solid #566273;
+    border-radius: 0 0 0 4px; opacity: 0.8;
+  }
+  #sidecar-resize-handle:hover::before { border-color: #58a6ff; opacity: 1; }
+  #hubert-session-strip {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
+    gap: 12px; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid rgba(48,56,68,0.8);
+    background: #0f151d; color: #8b949e; font-size: 12px;
+  }
+  #hubert-context-line {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #hubert-context-line strong { color: #c9d1d9; font-weight: 650; }
+  #hubert-mode-pill {
+    border: 1px solid rgba(63,185,80,0.42); color: #7ee787;
+    border-radius: 999px; padding: 4px 10px; font-size: 11px; background: rgba(46,160,67,0.12);
+    white-space: nowrap;
+  }
+  #hubert-messages {
+    flex: 1; overflow-y: auto; padding: 18px 20px 22px;
+    display: flex; flex-direction: column; gap: 16px;
+    scrollbar-gutter: stable;
+  }
+  .hubert-msg {
+    max-width: min(74ch, 100%); padding: 12px 14px; border-radius: 14px;
+    font-size: 14px; line-height: 1.62; word-wrap: break-word; overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .hubert-msg.user { align-self: flex-end; background: #202832; color: #e6edf3; border: 1px solid #334052; max-width: min(62ch, 82%); }
+  .hubert-msg.assistant {
+    align-self: stretch; background: #171e27; color: #d8dee7;
+    border: 1px solid #303a48;
+  }
+  .hubert-msg.system {
+    align-self: stretch; color: #98a4b3; font-size: 12px; font-style: normal;
+    background: rgba(88,166,255,0.07); border: 1px solid rgba(88,166,255,0.16);
+    max-width: none; text-align: left;
+  }
+  .hubert-msg.pending {
+    align-self: flex-start; color: #8b949e; background: #121821;
+    border: 1px solid #2d3643; max-width: min(74ch, 100%);
+  }
+  .hubert-msg.error {
+    align-self: stretch; color: #ffd8d3;
+    background: rgba(248,81,73,0.09); border: 1px solid rgba(248,81,73,0.28);
+    max-width: none;
+  }
+  .hubert-msg .msg-meta {
+    display: flex; align-items: center; gap: 8px;
+    color: #8b949e; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .hubert-msg.user .msg-meta { justify-content: flex-end; }
+  .hubert-msg .msg-body { white-space: pre-wrap; }
+  .hubert-run-card {
+    margin-top: 12px; display: grid; gap: 10px;
+    background: #0c1219; border: 1px solid #283442; border-radius: 10px;
+    padding: 10px;
+  }
+  .hubert-run-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    color: #a8b3c1; font-size: 12px; font-weight: 700;
+  }
+  .hubert-run-head span:last-child {
+    color: #7d8997; font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; font-weight: 600;
+  }
+  .hubert-run-track { display: grid; gap: 7px; }
+  .hubert-run-stage {
+    display: grid; grid-template-columns: 12px minmax(0, 1fr) auto;
+    gap: 8px; align-items: center; min-height: 24px;
+    color: #8f9baa; font-size: 12px;
+  }
+  .hubert-run-stage .dot {
+    width: 9px; height: 9px; border-radius: 999px; background: #303a48;
+    box-shadow: 0 0 0 3px rgba(48,58,72,0.22);
+  }
+  .hubert-run-stage.active .dot { background: #58a6ff; box-shadow: 0 0 0 3px rgba(88,166,255,0.18); }
+  .hubert-run-stage.done .dot { background: #3fb950; box-shadow: 0 0 0 3px rgba(63,185,80,0.16); }
+  .hubert-run-stage.error .dot { background: #ff7b72; box-shadow: 0 0 0 3px rgba(255,123,114,0.16); }
+  .hubert-run-stage strong {
+    min-width: 0; color: #c9d1d9; font-weight: 650;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .hubert-run-stage small {
+    color: #6f7a87; font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .hubert-tool-list {
+    display: grid; gap: 6px; border-top: 1px solid #25303c; padding-top: 9px;
+  }
+  .hubert-tool-row {
+    display: grid; grid-template-columns: minmax(0, 0.8fr) auto; gap: 10px; align-items: center;
+    color: #a8b3c1; font-size: 12px; background: #111820; border: 1px solid #25303c;
+    border-radius: 8px; padding: 7px 9px;
+  }
+  .hubert-tool-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hubert-tool-row span { color: #7d8997; font-size: 11px; }
+  .hubert-error-detail {
+    display: grid; gap: 6px; margin-top: 10px; padding: 10px;
+    border: 1px solid rgba(255,123,114,0.24); border-radius: 10px;
+    background: rgba(255,123,114,0.06); color: #ffd8d3; font-size: 13px;
+  }
+  .hubert-error-detail .error-code {
+    color: #ffb4a8; font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; font-weight: 800;
+  }
+  .hubert-msg p { margin: 0 0 10px; }
+  .hubert-msg p:last-child { margin-bottom: 0; }
+  .hubert-msg pre {
+    margin: 10px 0; padding: 12px 14px; overflow: auto;
+    background: #0a0f15; border: 1px solid #303a48; border-radius: 10px;
+    color: #d8dee7; font-size: 12px; line-height: 1.55;
+  }
+  .hubert-msg code {
+    font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    background: #0a0f15; border: 1px solid #2a3440; border-radius: 5px;
+    padding: 1px 5px; color: #d8dee7; font-size: 0.92em;
+  }
+  #hubert-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "chips chips"
+      "input send";
+    gap: 10px;
+    padding: 14px 16px 16px;
+    border-top: 1px solid #303844;
+    align-items: end;
+    background: #0f151d;
+  }
+  #hubert-prompt-chips {
+    grid-area: chips; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .hubert-chip {
+    border: 1px solid #303a48; border-radius: 999px; background: #141b24;
+    color: #a8b3c1; padding: 5px 10px; font-size: 12px; cursor: pointer;
+  }
+  .hubert-chip:hover { border-color: #58a6ff; color: #d8dee7; background: #17202b; }
+  #chat-model-wrap { display: grid; grid-template-columns: auto minmax(120px, 1fr); gap: 8px; align-items: center; }
+  #chat-model-wrap label {
+    display: block; color: #788391; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  #chat-model-select {
+    width: 100%; background: #161d26; color: #c9d1d9; border: 1px solid #303a48;
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; min-height: 38px;
+  }
+  #chat-model-status {
+    grid-column: 1 / -1; min-height: 18px; color: #8b949e; font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #chat-model-status.verified { color: #7ee787; }
+  #chat-model-status.ready, #chat-model-status.available { color: #a8b3c1; }
+  #chat-model-status.slow { color: #f2cc60; }
+  #chat-model-status.flaky, #chat-model-status.error { color: #ffb4a8; }
+  #chat-model-status.running { color: #79c0ff; }
+  #hubert-input {
+    grid-area: input; background: #0b1016; border: 1px solid #3b82f6;
+    border-radius: 12px; color: #e6edf3; font-size: 15px; line-height: 1.45;
+    padding: 13px 15px; resize: vertical; min-height: 104px;
+    max-height: 240px; font-family: inherit;
+  }
+  #hubert-input:focus { border-color: #58a6ff; outline: none; box-shadow: 0 0 0 3px rgba(88,166,255,0.15); }
+  #hubert-send {
+    grid-area: send; min-height: 44px;
+    background: #238636; border: 1px solid #2ea043; border-radius: 999px;
+    color: #f0f6fc; padding: 0 20px; font-size: 14px; font-weight: 800; cursor: pointer;
+  }
+  #hubert-send:hover { background: #2ea043; }
+  #hubert-send:disabled { opacity: 0.5; cursor: not-allowed; }
+  #edit-auth-status {
+    margin-top: 6px;
+    font-size: 10px;
+    color: #8b949e;
+    text-align: center;
+  }
+  #edit-auth-status.unlocked { color: #3fb950; }
+  @media (max-width: 720px) {
+    #swimlane-overlay, #swimlane-controls { right: 0; }
+    .swimlane-header { padding-right: 12px; gap: 8px; }
+    .swimlane-label { font-size: 9px; letter-spacing: 2px; }
+    .lane-lib { max-width: calc(100vw - 48px); overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .lane-chip { flex-shrink: 0; }
+    #panel {
+      left: 12px; right: 12px; top: auto; bottom: 44px;
+      min-width: 0; max-height: 34vh; padding: 10px 12px;
+      border-radius: 8px;
+    }
+    #panel h3 { font-size: 12px; margin: 8px 0 5px; }
+    #panel .lens-btn, #panel .action-btn { padding: 7px 9px; font-size: 12px; }
+    #panel .legend { display: none; }
+    #info {
+      left: 12px; right: 12px; bottom: 10px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #inspect { width: min(100vw, 360px); }
+    #sidecar-widget {
+      left: 10px; right: 10px; top: 48px; bottom: 10px;
+      width: auto; height: auto; min-height: 0;
+    }
+    #sidecar-resize-handle { display: none; }
+    #sidecar-header { min-height: 54px; padding: 8px 10px; }
+    .sidecar-tab { padding: 7px 12px; }
+    #hubert-session-strip {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    #chat-model-wrap { grid-template-columns: 54px minmax(0, 1fr); }
+    #hubert-input-row {
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "chips chips"
+        "input input";
+    }
+    #hubert-input { min-height: 96px; }
+    #hubert-messages { padding: 14px; }
+    .hubert-msg { max-width: 100%; }
+    .hubert-msg.user { max-width: 92%; }
+  }
+  @media (min-width: 1260px) {
+    #sidecar-widget.vibe-wide:not(.user-sized) { width: min(920px, calc(100vw - 408px)); }
+  }
+</style>
+</head>
+<body>
+<div id="tab-bar">
+  <!-- Populated by loadClusters() -->
+  <button class="tab-new" id="new-tab-btn" title="New cluster">+</button>
+</div>
+<div id="graph-wrap">
+  <div id="swimlane-overlay"></div>
+  <div id="graph"></div>
+  <div id="swimlane-controls"></div>
+</div>
+<div id="panel">
+  <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
+  <h3>Lens</h3>
+  <button class="lens-btn" data-lens="all">All nodes</button>
+  <button class="lens-btn" data-lens="tier">Tier (by type)</button>
+  <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
+  <button class="lens-btn" data-lens="live">Live only</button>
+  <button class="lens-btn active" data-lens="padi">PADI (swim lanes)</button>
+  <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies</button>
+  <button class="action-btn infra" id="infra-btn" style="margin-top:4px;">▸ Infrastructure</button>
+
+  <!-- Spawn / Add-agent controls now live in the Agent·Logic lane header (PADI). -->
+
+  <div class="sep"></div>
+  <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
+  <div id="edit-auth-status" class="unlocked">Authenticated via Cloudflare Access</div>
+  <button class="action-btn" id="chat-toggle" style="margin-top:4px;background:#1a1a2e;border-color:#d29922;color:#d29922;">💬 MiMo chat</button>
+
+  <div class="sep"></div>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span> agent</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#f0883e"></span> tool</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span> logic (model)</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#d2a8ff"></span> interface</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ff7b72"></span> router</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#a5d6ff"></span> database</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#f0c040"></span> ui</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#56d4dd"></span> capability (rail)</div>
+  </div>
+  <div class="sep"></div>
+  <div class="legend" style="margin-top:0;">
+    <div style="font-size:11px;color:#8b949e;margin-bottom:4px;">Agent status (at a glance)</div>
+    <div class="legend-item"><span class="legend-icon" style="color:#8b949e">○</span> blank — hollow, tiny dot</div>
+    <div class="legend-item"><span class="legend-icon" style="color:#d29922">⚠</span> building — yellow warning</div>
+    <div class="legend-item"><span class="legend-icon" style="color:#3fb950">◉</span> built — full arc</div>
+    <div class="legend-item"><span class="legend-icon" style="color:#3fb950">◎</span> live — green pulse ring</div>
+    <div class="legend-item"><span class="legend-icon" style="color:#ff7b72">✕</span> error — red cross</div>
+    <div class="legend-note">Size = connected nodes · Fill arc = gate progress</div>
+  </div>
+</div>
+<div id="info">Loading…</div>
+<div id="tooltip"></div>
+<div id="inspect">
+  <div id="inspect-header">
+    <h3 id="inspect-title">—</h3>
+    <button class="close-btn" id="inspect-close">&times;</button>
+  </div>
+  <div id="inspect-body"></div>
+  <div class="save-msg" id="inspect-save-msg"></div>
+  <div id="inspect-footer">
+    <button class="save-btn" id="inspect-save">Save changes</button>
+    <button class="wire-btn" id="inspect-wire">Wire to...</button>
+  </div>
+</div>
+<div id="sidecar-widget">
+  <div id="sidecar-header">
+    <button class="sidecar-tab active" data-tab="agent">Agent</button>
+    <button class="sidecar-tab" data-tab="hubert">Hubert</button>
+    <span id="sidecar-agent-label"></span>
+    <button id="sidecar-close">&times;</button>
+  </div>
+  <div id="sidecar-panel-agent" class="sidecar-panel active">
+    <iframe id="sidecar-agent-frame" title="Agent Chat"></iframe>
+  </div>
+  <div id="sidecar-panel-hubert" class="sidecar-panel">
+    <div id="hubert-session-strip">
+      <div id="hubert-context-line">No cluster selected</div>
+      <div id="chat-model-wrap">
+        <label for="chat-model-select">Model</label>
+        <select id="chat-model-select" title="Chat model"></select>
+        <div id="chat-model-status">Loading MiMo models...</div>
+      </div>
+      <div id="hubert-mode-pill">workspace access</div>
+    </div>
+    <div id="hubert-messages">
+    </div>
+    <div id="hubert-input-row">
+      <div id="hubert-prompt-chips">
+        <button class="hubert-chip" data-prompt="Help me shape the next build step for this cluster.">Shape next step</button>
+        <button class="hubert-chip" data-prompt="Review the current graph and call out the most important risk.">Review graph</button>
+        <button class="hubert-chip" data-prompt="Debug the current failure. Give me the likely cause and the safest fix.">Debug failure</button>
+        <button class="hubert-chip" data-prompt="Turn this idea into an implementation plan with files and tests.">Make plan</button>
+      </div>
+      <textarea id="hubert-input" placeholder="Describe what you want..." rows="1"></textarea>
+      <button id="hubert-send">Send</button>
+    </div>
+  </div>
+  <div id="sidecar-resize-handle" title="Drag to resize chat"></div>
+</div>
+<div id="wire-status">Select target node... <button class="cancel" id="wire-cancel">Cancel</button></div>
+<div id="view-crumb" class="view-crumb">
+  <span id="view-crumb-text">Project view</span>
+  <button id="back-project-btn" style="display:none">← Back to project</button>
+</div>
+
+<script src="https://unpkg.com/force-graph@1.43.5/dist/force-graph.min.js"></script>
+<script>
+// ── Color map ──
+const COLORS = {
+  agent: '#58a6ff', tool: '#f0883e', logic: '#3fb950',
+  intake: '#d2a8ff', router: '#ff7b72', database: '#a5d6ff',
+  ui: '#f0c040', builder: '#ffa198', design: '#79c0ff',
+  capability: '#56d4dd',
+  // Infra rail colors
+  service: '#c8a0ff', host: '#8b949e', container: '#79c0ff',
+  network: '#56d4dd', tunnel: '#ffa198',
+};
+
+// ── Helpers ──
+const hexAlpha = a => Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+const lid = x => (x && typeof x === 'object') ? x.id : x;
+
+// ── Double-click detector (fallback for libraries without onNodeDoubleClick) ──
+let _lastClick = { id: null, ts: 0 };
+function _maybeDoubleClick(node) {
+  const now = Date.now();
+  const same = _lastClick.id === node.id;
+  const fast = now - _lastClick.ts < 350;
+  _lastClick = { id: node.id, ts: now };
+  return same && fast;
+}
+
+// ── Node metrics ──
+function computeNodeMetrics(data) {
+  const cc = {};
+  for (const l of data.links) {
+    const s = lid(l.source), t = lid(l.target);
+    cc[s] = (cc[s] || 0) + 1;
+    cc[t] = (cc[t] || 0) + 1;
+  }
+  const gc = {};
+  for (const n of data.nodes) {
+    if (n.type === 'agent' && n.gates) {
+      let passed = 0;
+      if (n.gates.L0) passed++;
+      if (n.gates.L1) passed++;
+      if (n.gates.L2) passed++;
+      if (n.gates.L3) passed++;
+      gc[n.id] = passed / 4;
+    }
+  }
+  return { cc, gc };
+}
+
+let nodeMetrics = { cc: {}, gc: {} };
+
+function nodeRadius(node) {
+  if (node.rail) return 5; // Rail nodes are medium dots
+  const count = nodeMetrics.cc[node.id] || 0;
+  if (node.type === 'agent') return Math.max(7, Math.min(18, 6 + count * 1.45));
+  return Math.max(4, Math.min(16, 4 + count * 1.3));
+}
+
+function padiScreenStableNodes() {
+  return currentLens === 'padi' && viewMode !== 'agent';
+}
+
+function nodeVisualRadius(node, scale) {
+  const r = nodeRadius(node);
+  return padiScreenStableNodes() && !node.rail ? r / scale : r;
+}
+
+// ── PADI swim-lane geometry ──
+const LANE_Y = {
+  intake: -240, ui: -240,
+  router: -80,
+  agent: 80, logic: 80,
+  tool: 240, database: 240,
+};
+// Swim-lane sheet rows, top → bottom. The colored sheet is drawn in graph
+// coordinates so it scales and pans with the live graph; the DOM layer above it
+// is only the operator control surface.
+const PADI_LANES = [
+  { key: 'interfaces', label: 'Interfaces',    hue: '210,168,255' },
+  { key: 'router',     label: 'Router',        hue: '255,123,114' },
+  { key: 'agent',      label: 'Agent · Logic', hue: '88,166,255'  },
+  { key: 'tools',      label: 'Tools · Data',  hue: '240,136,62'  },
+];
+// LANE_Y value → swim-lane row index
+const LANE_INDEX = { '-240': 0, '-80': 1, '80': 2, '240': 3 };
+const RAIL_X = 900;
+const PADI_LANE_HEIGHT = 220;
+const PADI_LANE_STEP = 220;
+const PADI_WORLD_X_SHIFT = -80;
+const PADI_CONTROL_GAP = 6;
+const PADI_CONTROL_LEFT_PAD = 18;
+const PADI_CONTROL_TOP_PAD = 28;
+const PADI_CONTROL_ROW_GAP = 28;
+const PADI_LIBRARY_COL_STEP = 86;
+const PADI_LIBRARY_ROW_STEP = 26;
+const PADI_LIBRARY_COLS = 3;
+const PADI_NODE_Y_OFFSET = 42;
+
+function padiLaneCenter(laneIndex) {
+  return (laneIndex - (PADI_LANES.length - 1) / 2) * PADI_LANE_STEP;
+}
+
+function padiControlScale() {
+  if (!fg || typeof fg.zoom !== 'function') return 1;
+  const z = fg.zoom();
+  return Number.isFinite(z) && z > 0 ? Math.max(0.2, z) : 1;
+}
+
+function padiControlLayoutUnits(px) {
+  return px / padiControlScale();
+}
+
+// ── Interface abstraction ──
+const CHANNEL_LABEL = {
+  discord: 'Discord', text: 'Text', sms: 'Text', email: 'Email',
+  telegram: 'Telegram', slack: 'Slack', web: 'Hosted Chat', hosted: 'Hosted Chat',
+};
+function channelTypeOf(n) {
+  if (n.channel) return n.channel;
+  if (n.id.startsWith('chan:')) return 'discord';
+  if (n.id.startsWith('iface:')) return n.id.split(':')[1];
+  return (n.id.split(':')[1] || 'other');
+}
+function collapseIntake(data) {
+  const intakeNodes = data.nodes.filter(n => n.type === 'intake');
+  if (!intakeNodes.length) return data;
+  const remap = {};
+  const groups = {};
+  intakeNodes.forEach(n => {
+    const t = channelTypeOf(n);
+    remap[n.id] = 'iface:' + t;
+    (groups[t] = groups[t] || { type: t, names: [], members: [] });
+    groups[t].names.push(n.name);
+    groups[t].members.push(n);
+  });
+  const ifaceNodes = Object.values(groups).map(g => {
+    const has = s => g.members.some(m => m.state === s);
+    const state = has('live') ? 'live' : has('built') ? 'built' : has('building') ? 'building' : 'blank';
+    const gates = ['L0','L1','L2','L3'].reduce((o,k) => { o[k] = g.members.some(m => m.gates && m.gates[k]); return o; }, {});
+    return {
+      id: 'iface:' + g.type, name: CHANNEL_LABEL[g.type] || g.type,
+      kind: 'intake', type: 'intake', channel: g.type,
+      artifact: g.type === 'discord' ? ('Discord channels: ' + g.names.join(', ')) : (g.members[0].artifact || ''),
+      gates, state, reachable: false,
+      contract: { accepts: ['external_message'], emits: ['routed_message'] },
+      role: 'plain', members: g.names,
+    };
+  });
+  data.nodes = data.nodes.filter(n => n.type !== 'intake').concat(ifaceNodes);
+  const seen = new Set();
+  const newLinks = [];
+  for (const l of data.links) {
+    const s = remap[lid(l.source)] || lid(l.source);
+    const t = remap[lid(l.target)] || lid(l.target);
+    if (s === t) continue;
+    const key = s + '→' + t + '→' + (l.kind || '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    newLinks.push({ source: s, target: t, kind: l.kind });
+  }
+  data.links = newLinks;
+  data.node_count = data.nodes.length;
+  data.link_count = data.links.length;
+  return data;
+}
+
+// ── URL routing for CRM proxy ──
+// When loaded through graph_embed, relative fetch calls go to the CRM domain.
+// This function rewrites paths to go through the proxy.
+function apiUrl(path){
+  const loc = window.location;
+  if (loc.pathname.includes('graph_embed') || new URLSearchParams(loc.search).has('path'))
+    return loc.pathname + '?path=' + encodeURIComponent(path);
+  return path;
+}
+
+// ── Auth: Cloudflare Access handles identity at the edge ──
+// No client-side secret management needed. Access JWT is injected by the edge.
+let __graphSecret = '';
+function graphSecretHeaders() { return {}; }
+function mutationHeaders(extra = {}) {
+  return { 'Content-Type': 'application/x-www-form-urlencoded', ...extra };
+}
+function updateEditAuthStatus() {}
+async function unlockGraphEdits() { return true; }
+async function ensureGraphSecret() { return true; }
+
+// ── State ──
+let graphData, currentLens = 'padi', lineageRoot = null, showDepRail = false, showInfraRail = false;
+let currentCluster = null;
+let clusters = [];
+// PADI swim-lane geometry (world coords), shared between layout, forces, and
+// link routing. Lanes are held by gentle forces — nothing is hard-pinned.
+let padiLaneY = [], padiLaneBound = [], padiTick = 0, padiFitPending = true;
+let padiWorld = {
+  xLeft: -560,
+  xRight: 400,
+  yTop: padiLaneCenter(0) - PADI_LANE_HEIGHT / 2,
+  yBottom: padiLaneCenter(PADI_LANES.length - 1) + PADI_LANE_HEIGHT / 2
+};
+// ── Focus mode state ──
+let viewMode = 'project'; // 'project' | 'agent'
+let focusedAgentId = null;
+let focusedAgentConfig = null;
+let focusedAgentTools = [];
+let focusedAgentModels = [];
+let focusedAgentVerify = null;
+let focusedAgentEvalsets = [];
+let focusedAgentEval = null;
+const info = document.getElementById('info');
+const tooltip = document.getElementById('tooltip');
+// Per-lane spawn/library state (controls live in the swim-lane headers).
+let registryAgentIds = [], dragItem = null;
+
+// ── Cluster loading ──
+function loadClusters() {
+  fetch(apiUrl('/clusters'))
+    .then(r => r.json())
+    .then(data => {
+      clusters = data;
+      renderTabs();
+      // Auto-select first cluster
+      if (clusters.length && !currentCluster) {
+        selectCluster(clusters[0].name);
+      }
+    })
+    .catch(err => { info.textContent = 'Failed to load clusters — ' + err.message; });
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tab-bar');
+  // Clear existing tabs (keep the + button)
+  bar.querySelectorAll('.tab').forEach(t => t.remove());
+  clusters.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (c.name === currentCluster ? ' active' : '');
+    btn.dataset.cluster = c.name;
+    const pct = c.handoff_pct ? `<span class="pct">${esc(c.handoff_pct)}%</span>` : '';
+    btn.textContent = c.name;
+    if (pct) btn.innerHTML += pct;
+    btn.title = c.goal || c.name;
+    btn.addEventListener('click', () => selectCluster(c.name));
+    bar.insertBefore(btn, document.getElementById('new-tab-btn'));
+  });
+}
+
+function selectCluster(name) {
+  currentCluster = name;
+  renderTabs();
+  // Update panel indicator
+  const ci = document.getElementById('cluster-indicator');
+  const c = clusters.find(x => x.name === name);
+  const pct = c && c.handoff_pct ? ` · ${c.handoff_pct}%` : '';
+  ci.textContent = c ? `📋 ${c.name}${pct}` : '— no cluster —';
+  ci.style.color = c ? '#58a6ff' : '#8b949e';
+  loadGraph(name);
+  writeHashState();
+}
+
+function loadGraph(clusterName) {
+  info.textContent = 'Loading…';
+  const url = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.nodes) {
+        info.textContent = `Failed to load${clusterName ? ' cluster ' + clusterName : ''}: ${data?.error || 'no graph data'}`;
+        graphData = { nodes: [], links: [], node_count: 0, link_count: 0, version: 0 };
+        if (fg) { fg.graphData(graphData); }
+        return;
+      }
+      const hosted = data.nodes.find(n => n.id === 'ui:bridge');
+      if (hosted) hosted.name = 'Hosted Chat';
+      collapseIntake(data);
+      graphData = data;
+      nodeMetrics = computeNodeMetrics(data);
+      const clusterTag = data.cluster ? ` · ${data.cluster}` : '';
+      info.textContent = `${data.node_count} nodes · ${data.link_count} links · v${data.version}${clusterTag}`;
+      if (!fg) initGraph(graphData);
+      padiFitPending = true;
+      renderLens();
+    })
+    .catch(err => { info.textContent = 'Failed to load — ' + err.message; });
+}
+
+// ── Lens logic ──
+function applyLens(lens) {
+  currentLens = lens;
+  if (lens === 'padi') {
+    padiFitPending = true;
+  }
+  if (lens !== 'lineage') lineageRoot = null;
+  document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-lens="${lens}"]`)?.classList.add('active');
+  renderLens();
+}
+
+// ── Focus mode: enter/exit ──
+function enterAgentFocus(agentId) {
+  if (!agentId || !agentId.startsWith('agent:')) return;
+  viewMode = 'agent';
+  focusedAgentId = agentId;
+  lineageRoot = null;
+  currentLens = 'padi';
+  updateViewCrumb();
+  renderLens();
+  openAgentWorkbench(agentId);
+  // Zoom to the agent node — dynamic based on node count
+  const n = getNodeById(agentId);
+  if (n && Number.isFinite(n.x) && Number.isFinite(n.y)) {
+    fg.centerAt(n.x, n.y, 650);
+    const focusData = buildAgentFocusData();
+    const nodeCount = focusData.nodes.length;
+    const zoom = Math.max(0.8, Math.min(2.5, 3.0 / Math.sqrt(nodeCount)));
+    fg.zoom(zoom, 650);
+  }
+  loadFocusedAgentData(agentId);
+  writeHashState();
+}
+
+function exitAgentFocus() {
+  viewMode = 'project';
+  focusedAgentId = null;
+  focusedAgentConfig = null;
+  focusedAgentVerify = null;
+  focusedAgentEval = null;
+  focusedAgentEvalsets = [];
+  // Clear focus-only pins so they don't leak into project view
+  if (graphData) {
+    graphData.nodes.forEach(n => {
+      if (!n.synthetic) { n.fx = undefined; n.fy = undefined; }
+    });
+  }
+  updateViewCrumb();
+  padiFitPending = true;
+  renderLens();
+  document.getElementById('inspect').classList.remove('open');
+  writeHashState();
+}
+
+// ── Focus mode graph projection ──
+function buildFocusDevNodes(agent) {
+  const base = agent.id;
+  const clean = cleanAgentId(base);
+  const evalState = focusedAgentEval?.ok ? 'built' : (focusedAgentEval?.error ? 'error' : 'blank');
+  const verifyState = focusedAgentVerify?.ok ? 'built' : (focusedAgentVerify?.error ? 'error' : 'blank');
+  return [
+    { id: focusNodeId(base, 'config'), name: 'Config', type: 'ui', state: agent.state || 'blank', synthetic: true, focusChild: true, artifact: `agent-config:${clean}` },
+    { id: focusNodeId(base, 'tools'), name: 'Tools', type: 'tool', state: 'built', synthetic: true, focusChild: true, artifact: `agent-tools:${clean}` },
+    { id: focusNodeId(base, 'evals'), name: 'Evals', type: 'capability', state: evalState, synthetic: true, focusChild: true, artifact: `agent-evals:${clean}` },
+    { id: focusNodeId(base, 'runtime'), name: 'Runtime', type: 'capability', state: agent.state || 'blank', synthetic: true, focusChild: true, artifact: `agent-runtime:${clean}` },
+    { id: focusNodeId(base, 'chat'), name: 'Chat', type: 'ui', state: 'built', synthetic: true, focusChild: true, artifact: `agent-chat:${clean}` },
+    { id: focusNodeId(base, 'generate'), name: 'Generate', type: 'capability', state: 'built', synthetic: true, focusChild: true, artifact: `agent-generate:${clean}` },
+    { id: focusNodeId(base, 'verify'), name: 'Verify', type: 'capability', state: verifyState, synthetic: true, focusChild: true, artifact: `agent-verify:${clean}` },
+  ];
+}
+
+function buildAgentFocusData() {
+  const agent = getNodeById(focusedAgentId);
+  if (!agent) return { nodes: [], links: [] };
+
+  // Find the agent's direct neighbors from the full manifest
+  const ids = new Set([focusedAgentId]);
+  for (const l of graphData.links || []) {
+    const source = lid(l.source);
+    const target = lid(l.target);
+    if (source === focusedAgentId) ids.add(target);
+    if (target === focusedAgentId) ids.add(source);
+  }
+
+  // Also pull in the agent's model node (even if no explicit link exists)
+  let modelNodeId = null;
+  if (agent.model) {
+    modelNodeId = `model:${agent.model}`;
+    if (graphData.nodes.some(n => n.id === modelNodeId)) ids.add(modelNodeId);
+  }
+
+  const baseNodes = graphData.nodes.filter(n => ids.has(n.id)).map(n => {
+    // Model nodes: override shared/blank so they're visible in focus
+    if (n.id === modelNodeId) {
+      return { ...n, shared: false, state: n.state === 'blank' ? 'built' : n.state };
+    }
+    return n;
+  });
+  const baseLinks = graphData.links.filter(l => ids.has(lid(l.source)) && ids.has(lid(l.target)));
+
+  // Add model link if agent has a model and it's included but not already linked
+  if (modelNodeId && ids.has(modelNodeId) && !baseLinks.some(l => {
+    const s = lid(l.source), t = lid(l.target);
+    return (s === focusedAgentId && t === modelNodeId) || (s === modelNodeId && t === focusedAgentId);
+  })) {
+    baseLinks.push({ source: focusedAgentId, target: modelNodeId, kind: 'pinned-model' });
+  }
+
+  const devNodes = buildFocusDevNodes(agent);
+  const devLinks = devNodes.map(n => ({ source: focusedAgentId, target: n.id, kind: 'focus' }));
+
+  return {
+    nodes: [...baseNodes, ...devNodes],
+    links: [...baseLinks, ...devLinks],
+  };
+}
+
+function padiControlWidth(kind, label) {
+  if (kind === 'label') return Math.max(120, label.length * 9 + 28);
+  if (kind === 'spawn') return Math.max(88, label.length * 7 + 26);
+  return 90;
+}
+
+function buildPadiControlNodes() {
+  if (currentLens !== 'padi' || viewMode === 'agent') return [];
+  const nodes = [];
+  PADI_LANES.forEach((lane, laneIndex) => {
+    const sk = LANE_KEY_TO_SPAWNER[lane.key];
+    const sp = LANE_SPAWNERS[sk] || {};
+    nodes.push({
+      id: `padi:label:${lane.key}`,
+      name: lane.label,
+      type: 'capability',
+      state: 'built',
+      synthetic: true,
+      padiControl: true,
+      padiControlKind: 'label',
+      padiLaneKey: lane.key,
+      padiLaneIndex: laneIndex,
+      padiHue: lane.hue,
+      padiWidth: padiControlWidth('label', lane.label),
+      padiHeight: 22,
+    });
+    nodes.push({
+      id: `padi:spawn:${lane.key}`,
+      name: `+ ${sp.blankLabel || ('New ' + sk)}`,
+      type: 'capability',
+      state: sp.disabled ? 'blank' : 'built',
+      synthetic: true,
+      padiControl: true,
+      padiControlKind: 'spawn',
+      padiDisabled: !!sp.disabled,
+      padiSpawner: sk,
+      padiLaneKey: lane.key,
+      padiLaneIndex: laneIndex,
+      padiHue: lane.hue,
+      padiWidth: padiControlWidth('spawn', sp.blankLabel || ('New ' + sk)),
+      padiHeight: 24,
+    });
+    if (sp.library && !sp.hideCanvasLibrary) {
+      sp.library().forEach((agent, order) => {
+        nodes.push({
+          id: `padi:library:${sk}:${agent.id}`,
+          name: agent.name,
+          type: 'agent',
+          state: agent.inCluster ? 'blank' : 'built',
+          synthetic: true,
+          padiControl: true,
+          padiControlKind: 'library',
+          padiDisabled: !!agent.inCluster,
+          padiSpawner: sk,
+          padiAgentId: agent.id,
+          padiOrder: order,
+          padiLaneKey: lane.key,
+          padiLaneIndex: laneIndex,
+          padiHue: lane.hue,
+          padiWidth: padiControlWidth('library', agent.name),
+          padiHeight: 18,
+        });
+      });
+    }
+  });
+  return nodes;
+}
+
+function getVisibleData() {
+  // ── Focus mode: agent-specific subgraph ──
+  if (viewMode === 'agent' && focusedAgentId) {
+    return buildAgentFocusData();
+  }
+
+  let base;
+  if (currentLens === 'all' || currentLens === 'padi' || currentLens === 'tier') {
+    base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
+  } else if (currentLens === 'live') {
+    const liveIds = new Set(graphData.nodes.filter(n => n.state === 'live').map(n => n.id));
+    base = {
+      nodes: graphData.nodes.filter(n => n.state === 'live'),
+      links: graphData.links.filter(l => liveIds.has(lid(l.source)) && liveIds.has(lid(l.target))),
+    };
+  } else if (currentLens === 'lineage' && lineageRoot) {
+    const visited = new Set([lineageRoot]);
+    const queue = [lineageRoot];
+    while (queue.length) {
+      const id = queue.shift();
+      for (const l of graphData.links) {
+        const s = lid(l.source), t = lid(l.target);
+        if (s === id && !visited.has(t)) { visited.add(t); queue.push(t); }
+        if (t === id && !visited.has(s)) { visited.add(s); queue.push(s); }
+      }
+    }
+    base = {
+      nodes: graphData.nodes.filter(n => visited.has(n.id)),
+      links: graphData.links.filter(l => visited.has(lid(l.source)) && visited.has(lid(l.target))),
+    };
+  } else {
+    base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
+  }
+
+  // Filter by rail visibility
+  if (!showDepRail) {
+    const depIds = new Set(base.nodes.filter(n => n.rail === 'dependency').map(n => n.id));
+    if (depIds.size) {
+      base = {
+        nodes: base.nodes.filter(n => !depIds.has(n.id)),
+        links: base.links.filter(l => !depIds.has(lid(l.source)) && !depIds.has(lid(l.target))),
+      };
+    }
+  }
+  if (!showInfraRail) {
+    const infraIds = new Set(base.nodes.filter(n => n.rail === 'infrastructure').map(n => n.id));
+    if (infraIds.size) {
+      base = {
+        nodes: base.nodes.filter(n => !infraIds.has(n.id)),
+        links: base.links.filter(l => !infraIds.has(lid(l.source)) && !infraIds.has(lid(l.target))),
+      };
+    }
+  }
+
+  if (currentLens === 'padi') {
+    base = { nodes: base.nodes.concat(buildPadiControlNodes()), links: base.links };
+  }
+
+  return base;
+}
+
+// ── PADI layout ──
+function clearFocusPins(nodes) {
+  nodes.forEach(n => {
+    if (!n.synthetic) { n.fx = undefined; n.fy = undefined; }
+  });
+}
+
+function applyLayout(vd) {
+  // ── Focus mode: tiered layout ──
+  if (viewMode === 'agent' && focusedAgentId) {
+    const center = vd.nodes.find(n => n.id === focusedAgentId);
+    if (center) { center.fx = 0; center.fy = -200; }
+
+    // Synthetic dev nodes in a horizontal row below agent
+    const dev = vd.nodes.filter(n => n.synthetic && n.focusChild);
+    const devSpacing = Math.max(120, 600 / Math.max(1, dev.length));
+    dev.forEach((n, i) => {
+      n.fx = (i - (dev.length - 1) / 2) * devSpacing;
+      n.fy = 0;
+    });
+
+    // Real tools fanned out below
+    const tools = vd.nodes.filter(n => !n.synthetic && n.id !== focusedAgentId && n.type === 'tool');
+    const toolSpacing = Math.max(80, 500 / Math.max(1, tools.length));
+    tools.forEach((n, i) => {
+      n.fx = (i - (tools.length - 1) / 2) * toolSpacing;
+      n.fy = 200;
+    });
+
+    // Everything else (model, channels, etc.) between dev and tools
+    const others = vd.nodes.filter(n => !n.synthetic && n.id !== focusedAgentId && n.type !== 'tool');
+    others.forEach((n, i) => {
+      n.fx = (i - (others.length - 1) / 2) * 100;
+      n.fy = 100;
+    });
+    return;
+  }
+
+  // Pin rail nodes in a column on the left edge
+  const depNodes = vd.nodes.filter(n => n.rail === 'dependency');
+  const infraNodes = vd.nodes.filter(n => n.rail === 'infrastructure');
+  const railOffset = 90;
+  // Infra sort order: top-down logical stack
+  const infraOrder = ['tunnel','network','service','container','host'];
+  infraNodes.sort((a, b) => {
+    const ai = infraOrder.indexOf(a.type), bi = infraOrder.indexOf(b.type);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  const railMidpoint = 0; // centered vertically on graph
+  depNodes.forEach((n, i) => {
+    n.fx = -400;
+    n.fy = railMidpoint + (i - (depNodes.length - 1) / 2) * railOffset;
+  });
+  infraNodes.forEach((n, i) => {
+    n.fx = -540;
+    n.fy = railMidpoint + (i - (infraNodes.length - 1) / 2) * railOffset;
+  });
+
+  // PADI swim-lane positions are computed in layoutPadi() so the graph lands
+  // on a graph-space factory floor that can zoom and pan.
+  if (currentLens !== 'padi') {
+    vd.nodes.forEach(n => {
+      if (n.rail) return; // rail nodes stay pinned
+      n.fx = null;
+      n.fy = null;
+    });
+  }
+}
+
+// ── Swim-lane controls: build the operator layer once; the colored sheet
+// itself is drawn in canvas graph-space by drawPadiLaneSheet(). ──
+function buildSwimlaneOverlay() {
+  const overlay = document.getElementById('swimlane-overlay');
+  if (!overlay || overlay.childElementCount) return;
+  PADI_LANES.forEach(lane => {
+    const row = document.createElement('div');
+    row.className = 'swimlane-row';
+    row.dataset.lane = lane.key;
+    // Subtle hue wash, slightly stronger at the labelled left edge → fades right,
+    // so the sheet reads as a labelled backdrop the graph sits on.
+    row.style.background = `linear-gradient(90deg, rgba(${lane.hue},0.10) 0%, rgba(${lane.hue},0.05) 28%, rgba(${lane.hue},0.025) 100%)`;
+    // Label + spawn controls live in the controls layer header, not the backdrop.
+    overlay.appendChild(row);
+  });
+}
+
+function layoutPadiControlShelf(laneIndex, controls) {
+  const y = padiLaneY[laneIndex];
+  if (!Number.isFinite(y)) return;
+
+  const laneTop = y - PADI_LANE_HEIGHT / 2;
+  const order = { label: 0, spawn: 1, library: 2 };
+  const sorted = controls.slice().sort((a, b) => {
+    return (order[a.padiControlKind] ?? 9) - (order[b.padiControlKind] ?? 9)
+      || (a.padiOrder ?? 0) - (b.padiOrder ?? 0)
+      || a.name.localeCompare(b.name);
+  });
+
+  const shelfLeft = padiWorld.xLeft + padiControlLayoutUnits(PADI_CONTROL_LEFT_PAD);
+  const headerY = laneTop + padiControlLayoutUnits(PADI_CONTROL_TOP_PAD);
+  const libraryY = headerY + padiControlLayoutUnits(PADI_CONTROL_ROW_GAP);
+
+  function place(node, centerX, centerY) {
+    node.__tx = centerX;
+    node.__ty = centerY;
+    node.x = centerX;
+    node.y = centerY;
+    node.fx = centerX;
+    node.fy = centerY;
+  }
+
+  const label = sorted.find(n => n.padiControlKind === 'label');
+  const spawn = sorted.find(n => n.padiControlKind === 'spawn');
+  if (label) {
+    const labelW = padiControlLayoutUnits(label.padiWidth || 80);
+    place(label, shelfLeft + labelW / 2, headerY);
+  }
+  if (spawn) {
+    const labelW = label ? padiControlLayoutUnits(label.padiWidth || 80) : 0;
+    const spawnW = padiControlLayoutUnits(spawn.padiWidth || 80);
+    place(spawn, shelfLeft + labelW + padiControlLayoutUnits(PADI_CONTROL_GAP) + spawnW / 2, headerY);
+  }
+
+  let cursorX = shelfLeft;
+  let cursorRow = 0;
+  sorted.filter(n => n.padiControlKind === 'library').forEach((node, index) => {
+    const w = padiControlLayoutUnits(node.padiWidth || 46);
+    if (index > 0 && index % PADI_LIBRARY_COLS === 0) {
+      cursorRow++;
+      cursorX = shelfLeft;
+    }
+    const x = cursorX + w / 2;
+    const y = libraryY + padiControlLayoutUnits(PADI_LIBRARY_ROW_STEP * cursorRow);
+    place(node, x, y);
+    cursorX += w + padiControlLayoutUnits(PADI_CONTROL_GAP);
+  });
+}
+
+function snapPadiControlNode(node) {
+  if (!node?.padiControl || !fg || currentLens !== 'padi' || viewMode === 'agent') return false;
+  const controls = fg.graphData().nodes
+    .filter(n => n.padiControl && n.padiLaneIndex === node.padiLaneIndex);
+  layoutPadiControlShelf(node.padiLaneIndex, controls);
+  positionSwimlaneControls();
+  return true;
+}
+
+// Pin every visible node onto its swim-lane row, spread evenly across the
+// graph-space factory floor. The first render fits the whole floor to the
+// viewport; after that users can zoom/pan and the lanes move with the graph.
+function layoutPadi() {
+  const overlay = document.getElementById('swimlane-overlay');
+  const wrap = document.getElementById('graph-wrap');
+  if (!fg || !overlay || !wrap) return;
+  const controls = document.getElementById('swimlane-controls');
+  if (currentLens !== 'padi' || viewMode === 'agent') {
+    overlay.classList.remove('on');
+    if (controls) controls.classList.remove('on');
+    return;
+  }
+  overlay.classList.remove('on');
+  if (controls) controls.classList.add('on');
+
+  const laneY = PADI_LANES.map((_, laneIndex) => padiLaneCenter(laneIndex));
+  const bounds = laneY.slice(0, -1).map((y, i) => (y + laneY[i + 1]) / 2);
+  padiLaneY = laneY;
+  padiLaneBound = bounds;
+
+  // Bucket visible non-rail nodes by lane, then give each a floaty *target*
+  // (forces pull toward it — nothing is hard-pinned, so the sheet stays alive).
+  const buckets = [[], [], [], []];
+  fg.graphData().nodes.forEach(n => {
+    if (n.padiControl) { n.__lane = n.padiLaneIndex; return; }
+    if (n.rail) { n.__lane = undefined; return; }
+    const li = LANE_INDEX[String(LANE_Y[n.type])] ?? 2;
+    n.__lane = li;
+    buckets[li].push(n);
+  });
+  const maxBucket = Math.max(1, ...buckets.map(arr => arr.length));
+  const laneWidth = Math.max(960, Math.min(1900, maxBucket * 190));
+  const xLeft = PADI_WORLD_X_SHIFT - laneWidth / 2;
+  const xRight = PADI_WORLD_X_SHIFT + laneWidth / 2;
+  padiWorld = {
+    xLeft,
+    xRight,
+    yTop: Math.min(...laneY) - PADI_LANE_HEIGHT / 2,
+    yBottom: Math.max(...laneY) + PADI_LANE_HEIGHT / 2
+  };
+  buckets.forEach((arr, li) => {
+    arr.sort((a, b) => a.id.localeCompare(b.id));
+    const n = arr.length;
+    arr.forEach((node, k) => {
+      const t = n === 1 ? 0.5 : (k + 0.5) / n;
+      node.__tx = xLeft + (xRight - xLeft) * t;
+      node.__ty = laneY[li] + PADI_NODE_Y_OFFSET;
+      if (node.__phase === undefined) {
+        const h = node.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        node.__phase = (h % 100) / 100 * Math.PI * 2;
+      }
+      // Seed an initial position so nodes ease in within their lane, not from origin.
+      if (!Number.isFinite(node.x)) { node.x = node.__tx; node.y = node.__ty; }
+      // Never hard-pin: lanes are held by forces (see padiLaneForce).
+      node.fx = undefined; node.fy = undefined;
+    });
+  });
+
+  PADI_LANES.forEach((lane, li) => {
+    const controls = fg.graphData().nodes
+      .filter(n => n.padiControl && n.padiLaneIndex === li);
+    layoutPadiControlShelf(li, controls);
+  });
+
+  renderLaneLibraries();   // keep chip in-cluster state in sync with the graph
+  positionSwimlaneControls();
+}
+
+function fitPadiToViewport(ms = 650) {
+  if (!fg || currentLens !== 'padi' || viewMode === 'agent') return;
+  const wrap = document.getElementById('graph-wrap');
+  const panel = document.getElementById('panel');
+  if (!wrap) return;
+
+  const W = wrap.clientWidth || window.innerWidth;
+  const H = wrap.clientHeight || window.innerHeight;
+  const panelLeft = panel ? panel.getBoundingClientRect().left : W - 300;
+  const usableW = Math.max(320, panelLeft - 24);
+  const usableH = Math.max(320, H - 72);
+
+  const xMin = padiWorld.xLeft - 56;
+  const xMax = padiWorld.xRight + 56;
+  const yMin = padiWorld.yTop - 18;
+  const yMax = padiWorld.yBottom + 18;
+  const boundsW = Math.max(1, xMax - xMin);
+  const boundsH = Math.max(1, yMax - yMin);
+  const zoom = Math.max(0.55, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
+  const cx = (xMin + xMax) / 2;
+  const cy = (yMin + yMax) / 2;
+
+  const panelOffset = Math.max(0, W - usableW) / 2;
+  fg.centerAt(cx + panelOffset / zoom, cy - 18 / zoom, ms);
+  fg.zoom(zoom, ms);
+  window.setTimeout(() => {
+    layoutPadi();
+    positionSwimlaneControls();
+  }, ms ? ms + 40 : 0);
+}
+
+function drawPadiLaneSheet(ctx, scale) {
+  if (currentLens !== 'padi' || viewMode === 'agent') return;
+  const x = padiWorld.xLeft;
+  const w = padiWorld.xRight - padiWorld.xLeft;
+  PADI_LANES.forEach((lane, i) => {
+    const y = padiLaneY[i];
+    if (!Number.isFinite(y)) return;
+    const top = y - PADI_LANE_HEIGHT / 2;
+    const grad = ctx.createLinearGradient(x, 0, padiWorld.xRight, 0);
+    grad.addColorStop(0, `rgba(${lane.hue},0.12)`);
+    grad.addColorStop(0.35, `rgba(${lane.hue},0.055)`);
+    grad.addColorStop(1, `rgba(${lane.hue},0.022)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, top, w, PADI_LANE_HEIGHT);
+    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+    ctx.lineWidth = 1 / scale;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(padiWorld.xRight, top);
+    ctx.stroke();
+  });
+}
+
+function positionSwimlaneControls() {
+  const layer = document.getElementById('swimlane-controls');
+  if (!fg || !layer || currentLens !== 'padi' || viewMode === 'agent') return;
+  if (typeof fg.graph2ScreenCoords !== 'function') return;
+  const rows = layer.querySelectorAll('.swimlane-ctrl-row');
+  rows.forEach(row => {
+    const laneIndex = Number(row.dataset.laneIndex);
+    const y = padiLaneY[laneIndex];
+    if (!Number.isFinite(y)) return;
+    const topLeft = fg.graph2ScreenCoords(padiWorld.xLeft, y - PADI_LANE_HEIGHT / 2);
+    const bottomRight = fg.graph2ScreenCoords(padiWorld.xRight, y + PADI_LANE_HEIGHT / 2);
+    const w = Math.max(0, bottomRight.x - topLeft.x);
+    const h = Math.max(0, bottomRight.y - topLeft.y);
+    row.style.transform = `translate(${topLeft.x}px, ${topLeft.y}px)`;
+    row.style.width = `${w}px`;
+    row.style.height = `${h}px`;
+  });
+}
+
+// Custom force: spring each node toward its lane target plus a small perpetual
+// float so the sheet feels alive but stays aligned. Horizontal is held tight
+// (columns line up, risers stay vertical); the float is a gentle vertical drift.
+// Constant (not alpha-scaled) so motion never dies when the simulation cools.
+function padiLaneForce() {
+  padiTick++;
+  const nodes = padiLaneForce._nodes || [];
+  for (const n of nodes) {
+    if (n.rail || n.__tx === undefined) continue;
+    if (n.padiControl) continue;
+    const sx = n.padiControl ? 0.35 : 0.12;
+    const sy = n.padiControl ? 0.35 : 0.06;
+    n.vx += (n.__tx - n.x) * sx;   // tight horizontal → clean columns
+    n.vy += (n.__ty - n.y) * sy;   // controls stay crisp; agents gently float
+    if (!n.padiControl) n.vy += Math.sin(padiTick * 0.013 + n.__phase) * 0.07;
+  }
+}
+padiLaneForce.initialize = nodes => { padiLaneForce._nodes = nodes; };
+
+// PADI link routing: leave the lower node going straight up, drop a pin where it
+// crosses the lane divider, then bend straight to the upper node.
+function drawPadiLink(link, ctx, scale) {
+  const s = link.source, t = link.target;
+  if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
+  const col = padiLinkColor(link);
+  ctx.lineWidth = 1.1 / scale;
+  ctx.strokeStyle = col;
+  // Rail or same-lane links: a plain straight line.
+  if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    return;
+  }
+  const upper = s.__lane < t.__lane ? s : t;   // smaller index = higher row
+  const lower = s.__lane < t.__lane ? t : s;
+  const boundY = padiLaneBound[upper.__lane];   // divider just below the upper lane
+  const px = lower.__tx;                         // static column x → pin never jitters
+  if (!Number.isFinite(boundY) || !Number.isFinite(px)) {
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(lower.x, lower.y);   // straight up from the lower node…
+  ctx.lineTo(px, boundY);         // …to the static pin on the row crossing…
+  ctx.lineTo(upper.x, upper.y);   // …then bend to the upper node.
+  ctx.stroke();
+  // Static pin at the crossing.
+  ctx.beginPath();
+  ctx.arc(px, boundY, 2.6 / scale, 0, 2 * Math.PI);
+  ctx.fillStyle = col;
+  ctx.fill();
+  ctx.lineWidth = 1.5 / scale;
+  ctx.strokeStyle = '#0d1117';
+  ctx.stroke();
+}
+function padiLinkColor(l) {
+  if (l.kind === 'depends-on') return 'rgba(165,214,255,0.45)';
+  if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.45)';
+  return 'rgba(139,160,184,0.5)';
+}
+
+function applyForces() {
+  const charge = fg.d3Force('charge');
+  const link = fg.d3Force('link');
+  const center = fg.d3Force('center');
+  if (currentLens === 'padi') {
+    // No charge/link tug — they'd shove nodes off their even spread (and behind
+    // the panel). Positioning + the floaty bob are entirely the lane force's job.
+    if (charge) charge.strength(0);
+    if (link) link.distance(90).strength(0);
+    if (center) center.strength(0);   // else it recentres the centroid, sliding the whole sheet off
+    fg.d3Force('lane', padiLaneForce);
+    fg.d3VelocityDecay(0.55);
+    fg.d3AlphaDecay(0);          // never fully cool → perpetual gentle float
+  } else {
+    if (charge) charge.strength(-30);
+    if (link) link.distance(30).strength(1);
+    if (center) center.strength(1);
+    fg.d3Force('lane', null);    // drop the lane force outside PADI
+    fg.d3VelocityDecay(0.4);
+    fg.d3AlphaDecay(0.0228);     // d3 default
+  }
+}
+
+// ── Canvas drawing helpers ──
+function drawWarningTriangle(ctx, x, y, size, scale) {
+  const s = size / scale;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s);
+  ctx.lineTo(x + s * 0.87, y + s * 0.5);
+  ctx.lineTo(x - s * 0.87, y + s * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = '#d29922';
+  ctx.fill();
+  ctx.fillStyle = '#0d1117';
+  ctx.font = `bold ${s * 0.7}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', x, y + s * 0.08);
+}
+
+function drawX(ctx, x, y, size, scale) {
+  const s = size / scale;
+  ctx.strokeStyle = '#ff7b72';
+  ctx.lineWidth = 2.5 / scale;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.55, y - s * 0.55);
+  ctx.lineTo(x + s * 0.55, y + s * 0.55);
+  ctx.moveTo(x + s * 0.55, y - s * 0.55);
+  ctx.lineTo(x - s * 0.55, y + s * 0.55);
+  ctx.stroke();
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+}
+
+function padiControlRect(node, scale) {
+  const w = (node.padiWidth || 80) / scale;
+  const h = (node.padiHeight || 22) / scale;
+  return { x: node.x - w / 2, y: node.y - h / 2, w, h };
+}
+
+function drawPadiControlNode(node, ctx, scale) {
+  const { x, y, w, h } = padiControlRect(node, scale);
+  const disabled = !!node.padiDisabled;
+  const hue = node.padiHue || '88,166,255';
+  ctx.save();
+  const controlFontSize = node.padiControlKind === 'library' ? 10 : 11;
+  ctx.font = `${node.padiControlKind === 'label' ? '600 ' : ''}${controlFontSize / scale}px ${node.padiControlKind === 'library' ? "ui-monospace, 'SF Mono', monospace" : "-apple-system, BlinkMacSystemFont, sans-serif"}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (node.padiControlKind === 'label') {
+    ctx.fillStyle = `rgba(${hue},0.78)`;
+    roundRectPath(ctx, x, y + 2 / scale, 3 / scale, h - 4 / scale, 2 / scale);
+    ctx.fill();
+    ctx.fillStyle = disabled ? 'rgba(139,148,158,0.32)' : 'rgba(150,170,190,0.62)';
+    ctx.letterSpacing = `${2.5 / scale}px`;
+    ctx.fillText(node.name.toUpperCase(), node.x + 8 / scale, node.y);
+    ctx.restore();
+    return;
+  }
+
+  if (node.padiControlKind === 'spawn') {
+    roundRectPath(ctx, x, y, w, h, 5 / scale);
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    ctx.fill();
+    ctx.setLineDash([4 / scale, 3 / scale]);
+    ctx.strokeStyle = disabled ? 'rgba(140,160,180,0.18)' : `rgba(${hue},0.55)`;
+    ctx.lineWidth = 1 / scale;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = disabled ? `rgba(${hue},0.26)` : `rgb(${hue})`;
+    ctx.fillText(node.name, node.x, node.y);
+    ctx.restore();
+    return;
+  }
+
+  roundRectPath(ctx, x, y, w, h, h / 2);
+  ctx.fillStyle = disabled ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.035)';
+  ctx.fill();
+  ctx.save();
+  roundRectPath(ctx, x, y, w, h, h / 2);
+  ctx.clip();
+  ctx.fillStyle = disabled ? 'rgba(139,148,158,0.52)' : '#c9d1d9';
+  ctx.fillText(node.name, node.x, node.y + 0.5 / scale);
+  ctx.restore();
+  if (disabled) ctx.setLineDash([4 / scale, 3 / scale]);
+  ctx.strokeStyle = disabled ? `rgba(${hue},0.34)` : `rgb(${hue})`;
+  ctx.lineWidth = 1.25 / scale;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function paintPadiControlHitArea(node, color, ctx, scale) {
+  const { x, y, w, h } = padiControlRect(node, scale);
+  ctx.fillStyle = color;
+  roundRectPath(ctx, x, y, w, h, h / 2);
+  ctx.fill();
+}
+
+function handlePadiControlClick(node) {
+  if (!node || node.padiDisabled) return;
+  if (node.padiControlKind === 'spawn' && node.padiSpawner === 'agent') {
+    const id = prompt('New agent id (a-z, 0-9, _)');
+    if (!id) return;
+    const desc = prompt('Description (optional)') || '';
+    spawnBlankAgent(id, desc, null);
+    return;
+  }
+  if (node.padiControlKind === 'library' && node.padiAgentId) {
+    if (node.padiSpawner === 'agent') {
+      addAgentToCluster(node.padiAgentId, null);
+    } else {
+      inspectGraphNode(node.padiSpawner, node.padiAgentId);
+    }
+  }
+}
+
+// ── Custom live particles along visible link segments ──
+let liveNodeIds = new Set();
+let particlePhase = 0;
+
+function drawLiveParticles(ctx, scale) {
+  if (!liveNodeIds.size || currentLens !== 'padi') return;
+  const gLinks = fg.graphData().links || [];
+  const now = Date.now();
+  particlePhase = (now % 4000) / 4000;
+  gLinks.forEach(link => {
+    const s = link.source, t = link.target;
+    if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
+    if (!liveNodeIds.has(s.id) && !liveNodeIds.has(t.id)) return;
+    const pts = padiLinkPath(s, t);
+    if (pts.length < 2) return;
+    const totalLen = pathLength(pts);
+    if (totalLen < 1) return;
+    const count = Math.max(2, Math.ceil(totalLen / 120));
+    for (let i = 0; i < count; i++) {
+      const frac = ((particlePhase + i / count) % 1) * totalLen;
+      const pos = pointAtDist(pts, frac);
+      const r = 2 / scale;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = '#4ade80';
+      ctx.fill();
+    }
+  });
+}
+
+function padiLinkPath(s, t) {
+  if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
+    return [s, t];
+  }
+  const upper = s.__lane < t.__lane ? s : t;
+  const lower = s.__lane < t.__lane ? t : s;
+  const boundY = padiLaneBound[upper.__lane];
+  const px = lower.__tx;
+  if (!Number.isFinite(boundY) || !Number.isFinite(px)) return [s, t];
+  const rS = nodeVisualRadius(s, 1) + 2;
+  const rT = nodeVisualRadius(t, 1) + 2;
+  const pin = { x: px, y: boundY };
+  const seg1 = clipSegment(lower, pin, rS, 0);
+  const seg2 = clipSegment(pin, upper, 0, rT);
+  return [seg1[0], seg1[1], seg2[1]];
+}
+
+function clipSegment(a, b, rA, rB) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < rA + rB) return [a, b];
+  const ux = dx / len, uy = dy / len;
+  return [
+    { x: a.x + ux * rA, y: a.y + uy * rA },
+    { x: b.x - ux * rB, y: b.y - uy * rB },
+  ];
+}
+
+function pathLength(pts) {
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    len += Math.sqrt(dx * dx + dy * dy);
+  }
+  return len;
+}
+
+function pointAtDist(pts, dist) {
+  let rem = dist;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+    if (rem <= segLen) {
+      const t = segLen > 0 ? rem / segLen : 0;
+      return { x: pts[i-1].x + dx * t, y: pts[i-1].y + dy * t };
+    }
+    rem -= segLen;
+  }
+  return pts[pts.length - 1];
+}
+
+// ── Graph init ──
+let fg;
+function initGraph(data) {
+  const elem = document.getElementById('graph');
+  fg = ForceGraph()(elem)
+    .graphData(data)
+    .nodeId('id')
+    .nodeLabel(node => {
+      if (node.padiControl) return node.name;
+      const g = node.gates || {};
+      const gateStr = `L0:${g.L0?'✓':'✗'} L1:${g.L1?'✓':'✗'} L2:${g.L2?'✓':'✗'} L3:${g.L3?'✓':'✗'}`;
+      const sharedTag = node.shared ? ' [shared]' : '';
+      return `${node.name} (${node.type}) · ${node.state} · ${gateStr}${sharedTag}`;
+    })
+    .nodeCanvasObjectMode(() => 'replace')
+    .nodeCanvasObject((node, ctx, globalScale) => {
+      if (isNaN(node.x) || isNaN(node.y)) return;
+      if (node.padiControl) {
+        drawPadiControlNode(node, ctx, globalScale);
+        return;
+      }
+
+      const baseR = nodeRadius(node);
+      const r = nodeVisualRadius(node, globalScale);
+      const color = COLORS[node.type] || '#8b949e';
+      const isAgent = node.type === 'agent';
+      const state = node.state;
+      const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
+      const isSynthetic = !!node.synthetic;
+
+      // Alpha: dim for blank/building, extra-dim for shared and synthetic
+      let alpha = 1.0;
+      if (state === 'blank') alpha = 0.35;
+      else if (state === 'building') alpha = 0.6;
+      else if (state === 'error') alpha = 0.75;
+      if (node.shared) alpha *= 0.5;
+      if (isSynthetic) alpha *= 0.85;
+      if (node.rail) alpha *= 0.7; // Rail nodes are muted
+
+      // ── Outer circle ──
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color + hexAlpha(alpha * 0.25);
+      ctx.fill();
+      ctx.strokeStyle = color + hexAlpha(alpha);
+      ctx.lineWidth = 1.5 / globalScale;
+      if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
+      if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
+      if (node.rail) ctx.setLineDash([2 / globalScale, 2 / globalScale]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // ── Fill arc (gate completion, agents only) ──
+      if (isAgent && completion > 0) {
+        const innerR = r - 1.5 / globalScale;
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.arc(node.x, node.y, innerR, -Math.PI / 2, -Math.PI / 2 + completion * 2 * Math.PI);
+        ctx.closePath();
+        ctx.fillStyle = color + hexAlpha(0.55 * (node.shared ? 0.5 : 1));
+        ctx.fill();
+      }
+
+      // ── Status symbol (agents only) ──
+      if (isAgent) {
+        const symSize = (padiScreenStableNodes() ? baseR : r) * 0.55;
+        if (state === 'blank') {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, 1.2 / globalScale, 0, 2 * Math.PI);
+          ctx.fillStyle = '#8b949e';
+          ctx.fill();
+        } else if (state === 'building') {
+          drawWarningTriangle(ctx, node.x, node.y, symSize, globalScale);
+        } else if (state === 'error') {
+          drawX(ctx, node.x, node.y, symSize, globalScale);
+        } else if (state === 'live') {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r + 2.5 / globalScale, 0, 2 * Math.PI);
+          ctx.strokeStyle = '#3fb950';
+          ctx.lineWidth = 2 / globalScale;
+          ctx.stroke();
+        }
+      }
+
+      // ── Label ──
+      const label = node.name;
+      const fontSize = padiScreenStableNodes() && !node.rail
+        ? 11 / globalScale
+        : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale));
+      ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      if (node.rail) {
+        // Rail nodes: label to the right, vertically centered
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = color + hexAlpha(0.9);
+        ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
+        ctx.restore();
+      } else {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
+        ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
+      }
+    })
+    .nodePointerAreaPaint((node, color, ctx, globalScale) => {
+      if (node.padiControl) {
+        paintPadiControlHitArea(node, color, ctx, globalScale);
+        return;
+      }
+      const r = nodeVisualRadius(node, globalScale);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 4 / globalScale, 0, 2 * Math.PI);
+      ctx.fill();
+    })
+    .linkColor(l => {
+      if (l.kind === 'depends-on') return 'rgba(165,214,255,0.4)'; // dependency rail
+      if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.4)'; // infra rail
+      return '#30363d';
+    })
+    .linkDirectionalArrowLength(() => currentLens === 'padi' ? 0 : 6)
+    .linkDirectionalArrowRelPos(0.95)
+    .linkLabel(l => l.kind)
+    .linkWidth(1)
+    .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
+    .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
+    .linkDirectionalParticles(0)
+    .onRenderFramePre((ctx, scale) => {
+      // PADI lanes and optional rail columns are graph-space surfaces, so they
+      // zoom and pan with the live graph instead of fighting the camera.
+      try {
+        drawPadiLaneSheet(ctx, scale);
+        const gNodes = fg.graphData().nodes;
+        if (showDepRail) {
+          const dn = gNodes.filter(n => n.rail === 'dependency');
+          if (dn.length) {
+            const cx = dn.reduce((s,n) => s + n.x, 0) / dn.length;
+            const cy = dn.reduce((s,n) => s + n.y, 0) / dn.length;
+            const hw = 100, hh = dn.length * 50;
+            ctx.fillStyle = 'rgba(86,212,221,0.04)';
+            ctx.fillRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.strokeStyle = 'rgba(86,212,221,0.1)';
+            ctx.lineWidth = 1 / scale;
+            ctx.strokeRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.fillStyle = 'rgba(86,212,225,0.7)';
+            ctx.font = `bold ${11 / scale}px -apple-system, sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText('DEPENDENCIES', cx, cy - hh - 6 / scale);
+          }
+        }
+        if (showInfraRail) {
+          const ig = gNodes.filter(n => n.rail === 'infrastructure');
+          if (ig.length) {
+            const cx = ig.reduce((s,n) => s + n.x, 0) / ig.length;
+            const cy = ig.reduce((s,n) => s + n.y, 0) / ig.length;
+            const hw = 120, hh = ig.length * 55;
+            ctx.fillStyle = 'rgba(200,160,255,0.04)';
+            ctx.fillRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.strokeStyle = 'rgba(200,160,255,0.1)';
+            ctx.lineWidth = 1 / scale;
+            ctx.strokeRect(cx - hw, cy - hh, hw * 2, hh * 2);
+            ctx.fillStyle = 'rgba(200,160,255,0.7)';
+            ctx.font = `bold ${11 / scale}px -apple-system, sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText('INFRASTRUCTURE', cx, cy - hh - 6 / scale);
+          }
+        }
+      } catch(e) { /* rail rendering is non-critical */ }
+    })
+    .onRenderFramePost((ctx, scale) => {
+      drawLiveParticles(ctx, scale);
+      positionSwimlaneControls();
+    })
+    .onZoom(() => {
+      if (currentLens === 'padi' && viewMode !== 'agent') layoutPadi();
+      positionSwimlaneControls();
+    })
+    .onNodeDrag(node => {
+      snapPadiControlNode(node);
+    })
+    .onNodeDragEnd(node => {
+      if (snapPadiControlNode(node) && typeof fg.d3ReheatSimulation === 'function') {
+        fg.d3ReheatSimulation();
+      }
+    })
+    .onNodeClick(node => {
+      if (node?.padiControl) { handlePadiControlClick(node); return; }
+      // Wire mode: handle wire target click
+      if (wireMode) { handleWireClick(node); return; }
+      // Chat synthetic node → open sidecar on Agent tab
+      if (node?.artifact?.startsWith('agent-chat:')) {
+        openSidecar(node.artifact.replace('agent-chat:', ''), 'agent');
+        return;
+      }
+      // Focus mode: synthetic node → switch workbench tab
+      if (node.synthetic && node.id.startsWith('focus:') && focusedAgentId) {
+        const suffix = node.id.split(':').pop();
+        const section = ['tools', 'evals', 'runtime'].includes(suffix) ? suffix : (suffix === 'generate' || suffix === 'verify' ? 'run' : 'config');
+        openAgentWorkbench(focusedAgentId, section);
+        return;
+      }
+      // Double-click detector for agent focus
+      if (node.type === 'agent' && _maybeDoubleClick(node)) {
+        enterAgentFocus(node.id);
+        return;
+      }
+      // Lineage lens: click agent to set root
+      if (currentLens === 'lineage' && node.type === 'agent') {
+        lineageRoot = node.id;
+        renderLens();
+      }
+      // Always open inspect panel on click
+      openInspect(node);
+    })
+    .onNodeHover(node => {
+      if (node) {
+        tooltip.style.display = 'block';
+        const extra = node.members ? `<br>channels: ${node.members.join(', ')}` : '';
+        const sharedTag = node.shared ? '<br><span style="color:#8b949e">shared component</span>' : '';
+        const cc = nodeMetrics.cc[node.id] || 0;
+        const gc = node.type === 'agent' ? Math.round((nodeMetrics.gc[node.id] || 0) * 100) : null;
+        const gcStr = gc !== null ? ` · gates: ${gc}%` : '';
+        tooltip.innerHTML = `
+          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span>${sharedTag}<br>
+          state: <b>${node.state}</b> · role: ${node.role} · links: ${cc}${gcStr}<br>
+          artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
+          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}${extra}
+        `;
+        tooltip.style.left = (node.x + nodeRadius(node) + 16) + 'px';
+        tooltip.style.top = (node.y - 10) + 'px';
+      } else {
+        tooltip.style.display = 'none';
+      }
+    })
+    .dagMode('td')
+    .dagLevelDistance(80)
+    .cooldownTicks(100);
+  window.fg = fg; // expose for debugging
+
+  // Build the swim-lane controls and keep the canvas, sheet, and node targets
+  // in sync with the container size (force-graph auto-sizing is unreliable
+  // when the panel/viewport changes, which left the canvas at 0×0).
+  buildSwimlaneOverlay();
+  buildSwimlaneControls();
+  const wrapEl = document.getElementById('graph-wrap');
+  const syncSize = () => {
+    fg.width(wrapEl.clientWidth).height(wrapEl.clientHeight);
+    if (currentLens === 'padi' && viewMode !== 'agent') {
+      layoutPadi();
+      fitPadiToViewport(0);
+    }
+  };
+  if (window.ResizeObserver) new ResizeObserver(syncSize).observe(wrapEl);
+  syncSize();
+}
+
+function renderLens() {
+  const vd = getVisibleData();
+  fg.graphData(vd);
+  if (currentLens === 'tier') fg.dagMode('td').dagLevelDistance(80);
+  else fg.dagMode(null);
+  applyLayout(vd);
+  applyForces();
+  // In PADI mode, hold nodes on the graph-space factory floor.
+  if (currentLens === 'padi') {
+    layoutPadi();
+    fg.cooldownTicks(Infinity);   // keep the sheet alive (floaty)…
+    fg.cooldownTime(Infinity);    // …the engine also stops after cooldownTime (15s default)
+    fg.enableZoomInteraction(true).enablePanInteraction(true);
+    if (padiFitPending) {
+      padiFitPending = false;
+      requestAnimationFrame(() => fitPadiToViewport(650));
+    }
+  } else {
+    document.getElementById('swimlane-overlay').classList.remove('on');  // sheet is PADI-only
+    document.getElementById('swimlane-controls').classList.remove('on');
+    fg.enableZoomInteraction(true).enablePanInteraction(true);
+    fg.cooldownTicks(150);
+    fg.cooldownTime(15000);
+  }
+  fg.d3ReheatSimulation();
+  const tag = currentLens === 'padi' ? ' · swim lanes' : '';
+  const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
+  if (viewMode === 'agent' && focusedAgentId) {
+    info.textContent = `${vd.nodes.length} focused nodes · agent: ${cleanAgentId(focusedAgentId)} · project: ${currentCluster || '—'}`;
+  } else {
+    const displayNodeCount = vd.nodes.filter(n => !n.padiControl).length;
+    info.textContent = `${displayNodeCount} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
+  }
+  updateViewCrumb();
+}
+
+// ── Lens buttons ──
+document.querySelectorAll('.lens-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyLens(btn.dataset.lens));
+});
+
+// ── Dependency rail toggle ──
+document.getElementById('deps-btn').addEventListener('click', () => {
+  showDepRail = !showDepRail;
+  const b = document.getElementById('deps-btn');
+  b.textContent = (showDepRail ? '▾' : '▸') + ' Dependencies';
+  b.classList.toggle('on', showDepRail);
+  renderLens();
+});
+
+// ── Infrastructure rail toggle ──
+document.getElementById('infra-btn').addEventListener('click', () => {
+  showInfraRail = !showInfraRail;
+  const b = document.getElementById('infra-btn');
+  b.textContent = (showInfraRail ? '▾' : '▸') + ' Infrastructure';
+  b.classList.toggle('on', showInfraRail);
+  renderLens();
+});
+
+// ── New cluster tab ──
+document.getElementById('new-tab-btn').addEventListener('click', async () => {
+  const name = prompt('New cluster name (a-z, 0-9, -, _):');
+  if (!name) return;
+  if (!(await ensureGraphSecret())) return;
+  const body = `name=${encodeURIComponent(name)}`;
+  fetch(apiUrl('/new-cluster'), { method: 'POST', headers: mutationHeaders(), body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        loadClusters();
+      } else {
+        alert(data.error || 'Failed to create cluster');
+      }
+    })
+    .catch(err => alert('Server error: ' + err.message));
+});
+
+// ── Lane spawn / library (controls live in the swim-lane headers) ──
+
+// Load the built-agent registry → library chips for the Agent·Logic lane.
+function loadRegistryAgents() {
+  fetch(apiUrl('registry/agents/agents.yaml'))
+    .then(r => r.text())
+    .then(text => {
+      // Crude YAML parse — extract agent ids from "  <id>:" lines under "agents:"
+      const ids = [];
+      let inAgents = false;
+      for (const line of text.split('\n')) {
+        if (line.startsWith('agents:')) { inAgents = true; continue; }
+        if (inAgents && /^  [a-z][a-z0-9_]*:/.test(line)) ids.push(line.trim().replace(':', ''));
+        if (inAgents && line && !line.startsWith('  ')) break;
+      }
+      registryAgentIds = ids;
+      renderLaneLibraries();
+      if (fg && currentLens === 'padi' && viewMode !== 'agent') renderLens();
+    })
+    .catch(() => {});
+}
+
+function setLaneMsg(el, cls, txt) { if (el) { el.className = 'lane-msg ' + cls; el.textContent = txt; } }
+function clusterHasAgent(id) {
+  return !!(graphData && graphData.nodes && graphData.nodes.some(n => n.id === 'agent:' + id));
+}
+
+function clusterHasNode(nodeId) {
+  return !!(graphData && graphData.nodes && graphData.nodes.some(n => n.id === nodeId));
+}
+
+function findGraphNode(nodeId) {
+  return (graphData?.nodes || []).find(n => n.id === nodeId);
+}
+
+const NODE_PREFIX = { tool: 'tool', interface: 'iface', router: 'router' };
+
+function graphNodeLibrary(nodeType) {
+  let nodes = graphData?.nodes || [];
+  if (nodeType === 'intake') {
+    nodes = collapseIntake({ nodes, links: [] }).nodes;
+  }
+  return nodes
+    .filter(n => n.type === nodeType)
+    .map(n => ({
+      id: n.id.replace(NODE_PREFIX[nodeType] + ':', ''),
+      name: n.name || n.id.replace(NODE_PREFIX[nodeType] + ':', ''),
+      inCluster: clusterHasNode(n.id),
+    }));
+}
+
+function inspectGraphNode(spawnerKey, itemId) {
+  const node = findGraphNode(NODE_PREFIX[spawnerKey] + ':' + itemId);
+  if (node) openInspect(node);
+}
+
+// Shared actions, reused by both the spawn form and drag/click-to-add.
+async function spawnBlankAgent(id, desc, msgEl) {
+  id = (id || '').trim();
+  if (!id) { setLaneMsg(msgEl, 'err', 'Enter an agent_id'); return; }
+  if (!/^[a-z][a-z0-9_]*$/.test(id)) { setLaneMsg(msgEl, 'err', 'Invalid id (a-z, 0-9, _)'); return; }
+  if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
+  setLaneMsg(msgEl, '', 'Spawning…');
+  let body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent((desc || '').trim() || id + ' agent')}`;
+  if (currentCluster) body += `&cluster=${encodeURIComponent(currentCluster)}`;
+  fetch(apiUrl('/spawn'), { method: 'POST', headers: mutationHeaders(), body })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Spawn failed'); return; }
+      const suffix = data.already_exists ? 'already exists' : 'created';
+      setLaneMsg(msgEl, 'ok', `✓ ${data.agent_id} ${suffix}`);
+      setTimeout(() => {
+        loadRegistryAgents();
+        loadGraph(currentCluster);
+      }, 500);
+    })
+    .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
+}
+async function addAgentToCluster(agentId, msgEl) {
+  if (!currentCluster) { setLaneMsg(msgEl, 'err', 'No cluster selected'); return; }
+  if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
+  setLaneMsg(msgEl, '', 'Adding…');
+  const body = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(agentId)}`;
+  fetch(apiUrl('/add-agent'), { method: 'POST', headers: mutationHeaders(), body })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Failed'); return; }
+      setLaneMsg(msgEl, 'ok', data.already_member ? `✓ already in ${currentCluster}` : `✓ Added ${agentId}`);
+      setTimeout(() => loadGraph(currentCluster), 500);
+    })
+    .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
+}
+
+// Per-lane spawner adapter. Only `agent` is wired this round; the rest are stubs
+// that follow-on specs (Tools / Interfaces / Router) fill in — no UI rework.
+const LANE_SPAWNERS = {
+  agent: {
+    blankLabel: 'New agent',
+    formFields: [{ ph: 'agent_id' }, { ph: 'description (optional)' }],
+    spawnBlank(vals, msg) { spawnBlankAgent(vals[0], vals[1], msg); },
+    hideCanvasLibrary: true,
+    library() { return registryAgentIds.map(id => ({ id, name: id, inCluster: clusterHasAgent(id) })); },
+    onDrop(item, msg) { addAgentToCluster(item.id, msg); },
+  },
+  tool: {
+    blankLabel: 'New tool',
+    disabled: true,
+    library() { return graphNodeLibrary('tool'); },
+    onDrop(item, msg) { inspectGraphNode('tool', item.id); },
+  },
+  interface: {
+    blankLabel: 'New interface',
+    disabled: true,
+    library() { return graphNodeLibrary('intake'); },
+    onDrop(item, msg) { inspectGraphNode('interface', item.id); },
+  },
+  router: {
+    blankLabel: 'New router',
+    disabled: true,
+    library() { return graphNodeLibrary('router'); },
+    onDrop(item, msg) { inspectGraphNode('router', item.id); },
+  },
+};
+const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', router: 'router', agent: 'agent', tools: 'tool' };
+
+// Build the per-lane header controls once (above the canvas).
+function buildSwimlaneControls() {
+  const layer = document.getElementById('swimlane-controls');
+  if (!layer || layer.childElementCount) return;
+  PADI_LANES.forEach((lane, laneIndex) => {
+    const sk = LANE_KEY_TO_SPAWNER[lane.key];
+    const sp = LANE_SPAWNERS[sk] || {};
+    const row = document.createElement('div');
+    row.className = 'swimlane-ctrl-row';
+    row.dataset.lane = lane.key;
+    row.dataset.laneIndex = String(laneIndex);
+    row.dataset.spawner = sk;
+    row.style.setProperty('--lane-hue', `rgb(${lane.hue})`);
+
+    const header = document.createElement('div');
+    header.className = 'swimlane-header' + (sp.disabled ? ' disabled' : '');
+
+    const label = document.createElement('span');
+    label.className = 'swimlane-label';
+    label.textContent = lane.label;
+    header.appendChild(label);
+
+    const btn = document.createElement('button');
+    btn.className = 'lane-spawn-btn';
+    btn.textContent = '＋ ' + (sp.blankLabel || ('New ' + sk));
+    if (sp.disabled) { btn.disabled = true; btn.title = 'not wired yet'; }
+    header.appendChild(btn);
+
+    const form = document.createElement('div');
+    form.className = 'lane-form';
+    form.hidden = true;
+    const msg = document.createElement('span');
+    msg.className = 'lane-msg';
+    if (!sp.disabled && sp.formFields) {
+      const inputs = sp.formFields.map(f => { const i = document.createElement('input'); i.placeholder = f.ph; return i; });
+      inputs.forEach(i => form.appendChild(i));
+      const go = document.createElement('button');
+      go.textContent = 'Spawn';
+      go.addEventListener('click', () => sp.spawnBlank(inputs.map(i => i.value), msg));
+      form.appendChild(go);
+      btn.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) inputs[0].focus(); });
+    }
+    header.appendChild(form);
+    header.appendChild(msg);
+
+    const lib = document.createElement('div');
+    lib.className = 'lane-lib';
+    lib.dataset.lib = sk;
+    header.appendChild(lib);
+
+    row.appendChild(header);
+
+    // Drop target (active only while a chip of this lane is being dragged).
+    if (!sp.disabled) {
+      row.addEventListener('dragover', e => {
+        if (dragItem && dragItem.laneKey === lane.key) { e.preventDefault(); row.classList.add('drop-ok'); }
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drop-ok'));
+      row.addEventListener('drop', e => {
+        e.preventDefault(); row.classList.remove('drop-ok');
+        if (dragItem && dragItem.laneKey === lane.key && !dragItem.inCluster) sp.onDrop(dragItem, msg);
+      });
+    }
+    layer.appendChild(row);
+  });
+}
+
+// (Re)populate each lane's library strip; in-cluster items are dimmed + non-draggable.
+function renderLaneLibraries() {
+  const layer = document.getElementById('swimlane-controls');
+  if (!layer) return;
+  PADI_LANES.forEach(lane => {
+    const sk = LANE_KEY_TO_SPAWNER[lane.key];
+    const sp = LANE_SPAWNERS[sk] || {};
+    const lib = layer.querySelector(`.lane-lib[data-lib="${sk}"]`);
+    if (!lib) return;
+    lib.innerHTML = '';
+    if (!sp.library) return;
+    const items = sp.library();
+    if (!items.length) {
+      const e = document.createElement('span');
+      e.className = 'lane-msg'; e.style.opacity = '0.5'; e.textContent = `no built ${sk}s yet`;
+      lib.appendChild(e); return;
+    }
+    const msgEl = layer.querySelector(`.swimlane-ctrl-row[data-spawner="${sk}"] .lane-msg`);
+    items.forEach(it => {
+      const chip = document.createElement('div');
+      chip.className = 'lane-chip' + (it.inCluster ? ' in-cluster' : '');
+      chip.textContent = it.name;
+      if (it.inCluster) {
+        chip.title = 'already in cluster';
+      } else {
+        chip.draggable = true;
+        chip.title = 'drag into lane or click to add';
+        chip.addEventListener('dragstart', e => {
+          dragItem = { laneKey: lane.key, id: it.id, inCluster: false };
+          document.body.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('text/plain', it.id);
+        });
+        chip.addEventListener('dragend', () => {
+          dragItem = null;
+          document.body.classList.remove('dragging');
+          layer.querySelectorAll('.swimlane-ctrl-row').forEach(r => r.classList.remove('drop-ok'));
+        });
+        chip.addEventListener('click', () => sp.onDrop({ id: it.id }, msgEl));
+      }
+      lib.appendChild(chip);
+    });
+  });
+}
+
+// ── Refresh ──
+document.getElementById('refresh-btn').addEventListener('click', () => loadGraph(currentCluster));
+// unlock-edits button removed — Cloudflare Access handles auth at the edge
+
+// ── Chat toggle ── (wired after toggleSidecar is defined, see sidecar widget section)
+
+// ── Pulse (live traffic particles) ──
+let pulseInterval;
+function startPulse() {
+  pulseInterval = setInterval(() => {
+    fetch(apiUrl('/pulse'))
+      .then(r => r.json())
+      .then(p => {
+        if (fg && p.active_edges) {
+          liveNodeIds = new Set();
+          p.active_edges.forEach(e => { liveNodeIds.add(e.source); liveNodeIds.add(e.target); });
+          // Map collapsed intake nodes: if any member channel is live, the collapsed iface node is live too
+          if (graphData && graphData.nodes) {
+            graphData.nodes.forEach(n => {
+              if (n.type === 'intake' && n.members) {
+                if (n.members.some(m => liveNodeIds.has('chan:' + m) || liveNodeIds.has(m))) {
+                  liveNodeIds.add(n.id);
+                }
+              }
+            });
+          }
+          fg.linkColor(l => {
+            const s = lid(l.source), t = lid(l.target);
+            return liveNodeIds.has(s) || liveNodeIds.has(t) ? '#2ea043' : '#30363d';
+          });
+          fg.linkWidth(l => {
+            const s = lid(l.source), t = lid(l.target);
+            return liveNodeIds.has(s) || liveNodeIds.has(t) ? 2 : 1;
+          });
+          const pulseStr = p.bridge_alive ? '🌉' : '';
+          const authStr = p.authsome_alive ? '🔐' : '';
+          const llmStr = p.litellm_alive ? '🧠' : '';
+          const liveStr = [pulseStr, authStr, llmStr].filter(Boolean).join(' ');
+          const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
+          if (currentLens === 'padi' && viewMode !== 'agent') {
+            const displayNodeCount = fg.graphData().nodes.filter(n => !n.padiControl).length;
+            info.textContent = `${displayNodeCount} nodes · ${fg.graphData().links.length} links · lens: padi · swim lanes${clusterTag}`;
+          } else {
+            info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}${clusterTag}`;
+          }
+        }
+      })
+      .catch(() => {});
+  }, 3000);
+}
+
+// ── Inspect panel (feature A: node inspect/edit) ──
+let inspectedNode = null;
+let wireMode = false;
+let wireSource = null;
+let availableModels = [];
+
+function openInspect(node) {
+  inspectedNode = node;
+  const panel = document.getElementById('inspect');
+  const title = document.getElementById('inspect-title');
+  const body = document.getElementById('inspect-body');
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.textContent = '';
+
+  title.textContent = node.name;
+  title.style.color = COLORS[node.type] || '#c9d1d9';
+
+  let html = '';
+
+  // Read-only fields
+  html += `<div class="field"><label>ID</label><div class="ro">${node.id}</div></div>`;
+  html += `<div class="field"><label>Type</label><div class="ro">${node.type}</div></div>`;
+  html += `<div class="field"><label>State</label><div class="ro">${node.state}</div></div>`;
+
+  // Editable fields for agents
+  if (node.type === 'agent') {
+    html += `<div class="field"><label>Title</label><input id="insp-title" value="${esc(node.name)}"></div>`;
+    html += `<div class="field"><label>Role</label><input id="insp-role" value="${esc(node.role || '')}"></div>`;
+
+    // Model dropdown (feature D)
+    const modelOpts = availableModels.map(m =>
+      `<option value="${m}" ${m === node.model ? 'selected' : ''}>${m}</option>`
+    ).join('');
+    html += `<div class="field"><label>Model</label><select id="insp-model">
+      <option value="">— none —</option>${modelOpts}</select></div>`;
+
+    html += `<div class="field"><label>Safety Level</label>
+      <select id="insp-safety">
+        <option value="L0" ${(node.gates||{}).L0 ? 'selected' : ''}>L0</option>
+        <option value="L1" ${(node.gates||{}).L1 ? 'selected' : ''}>L1</option>
+        <option value="L2" ${(node.gates||{}).L2 ? 'selected' : ''}>L2</option>
+        <option value="L3" ${(node.gates||{}).L3 ? 'selected' : ''}>L3</option>
+      </select></div>`;
+
+    // Workspace (read-only, from CRM)
+    if (node.workspace) {
+      html += `<div class="field"><label>Workspace</label><div class="ro" style="word-break:break-all;font-size:11px;">${esc(node.workspace)}</div></div>`;
+    }
+  }
+
+  // Artifact
+  html += `<div class="field"><label>Artifact</label><div class="ro" style="word-break:break-all;font-size:11px;">${esc(node.artifact || '—')}</div></div>`;
+
+  // Contract (accepts/emits)
+  if (node.contract) {
+    html += `<div class="field"><label>Accepts</label><div>`;
+    (node.contract.accepts || []).forEach(a => {
+      html += `<span class="contract-tag accept">${a}</span>`;
+    });
+    html += `</div></div>`;
+    html += `<div class="field"><label>Emits</label><div>`;
+    (node.contract.emits || []).forEach(e => {
+      html += `<span class="contract-tag emit">${e}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Gates
+  if (node.gates) {
+    html += `<div class="field"><label>Gates</label><div class="gate-row">`;
+    ['L0','L1','L2','L3'].forEach(g => {
+      html += `<span class="gate-pill ${node.gates[g] ? 'pass' : ''}">${g} ${node.gates[g] ? '✓' : '✗'}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Links count
+  const links = graphData.links.filter(l => lid(l.source) === node.id || lid(l.target) === node.id);
+  html += `<div class="field"><label>Connections</label><div class="ro">${links.length} links</div></div>`;
+
+  // Focus button for agents
+  if (node.type === 'agent') {
+    html += `<div style="margin-top:10px;"><button id="insp-focus" class="small-action">🔍 Focus this agent</button></div>`;
+  }
+
+  body.innerHTML = html;
+  panel.classList.add('open');
+
+  // Attach focus button handler
+  const focusBtn = document.getElementById('insp-focus');
+  if (focusBtn) focusBtn.addEventListener('click', () => enterAgentFocus(node.id));
+}
+
+// ── Agent workbench panel ──
+function openAgentWorkbench(agentId, section = 'config') {
+  const agent = getNodeById(agentId);
+  if (!agent) return;
+  inspectedNode = agent;
+
+  const panel = document.getElementById('inspect');
+  const title = document.getElementById('inspect-title');
+  const body = document.getElementById('inspect-body');
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.textContent = '';
+
+  title.textContent = `${agent.name} workbench`;
+  title.style.color = COLORS.agent || '#c9d1d9';
+
+  body.innerHTML = `
+    <div class="focus-tabs">
+      <button data-section="config" class="focus-tab ${section === 'config' ? 'active' : ''}">Config</button>
+      <button data-section="tools" class="focus-tab ${section === 'tools' ? 'active' : ''}">Tools</button>
+      <button data-section="evals" class="focus-tab ${section === 'evals' ? 'active' : ''}">Evals</button>
+      <button data-section="runtime" class="focus-tab ${section === 'runtime' ? 'active' : ''}">Runtime</button>
+      <button data-section="run" class="focus-tab ${section === 'run' ? 'active' : ''}">Run</button>
+      <button id="run-sidecar-btn" class="focus-tab" style="margin-left:auto;border-color:#2ea043;color:#3fb950;">▶ Sidecar</button>
+    </div>
+    <div id="focus-section"></div>
+  `;
+
+  panel.classList.add('open');
+  document.querySelectorAll('.focus-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.focus-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderFocusSection(agentId, btn.dataset.section);
+    });
+  });
+  // Wire "Run in Sidecar" button
+  document.getElementById('run-sidecar-btn')?.addEventListener('click', () => {
+    openSidecar(focusedAgentId, 'agent');
+  });
+  renderFocusSection(agentId, section);
+}
+
+function renderFocusSection(agentId, section) {
+  const target = document.getElementById('focus-section');
+  if (!target) return;
+  const agent = getNodeById(agentId);
+  const clean = cleanAgentId(agentId);
+
+  if (section === 'config') {
+    const cfg = focusedAgentConfig?.config || focusedAgentConfig?.agent || focusedAgentConfig || {};
+    const model = cfg.model || agent?.model || '';
+    const instruction = cfg.instruction || '';
+    const description = cfg.description || agent?.name || clean;
+    const modelOpts = availableModels.map(m =>
+      `<option value="${esc(m)}" ${m === model ? 'selected' : ''}>${esc(m)}</option>`
+    ).join('');
+    target.innerHTML = `
+      <div class="field"><label>Agent ID</label><div class="ro">${esc(clean)}</div></div>
+      <div class="field"><label>Description</label><input id="focus-description" value="${esc(description)}"></div>
+      <div class="field"><label>Model</label><select id="focus-model"><option value="">— none —</option>${modelOpts}</select></div>
+      <div class="field"><label>Instruction</label><textarea id="focus-instruction" rows="8">${esc(instruction)}</textarea></div>
+      <div class="field"><label>Tools</label><div id="focus-tool-list" style="max-height:160px;overflow:auto;"></div></div>
+      <button id="focus-save-config" class="small-action">Save config</button>
+    `;
+    // Populate tools as checkboxes
+    const toolList = document.getElementById('focus-tool-list');
+    const selectedTools = cfg.tools || [];
+    const allTools = focusedAgentTools.length ? focusedAgentTools : (cfg.tools || []);
+    // Deduplicate
+    const toolSet = new Set([...selectedTools, ...allTools.map(t => typeof t === 'string' ? t : t.name || t.id || JSON.stringify(t))]);
+    if (toolSet.size === 0) {
+      toolList.innerHTML = '<div class="ro">No tools loaded. Click Tools tab to load.</div>';
+    } else {
+      let html = '';
+      toolSet.forEach(t => {
+        const checked = selectedTools.includes(t) ? 'checked' : '';
+        html += `<label class="tool-check"><input type="checkbox" class="focus-tool-check" value="${esc(t)}" ${checked}> ${esc(t)}</label>`;
+      });
+      toolList.innerHTML = html;
+    }
+    attachFocusConfigHandlers(agentId);
+  } else if (section === 'tools') {
+    const tools = focusedAgentTools.length ? focusedAgentTools : (focusedAgentConfig?.config?.tools || focusedAgentConfig?.tools || []);
+    const toolNames = Array.isArray(tools) ? tools.map(t => typeof t === 'string' ? t : (t.name || t.id || JSON.stringify(t))) : [];
+
+    // Group tools by prefix (e.g. forsch.adk_components.tools.X → X)
+    const groups = {};
+    toolNames.forEach(t => {
+      const parts = t.split('.');
+      const short = parts[parts.length - 1];
+      const prefix = parts.length > 1 ? parts.slice(0, -1).join('.') : '(root)';
+      (groups[prefix] = groups[prefix] || []).push({ full: t, short });
+    });
+
+    let toolsHtml = `<div class="field"><label>Tools (${toolNames.length})</label></div>`;
+    if (toolNames.length === 0) {
+      toolsHtml += '<div class="ro" style="padding:8px 0;">No tools assigned to this agent.</div>';
+    } else {
+      for (const [prefix, items] of Object.entries(groups)) {
+        const label = prefix === '(root)' ? 'Other' : prefix.split('.').pop();
+        toolsHtml += `<div style="margin-bottom:8px;"><div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">${esc(label)} (${items.length})</div>`;
+        items.forEach(t => {
+          toolsHtml += `<div class="tool-check" style="padding:2px 0;font-size:11px;">
+            <span style="color:#f0883e;">&#9679;</span> ${esc(t.short)}
+            ${t.short !== t.full ? `<span style="color:#484f58;font-size:10px;margin-left:4px;">${esc(t.full)}</span>` : ''}
+          </div>`;
+        });
+        toolsHtml += '</div>';
+      }
+    }
+    target.innerHTML = toolsHtml;
+  } else if (section === 'evals') {
+    const evalsets = focusedAgentEvalsets || [];
+    const lastRun = focusedAgentEval;
+    const statusClass = lastRun?.ok ? 'pass' : (lastRun?.error ? 'fail' : 'unknown');
+    const statusText = lastRun?.ok ? 'PASS' : (lastRun?.error ? 'FAIL' : 'No runs');
+    target.innerHTML = `
+      <div class="field"><label>Evalsets (${evalsets.length})</label>
+        <pre class="ro json-block">${esc(JSON.stringify(evalsets, null, 2))}</pre>
+      </div>
+      <button id="focus-run-evals-btn" class="small-action">Run evals</button>
+      <div style="margin-top:8px;">
+        <span class="eval-status ${statusClass}">${statusText}</span>
+      </div>
+      <div class="field" style="margin-top:8px;"><label>Last eval run</label>
+        <pre class="ro json-block">${esc(JSON.stringify(lastRun || { info: 'no runs yet' }, null, 2))}</pre>
+      </div>
+    `;
+    attachFocusEvalHandlers(agentId);
+  } else if (section === 'runtime') {
+    target.innerHTML = `
+      <div class="field"><label>Model</label><div class="ro">${esc(agent?.model || '—')}</div></div>
+      <div class="field"><label>State</label><div class="ro">${esc(agent?.state || '—')}</div></div>
+      <div class="field"><label>Role</label><div class="ro">${esc(agent?.role || 'plain')}</div></div>
+      <div class="field"><label>Runtime config</label>
+        <div class="ro" style="font-size:11px;color:#8b949e;">Temperature, output tokens, safety, session/cache config. Wire after core shape is verified.</div>
+      </div>
+    `;
+  } else if (section === 'run') {
+    const verifyStatus = focusedAgentVerify?.ok ? 'pass' : (focusedAgentVerify?.error ? 'fail' : 'unknown');
+    const verifyText = focusedAgentVerify?.ok ? 'PASS' : (focusedAgentVerify?.error ? 'FAIL' : 'Not run');
+    target.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button id="focus-verify-btn" class="small-action">Verify</button>
+        <button id="focus-generate-btn" class="small-action danger-light">Generate</button>
+      </div>
+      <div class="field"><label>Verify status</label>
+        <span class="eval-status ${verifyStatus}">${verifyText}</span>
+        <pre class="ro json-block" style="margin-top:6px;">${esc(JSON.stringify(focusedAgentVerify || { info: 'not run yet' }, null, 2))}</pre>
+      </div>
+    `;
+    attachFocusRunHandlers(agentId);
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatHubertText(text) {
+  const raw = String(text || '');
+  const chunks = raw.split('```');
+  return chunks.map((chunk, i) => {
+    if (i % 2 === 1) return '<pre><code>' + esc(chunk.trim()) + '</code></pre>';
+    return esc(chunk).replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  }).join('');
+}
+function cleanAgentId(agentId) { return agentId.replace('agent:', ''); }
+function getNodeById(id) { return (graphData?.nodes || []).find(n => n.id === id) || null; }
+function focusNodeId(agentId, suffix) { return 'focus:' + agentId + ':' + suffix; }
+
+// ── View crumb ──
+function updateViewCrumb() {
+  const text = document.getElementById('view-crumb-text');
+  const back = document.getElementById('back-project-btn');
+  if (!text || !back) return;
+  if (viewMode === 'agent' && focusedAgentId) {
+    text.textContent = `Project: ${currentCluster || '—'} / Agent: ${cleanAgentId(focusedAgentId)}`;
+    back.style.display = 'inline-block';
+  } else {
+    text.textContent = currentCluster ? `Project: ${currentCluster}` : 'Project view';
+    back.style.display = 'none';
+  }
+}
+document.getElementById('back-project-btn').addEventListener('click', exitAgentFocus);
+
+document.getElementById('inspect-close').addEventListener('click', () => {
+  document.getElementById('inspect').classList.remove('open');
+  inspectedNode = null;
+});
+
+document.getElementById('inspect-save').addEventListener('click', async () => {
+  if (!inspectedNode || inspectedNode.type !== 'agent') return;
+  const agentId = inspectedNode.id.replace('agent:', '');
+  const saveMsg = document.getElementById('inspect-save-msg');
+  const fields = {};
+  const titleEl = document.getElementById('insp-title');
+  const roleEl = document.getElementById('insp-role');
+  const modelEl = document.getElementById('insp-model');
+  const safetyEl = document.getElementById('insp-safety');
+
+  // Collect changed fields
+  if (titleEl && titleEl.value !== inspectedNode.name) fields.title = titleEl.value;
+  if (roleEl && roleEl.value !== (inspectedNode.role || '')) fields.role = roleEl.value;
+  if (modelEl && modelEl.value !== (inspectedNode.model || '')) fields.model = modelEl.value;
+  if (safetyEl) {
+    const level = safetyEl.value;
+    const newGates = {L0: level >= 'L0', L1: level >= 'L1', L2: level >= 'L2', L3: level >= 'L3'};
+    // Map safety level to status
+    if (level === 'L0') fields.status = 'draft';
+    else if (level === 'L1') fields.status = 'queued';
+    else if (level === 'L2') fields.status = 'in_progress';
+    else fields.status = 'complete';
+  }
+
+  if (!Object.keys(fields).length) {
+    saveMsg.className = 'save-msg'; saveMsg.textContent = 'No changes'; return;
+  }
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err'; saveMsg.textContent = 'Edits locked'; return;
+  }
+
+  // Save each field
+  saveMsg.className = 'save-msg'; saveMsg.textContent = 'Saving...';
+  let saved = 0, total = Object.keys(fields).length;
+  for (const [field, value] of Object.entries(fields)) {
+    const body = `agent_id=${encodeURIComponent(agentId)}&field=${encodeURIComponent(field)}&value=${encodeURIComponent(value)}`;
+    fetch(apiUrl('/save-agent'), { method: 'POST', headers: mutationHeaders(), body })
+      .then(r => r.json())
+      .then(data => {
+        saved++;
+        if (data.error) { saveMsg.className = 'save-msg err'; saveMsg.textContent = `Error: ${data.error}`; return; }
+        if (saved === total) {
+          saveMsg.className = 'save-msg ok'; saveMsg.textContent = `Saved ${saved} field(s)`;
+          // Update local node
+          if (fields.title) inspectedNode.name = fields.title;
+          if (fields.model) inspectedNode.model = fields.model;
+          if (fields.role) inspectedNode.role = fields.role;
+          if (fields.status) inspectedNode.state = fields.status;
+          fg.graphData(graphData);
+          setTimeout(() => { saveMsg.textContent = ''; }, 3000);
+        }
+      })
+      .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+  }
+});
+
+// ── Wire mode (feature C: contract-checked wiring) ──
+document.getElementById('inspect-wire').addEventListener('click', () => {
+  if (!inspectedNode) return;
+  wireMode = true;
+  wireSource = inspectedNode;
+  document.getElementById('wire-status').classList.add('active');
+  document.getElementById('inspect-wire').classList.add('active');
+  document.getElementById('inspect-wire').textContent = 'Wiring...';
+});
+
+document.getElementById('wire-cancel').addEventListener('click', () => {
+  wireMode = false;
+  wireSource = null;
+  document.getElementById('wire-status').classList.remove('active');
+  document.getElementById('inspect-wire').classList.remove('active');
+  document.getElementById('inspect-wire').textContent = 'Wire to...';
+});
+
+async function handleWireClick(node) {
+  if (!wireMode || !wireSource || node.id === wireSource.id) return;
+  wireMode = false;
+  document.getElementById('wire-status').classList.remove('active');
+  document.getElementById('inspect-wire').classList.remove('active');
+  document.getElementById('inspect-wire').textContent = 'Wire to...';
+
+  const source = wireSource.id;
+  const target = node.id;
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.className = 'save-msg'; saveMsg.textContent = `Checking contract: ${source} → ${target}...`;
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err'; saveMsg.textContent = 'Edits locked'; wireSource = null; return;
+  }
+
+  const body = `source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`;
+  fetch(apiUrl('/wire'), { method: 'POST', headers: mutationHeaders(), body })
+    .then(r => r.json())
+    .then(data => {
+      if (data.valid) {
+        saveMsg.className = 'save-msg ok';
+        saveMsg.textContent = `✓ Contract OK: ${data.message || source + ' → ' + target}`;
+        // Add link to graph
+        graphData.links.push({ source, target, kind: 'wired' });
+        fg.graphData(graphData);
+      } else {
+        saveMsg.className = 'save-msg err';
+        saveMsg.textContent = `✗ ${data.error || data.message || 'incompatible contracts'}`;
+        if (data.source_contract) {
+          saveMsg.textContent += ` (accepts: ${data.source_contract.accepts.join(', ')})`;
+        }
+      }
+      wireSource = null;
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; wireSource = null; });
+}
+
+// ── Unified sidecar widget (Agent + Hubert tabs) ──
+// ADK_CHAT_BASE is the Gradio iframe URL. serve.py reverse-proxies /chat/ to the
+// ADK bridge at 127.0.0.1:8800, so the iframe loads on the same hostname.
+let ADK_CHAT_BASE = window.ADK_CHAT_BASE || '/chat/';
+let __chatToken = '';
+async function fetchChatToken() {
+  try {
+    const r = await fetch(apiUrl('/chat-token'), { headers: graphSecretHeaders() });
+    if (r.ok) {
+      const d = await r.json();
+      __chatToken = d.token || '';
+      if (d.base) ADK_CHAT_BASE = d.base;
+    }
+  } catch(_) {}
+}
+let sidecarOpen = false;
+let sidecarTab = 'agent';
+let sidecarAgentId = null;
+let hubertSessionId = null;
+let hubertMessages = [{
+  role: 'system',
+  text: 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.'
+}];
+let hubertSending = false;
+let chatModelHealth = {};
+let chatModelSource = 'fallback';
+let pendingHubertRun = null;
+let pendingHubertTimers = [];
+// CHAT_MODEL_FALLBACKS is only the pre-load safety net. The sidecar replaces
+// it with the live /models payload from serve.py as soon as the fetch returns.
+const CHAT_MODEL_FALLBACKS = [
+  'default',
+  'mimo/mimo-auto',
+  'openai/gpt-5.4',
+  'openai/gpt-5.3-codex-spark',
+  'ollama-cloud/deepseek-v4-flash',
+  'ollama-cloud/deepseek-v4-pro',
+  'ollama-cloud/minimax-m2.7',
+  'ollama-cloud/kimi-k2.6',
+  'ollama-cloud/qwen3-coder:480b',
+  'ollama-cloud/glm-5.1',
+  'ollama-cloud/glm-5.2',
+  'google/gemini-3.1-pro-preview',
+  'google/gemini-3-flash-preview',
+  'minimax/MiniMax-M3',
+  'minimax/MiniMax-M3-thinking',
+  'cerebras/gpt-oss-120b',
+  'xiaomi/mimo-v2.5',
+];
+const CHAT_MODEL_LABELS = {
+  'default': 'Default',
+  'openai/gpt-5.5': 'OpenAI gpt-5.5',
+  'openai/gpt-5.4': 'OpenAI gpt-5.4',
+  'openai/gpt-5.3-codex-spark': 'Codex Spark',
+  'openai/gpt-5.3-codex': 'Codex',
+  'ollama-cloud/deepseek-v4-flash': 'Ollama Cloud DeepSeek flash',
+  'ollama-cloud/deepseek-v4-pro': 'Ollama Cloud DeepSeek pro',
+  'ollama-cloud/minimax-m2.7': 'Ollama Cloud MiniMax',
+  'ollama-cloud/kimi-k2.6': 'Ollama Cloud Kimi',
+  'ollama-cloud/qwen3-coder:480b': 'Ollama Cloud Qwen coder',
+  'google/gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
+  'google/gemini-3-flash-preview': 'Gemini 3 Flash',
+  'minimax/MiniMax-M3': 'MiniMax M3',
+  'minimax/MiniMax-M3-thinking': 'MiniMax M3 Thinking',
+  'cerebras/gpt-oss-120b': 'Cerebras GPT OSS 120B',
+  'xiaomi/mimo-v2.5': 'Xiaomi MiMo v2.5',
+  'mimo-v2.5': 'MiMo v2.5',
+  'mimo-v2.5-pro': 'MiMo v2.5 Pro',
+  'mimo/mimo-auto': 'MiMo auto'
+};
+
+function chatModelLabel(model) {
+  return CHAT_MODEL_LABELS[model] || model;
+}
+
+function normaliseChatModel(model) {
+  if (model === 'codex/gpt-5.5') return 'openai/gpt-5.5';
+  if (model === 'codex/gpt-5.4') return 'openai/gpt-5.4';
+  if (model === 'codex/gpt-5.3-codex-spark') return 'openai/gpt-5.3-codex-spark';
+  if (model === 'gpt-5.5') return 'openai/gpt-5.5';
+  if (model === 'gpt-5.4') return 'openai/gpt-5.4';
+  if (model === 'deepseek-v4-flash') return 'ollama-cloud/deepseek-v4-flash';
+  if (model === 'deepseek-v4-pro') return 'ollama-cloud/deepseek-v4-pro';
+  return model;
+}
+
+function modelProviderLabel(model) {
+  if (model === 'default') return 'Default';
+  const provider = (model || '').split('/')[0] || 'Other';
+  return {
+    openai: 'OpenAI / Codex',
+    'ollama-cloud': 'Ollama Cloud',
+    google: 'Google',
+    minimax: 'MiniMax',
+    cerebras: 'Cerebras',
+    xiaomi: 'Xiaomi',
+    mimo: 'MiMo'
+  }[provider] || provider;
+}
+
+function modelStateLabel(model) {
+  const state = chatModelHealth[model]?.state || 'available';
+  if (state === 'verified') return 'ready';
+  if (state === 'ready') return 'ready';
+  if (state === 'slow') return 'slow';
+  if (state === 'flaky') return 'flaky';
+  if (state === 'error') return 'error';
+  return 'listed';
+}
+
+function updateChatModelStatus(stateOverride, noteOverride) {
+  const sel = document.getElementById('chat-model-select');
+  const el = document.getElementById('chat-model-status');
+  if (!sel || !el) return;
+  const model = sel.value || 'default';
+  const health = chatModelHealth[model] || { state: 'available', note: 'listed by ' + chatModelSource };
+  const state = stateOverride || health.state || 'available';
+  const note = noteOverride || health.note || 'listed by ' + chatModelSource;
+  el.className = state;
+  el.textContent = `${chatModelLabel(model)}: ${state} · ${note}`;
+}
+
+function renderChatModelOptions(payload) {
+  const sel = document.getElementById('chat-model-select');
+  if (!sel) return;
+  const current = sel.value || localStorage.getItem('hubert-chat-model') || 'default';
+  const models = Array.isArray(payload) ? payload : (payload && payload.models);
+  chatModelSource = Array.isArray(payload) ? 'fallback' : (payload?.source || 'mimo-cli');
+  chatModelHealth = Array.isArray(payload) ? chatModelHealth : (payload?.health || {});
+  const safeModels = Array.from(new Set((models && models.length ? models : CHAT_MODEL_FALLBACKS)
+    .filter(m => typeof m === 'string' && m.trim())
+    .map(normaliseChatModel)));
+  if (!safeModels.includes('default')) safeModels.unshift('default');
+  const groups = new Map();
+  safeModels.forEach(model => {
+    const provider = modelProviderLabel(model);
+    if (!groups.has(provider)) groups.set(provider, []);
+    groups.get(provider).push(model);
+  });
+  sel.innerHTML = Array.from(groups.entries()).map(([provider, groupModels]) => {
+    const options = groupModels.map(m => {
+      const state = modelStateLabel(m);
+      return `<option value="${esc(m)}">${esc(chatModelLabel(m))} (${esc(state)})</option>`;
+    }).join('');
+    return `<optgroup label="${esc(provider)}">${options}</optgroup>`;
+  }).join('');
+  const nextCurrent = CHAT_MODEL_LABELS[current] ? current : {
+    'codex/gpt-5.5': 'openai/gpt-5.5',
+    'codex/gpt-5.4': 'openai/gpt-5.4',
+    'codex/gpt-5.3-codex-spark': 'openai/gpt-5.3-codex-spark',
+    'gpt-5.5': 'openai/gpt-5.5',
+    'gpt-5.4': 'openai/gpt-5.4',
+    'deepseek-v4-flash': 'ollama-cloud/deepseek-v4-flash',
+    'deepseek-v4-pro': 'ollama-cloud/deepseek-v4-pro'
+  }[current] || current;
+  sel.value = safeModels.includes(nextCurrent) ? nextCurrent : 'default';
+  updateChatModelStatus();
+}
+
+function initSidecarResize() {
+  const box = document.getElementById('sidecar-widget');
+  const handle = document.getElementById('sidecar-resize-handle');
+  if (!box || !handle) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem('hubert-sidecar-size') || '{}');
+    if (Number.isFinite(saved.width) && Number.isFinite(saved.height)) {
+      box.style.setProperty('--sidecar-width', saved.width + 'px');
+      box.style.setProperty('--sidecar-height', saved.height + 'px');
+      box.classList.add('user-sized');
+    }
+  } catch (_) {}
+  handle.addEventListener('dblclick', () => {
+    box.style.removeProperty('--sidecar-width');
+    box.style.removeProperty('--sidecar-height');
+    box.classList.remove('user-sized');
+    localStorage.removeItem('hubert-sidecar-size');
+  });
+  handle.addEventListener('pointerdown', (ev) => {
+    if (window.matchMedia('(max-width: 720px)').matches) return;
+    ev.preventDefault();
+    handle.setPointerCapture(ev.pointerId);
+    const rect = box.getBoundingClientRect();
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    const onMove = (moveEv) => {
+      const maxWidth = Math.max(420, window.innerWidth - 48);
+      const maxHeight = Math.max(460, window.innerHeight - 80);
+      const width = Math.min(maxWidth, Math.max(420, startWidth - (moveEv.clientX - startX)));
+      const height = Math.min(maxHeight, Math.max(460, startHeight + (moveEv.clientY - startY)));
+      box.style.setProperty('--sidecar-width', Math.round(width) + 'px');
+      box.style.setProperty('--sidecar-height', Math.round(height) + 'px');
+      box.classList.add('user-sized');
+    };
+    const onUp = () => {
+      const next = {
+        width: Math.round(box.getBoundingClientRect().width),
+        height: Math.round(box.getBoundingClientRect().height)
+      };
+      localStorage.setItem('hubert-sidecar-size', JSON.stringify(next));
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.removeEventListener('pointercancel', onUp);
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+    handle.addEventListener('pointercancel', onUp);
+  });
+}
+initSidecarResize();
+
+// Tab switching
+document.querySelectorAll('.sidecar-tab').forEach(btn => {
+  btn.addEventListener('click', () => switchSidecarTab(btn.dataset.tab));
+});
+
+function switchSidecarTab(tab) {
+  sidecarTab = tab;
+  document.querySelectorAll('.sidecar-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('sidecar-panel-agent').classList.toggle('active', tab === 'agent');
+  document.getElementById('sidecar-panel-hubert').classList.toggle('active', tab === 'hubert');
+  document.getElementById('sidecar-widget').classList.toggle('vibe-wide', tab === 'hubert');
+  renderHubertContext();
+  if (tab === 'hubert') {
+    setTimeout(() => document.getElementById('hubert-input')?.focus(), 100);
+  }
+}
+
+function openSidecar(agentId, defaultTab) {
+  const clean = (agentId || '').replace(/^agent:/, '');
+  sidecarAgentId = clean;
+  document.getElementById('sidecar-agent-label').textContent = clean || '';
+  if (clean) {
+    const url = new URL(ADK_CHAT_BASE, window.location.origin);
+    url.searchParams.set('agent', clean);
+    if (__chatToken) url.searchParams.set('chat_token', __chatToken);
+    document.getElementById('sidecar-agent-frame').src = url.toString();
+  }
+  document.getElementById('sidecar-widget').classList.add('open');
+  sidecarOpen = true;
+  switchSidecarTab(defaultTab || sidecarTab);
+}
+
+function closeSidecar() {
+  document.getElementById('sidecar-widget').classList.remove('open');
+  sidecarOpen = false;
+}
+
+document.getElementById('sidecar-close').addEventListener('click', closeSidecar);
+
+// Wire old chat-toggle button to open sidecar on Hubert tab
+function toggleSidecar() {
+  if (sidecarOpen && sidecarTab === 'hubert') {
+    closeSidecar();
+  } else {
+    openSidecar(sidecarAgentId || '', 'hubert');
+  }
+}
+document.getElementById('chat-toggle').addEventListener('click', toggleSidecar);
+
+// Load models for the chat model selector
+async function loadChatModels() {
+  renderChatModelOptions(CHAT_MODEL_FALLBACKS);
+  try {
+    const r = await fetch(apiUrl('/models'));
+    if (r.ok) {
+      const d = await r.json();
+      renderChatModelOptions(d || CHAT_MODEL_FALLBACKS);
+    }
+  } catch(_) {
+    updateChatModelStatus('error', 'could not load live model list');
+  }
+}
+loadChatModels();
+document.getElementById('chat-model-select')?.addEventListener('change', (ev) => {
+  localStorage.setItem('hubert-chat-model', ev.target.value || 'default');
+  updateChatModelStatus();
+});
+
+// Hubert chat tab
+function renderHubertContext() {
+  const el = document.getElementById('hubert-context-line');
+  if (!el) return;
+  const selected = inspectedNode ? `${inspectedNode.name || inspectedNode.id} (${inspectedNode.type || 'node'})` : 'nothing selected';
+  const graph = graphData ? `${graphData.node_count || 0} nodes, ${graphData.link_count || 0} links` : 'graph loading';
+  const cluster = currentCluster || 'no cluster';
+  el.innerHTML = `<strong>${esc(cluster)}</strong> · ${esc(selected)} · ${esc(graph)}`;
+}
+
+function hubertRoleLabel(role) {
+  if (role === 'assistant') return 'Hubert';
+  if (role === 'user') return 'You';
+  if (role === 'pending') return 'Hubert';
+  if (role === 'error') return 'Error';
+  return 'Status';
+}
+
+function clearPendingHubertRun() {
+  pendingHubertTimers.forEach(t => clearTimeout(t));
+  pendingHubertTimers = [];
+  pendingHubertRun = null;
+}
+
+function startPendingHubertRun(model, contextLabel) {
+  clearPendingHubertRun();
+  pendingHubertRun = {
+    state: 'running',
+    model: model || 'default',
+    startedAt: Date.now(),
+    stages: [
+      { label: 'request queued', state: 'active', at_ms: 0 },
+      { label: contextLabel || 'workspace context', state: 'pending' },
+      { label: `${chatModelLabel(model || 'default')} selected`, state: 'pending' },
+      { label: 'MiMo CLI running', state: 'pending' }
+    ],
+    tools: []
+  };
+  const advance = (index) => {
+    if (!pendingHubertRun) return;
+    pendingHubertRun.stages.forEach((stage, i) => {
+      if (i < index) stage.state = 'done';
+      else if (i === index) {
+        stage.state = 'active';
+        stage.at_ms = Date.now() - pendingHubertRun.startedAt;
+      }
+    });
+    renderHubertMessages();
+  };
+  pendingHubertTimers.push(setTimeout(() => advance(1), 180));
+  pendingHubertTimers.push(setTimeout(() => advance(2), 420));
+  pendingHubertTimers.push(setTimeout(() => advance(3), 900));
+}
+
+function normalizeRunReceipt(data, fallbackModel, ok) {
+  const events = Array.isArray(data?.events) ? data.events : [];
+  const tools = Array.isArray(data?.tools) ? data.tools : [];
+  const terminal = data?.progress?.current_event || events[events.length - 1] || {};
+  return {
+    state: ok ? 'complete' : 'error',
+    model: data?.model || fallbackModel || 'default',
+    elapsed_ms: Number(data?.elapsed_ms || terminal.at_ms || 0),
+    stages: events.slice(-8).map((event, index, arr) => ({
+      label: event.label || event.type || 'event',
+      state: ok ? 'done' : (index === arr.length - 1 ? 'error' : 'done'),
+      at_ms: Number(event.at_ms || 0),
+      detail: event.detail || event.preview || '',
+      type: event.type || ''
+    })),
+    tools: tools.slice(-10).map(tool => ({
+      name: tool.name || tool.tool || tool.label || 'tool',
+      status: tool.status || tool.type || 'event',
+      at_ms: Number(tool.at_ms || 0),
+      preview: tool.preview || tool.detail || ''
+    })),
+    diagnostic: data?.diagnostic || null
+  };
+}
+
+function renderRunPanel(run) {
+  if (!run) return '';
+  const elapsed = run.elapsed_ms ? `${Math.max(1, Math.round(run.elapsed_ms / 1000))}s` : 'running';
+  const stages = (run.stages || []).length ? run.stages : [{ label: 'working', state: run.state || 'active' }];
+  const stageHtml = stages.map(stage => {
+    const state = stage.state || (run.state === 'error' ? 'error' : 'done');
+    const timing = Number.isFinite(stage.at_ms) && stage.at_ms > 0 ? `${Math.round(stage.at_ms / 1000)}s` : '';
+    const detail = stage.detail ? ` title="${esc(stage.detail)}"` : '';
+    return `<div class="hubert-run-stage ${esc(state)}"${detail}><span class="dot"></span><strong>${esc(stage.label || 'event')}</strong><small>${esc(timing)}</small></div>`;
+  }).join('');
+  const toolHtml = (run.tools || []).length ? `
+    <div class="hubert-tool-list">
+      ${(run.tools || []).map(tool => `
+        <div class="hubert-tool-row" title="${esc(tool.preview || '')}">
+          <strong>${esc(tool.name || 'tool')}</strong>
+          <span>${esc(tool.status || 'used')}</span>
+        </div>
+      `).join('')}
+    </div>` : '';
+  const diagnosticHtml = run.diagnostic ? `
+    <div class="hubert-error-detail">
+      <div class="error-code">${esc(run.diagnostic.code || 'CHAT_FAILED')}</div>
+      <div>${esc(run.diagnostic.message || '')}</div>
+      <div>${esc(run.diagnostic.next_action || '')}</div>
+    </div>` : '';
+  return `
+    <div class="hubert-run-card">
+      <div class="hubert-run-head"><span>${esc(chatModelLabel(run.model || 'default'))}</span><span>${esc(elapsed)}</span></div>
+      <div class="hubert-run-track">${stageHtml}</div>
+      ${toolHtml}
+      ${diagnosticHtml}
+    </div>
+  `;
+}
+
+function chatFailureText(status, data, err) {
+  if (err) return `Network error: ${err.message || err}`;
+  const diagnostic = data?.diagnostic || {};
+  const message = diagnostic.message || data?.error || 'Chat request failed';
+  if (status === 401) return 'Cloudflare Access did not authenticate this chat request. Refresh the graph and try again.';
+  if (status === 403) return 'This chat session belongs to another browser session. Refresh to start a clean one.';
+  if (status === 429) return 'The chat rate limit is protecting the box. Wait a minute and send it again.';
+  if (status === 400) return message;
+  if (status >= 500) return `MiMo could not finish the run: ${message}`;
+  return message;
+}
+
+function renderHubertMessages() {
+  const el = document.getElementById('hubert-messages');
+  const rows = hubertMessages.map(m => {
+    const role = esc(m.role);
+    return `<div class="hubert-msg ${role}"><div class="msg-meta">${esc(hubertRoleLabel(m.role))}</div><div class="msg-body">${formatHubertText(m.text)}${renderRunPanel(m.run)}</div></div>`;
+  });
+  if (hubertSending && pendingHubertRun) {
+    rows.push(`<div class="hubert-msg pending"><div class="msg-meta">Hubert</div><div class="msg-body">working${renderRunPanel(pendingHubertRun)}</div></div>`);
+  }
+  el.innerHTML = rows.join('');
+  el.scrollTop = el.scrollHeight;
+  renderHubertContext();
+}
+
+async function sendHubertMessage() {
+  const input = document.getElementById('hubert-input');
+  const text = input.value.trim();
+  if (!text || hubertSending) return;
+  if (!(await ensureGraphSecret())) {
+    hubertMessages.push({
+      role: 'error',
+      text: 'Edits are locked. Unlock edits before asking Hubert to act on the graph.',
+      run: normalizeRunReceipt({
+        model: document.getElementById('chat-model-select')?.value || 'default',
+        diagnostic: { code: 'EDITS_LOCKED', message: 'Mutation auth is not available.', next_action: 'Unlock edits and retry.' },
+        events: [{ label: 'edit auth missing', type: 'auth', at_ms: 0 }]
+      }, null, false)
+    });
+    renderHubertMessages();
+    return;
+  }
+  hubertSending = true;
+  hubertMessages.push({ role: 'user', text });
+  input.value = '';
+  input.style.height = '';
+  document.getElementById('hubert-send').disabled = true;
+
+  // Build context
+  let context = '';
+  if (currentCluster) context += '[cluster: ' + currentCluster + '] ';
+  if (inspectedNode) context += '[selected: ' + inspectedNode.name + ' (' + inspectedNode.type + ')] ';
+  if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
+
+  const modelSel = document.getElementById('chat-model-select');
+  const model = modelSel ? modelSel.value : 'default';
+  const contextLabel = currentCluster ? `${currentCluster} context` : 'workspace context';
+  startPendingHubertRun(model, contextLabel);
+  renderHubertMessages();
+
+  try {
+    const hdrs = { 'Content-Type': 'application/json', ...graphSecretHeaders() };
+    updateChatModelStatus('running', 'MiMo is working in the live workspace');
+    const body = JSON.stringify({
+      message: context + text,
+      session_id: hubertSessionId,
+      model
+    });
+    const r = await fetch(apiUrl('/chat'), { method: 'POST', headers: hdrs, body });
+    let data = {};
+    try {
+      data = await r.json();
+    } catch (_) {
+      data = { ok: false, error: `HTTP ${r.status}` };
+    }
+    if (data.ok) {
+      hubertMessages.push({
+        role: 'assistant',
+        text: data.response || '(no response)',
+        run: normalizeRunReceipt(data, model, true)
+      });
+      hubertSessionId = data.session_id || hubertSessionId;
+      if (data.model) {
+        chatModelHealth[data.model] = {
+          state: 'verified',
+          note: `last reply in ${Math.max(1, Math.round((data.elapsed_ms || 0) / 1000))}s`
+        };
+      }
+    } else {
+      hubertMessages.push({
+        role: 'error',
+        text: chatFailureText(r.status, data),
+        run: normalizeRunReceipt(data, model, false)
+      });
+      if (data.model) chatModelHealth[data.model] = { state: 'error', note: data.error || 'chat failed' };
+    }
+  } catch (e) {
+    hubertMessages.push({
+      role: 'error',
+      text: chatFailureText(0, null, e),
+      run: normalizeRunReceipt({
+        model,
+        diagnostic: { code: 'NETWORK_ERROR', message: e.message, next_action: 'Check the graph service and try again.' },
+        events: [{ label: 'network request failed', type: 'network', at_ms: 0 }]
+      }, model, false)
+    });
+    updateChatModelStatus('error', e.message);
+  }
+  hubertSending = false;
+  clearPendingHubertRun();
+  document.getElementById('hubert-send').disabled = false;
+  updateChatModelStatus();
+  renderHubertMessages();
+}
+
+document.getElementById('hubert-send').addEventListener('click', sendHubertMessage);
+document.getElementById('hubert-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendHubertMessage();
+  }
+});
+document.getElementById('hubert-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(Math.max(this.scrollHeight, 104), 220) + 'px';
+});
+document.querySelectorAll('.hubert-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById('hubert-input');
+    const prompt = btn.dataset.prompt || '';
+    input.value = input.value.trim() ? `${input.value.trim()}\n\n${prompt}` : prompt;
+    input.dispatchEvent(new Event('input'));
+    input.focus();
+  });
+});
+renderHubertMessages();
+
+// ── Fetch focused agent data ──
+function loadFocusedAgentData(agentId) {
+  const clean = cleanAgentId(agentId);
+  const hdrs = mutationHeaders();
+  Promise.allSettled([
+    fetch(apiUrl(`/agent-config?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl('/agent-tools'), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl('/agent-models'), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
+    fetch(apiUrl(`/agent-evals?agent_id=${encodeURIComponent(clean)}`), { headers: hdrs }).then(r => r.json()),
+  ]).then(results => {
+    const [config, tools, models, verify, evals] = results;
+    focusedAgentConfig = config.status === 'fulfilled' ? config.value : { ok: false, error: config.reason?.message || 'config failed' };
+    focusedAgentTools = tools.status === 'fulfilled' ? (tools.value.tools || tools.value || []) : [];
+    focusedAgentModels = models.status === 'fulfilled' ? (models.value.models || []) : [];
+    focusedAgentVerify = verify.status === 'fulfilled' ? verify.value : { ok: false, error: verify.reason?.message || 'verify failed' };
+    focusedAgentEvalsets = evals.status === 'fulfilled' ? (evals.value.evalsets || []) : [];
+    focusedAgentEval = evals.status === 'fulfilled' ? (evals.value.last_run || null) : { ok: false, error: evals.reason?.message || 'evals failed' };
+    // Refresh workbench if still in focus mode
+    if (viewMode === 'agent' && focusedAgentId === agentId) {
+      openAgentWorkbench(agentId, 'config');
+      renderLens();
+    }
+  });
+}
+
+// ── Config save handler ──
+function attachFocusConfigHandlers(agentId) {
+  const btn = document.getElementById('focus-save-config');
+  if (!btn) return;
+  btn.addEventListener('click', () => saveFocusedAgentConfig(agentId));
+}
+
+async function saveFocusedAgentConfig(agentId) {
+  const clean = cleanAgentId(agentId);
+  const saveMsg = document.getElementById('inspect-save-msg');
+  const instruction = document.getElementById('focus-instruction')?.value?.trim() || '';
+  if (!instruction) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Instruction cannot be blank';
+    return;
+  }
+  const tools = Array.from(document.querySelectorAll('.focus-tool-check:checked')).map(el => el.value);
+  const body = JSON.stringify({
+    agent_id: clean,
+    description: document.getElementById('focus-description')?.value || clean,
+    model: document.getElementById('focus-model')?.value || '',
+    instruction,
+    tools,
+  });
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Saving config...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
+  fetch(apiUrl('/agent-config'), {
+    method: 'POST',
+    headers: mutationHeaders({ 'Content-Type': 'application/json' }),
+    body,
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok === false || data.error) {
+        saveMsg.className = 'save-msg err';
+        saveMsg.textContent = data.error || 'Save failed';
+        return;
+      }
+      saveMsg.className = 'save-msg ok';
+      saveMsg.textContent = 'Config saved';
+      loadFocusedAgentData(agentId);
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+// ── Verify & Generate handlers ──
+function attachFocusRunHandlers(agentId) {
+  const verify = document.getElementById('focus-verify-btn');
+  const generate = document.getElementById('focus-generate-btn');
+  if (verify) verify.addEventListener('click', () => verifyFocusedAgent(agentId));
+  if (generate) generate.addEventListener('click', () => generateFocusedAgent(agentId));
+}
+
+async function verifyFocusedAgent(agentId) {
+  const clean = cleanAgentId(agentId);
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Verifying...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
+  fetch(apiUrl(`/agent-verify?agent_id=${encodeURIComponent(clean)}`), { headers: mutationHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      focusedAgentVerify = data;
+      saveMsg.className = data.ok === false ? 'save-msg err' : 'save-msg ok';
+      saveMsg.textContent = data.ok === false ? (data.error || 'Verify failed') : 'Verify passed';
+      renderFocusSection(agentId, 'run');
+      renderLens();
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+async function generateFocusedAgent(agentId) {
+  const clean = cleanAgentId(agentId);
+  if (!confirm(`Generate agent ${clean}? This will write generated files from the current config.`)) return;
+  const saveMsg = document.getElementById('inspect-save-msg');
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Generating...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
+  fetch(apiUrl('/agent-generate'), {
+    method: 'POST',
+    headers: mutationHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ agent_id: clean }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok === false || data.error) {
+        saveMsg.className = 'save-msg err';
+        saveMsg.textContent = data.error || 'Generate failed';
+        return;
+      }
+      saveMsg.className = 'save-msg ok';
+      saveMsg.textContent = 'Generated';
+      verifyFocusedAgent(agentId);
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+// ── Eval handlers ──
+function attachFocusEvalHandlers(agentId) {
+  const btn = document.getElementById('focus-run-evals-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => runFocusedAgentEvals(agentId));
+}
+
+async function runFocusedAgentEvals(agentId) {
+  const clean = cleanAgentId(agentId);
+  const saveMsg = document.getElementById('inspect-save-msg');
+  const evalsetId = focusedAgentEvalsets?.[0]?.id || 'default';
+  saveMsg.className = 'save-msg';
+  saveMsg.textContent = 'Running evals...';
+  if (!(await ensureGraphSecret())) {
+    saveMsg.className = 'save-msg err';
+    saveMsg.textContent = 'Edits locked';
+    return;
+  }
+  fetch(apiUrl('/agent-eval-run'), {
+    method: 'POST',
+    headers: mutationHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ agent_id: clean, evalset_id: evalsetId }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      focusedAgentEval = data;
+      saveMsg.className = data.ok ? 'save-msg ok' : 'save-msg err';
+      saveMsg.textContent = data.ok ? 'Evals passed' : (data.error || 'Evals failed');
+      renderFocusSection(agentId, 'evals');
+      renderLens();
+    })
+    .catch(err => { saveMsg.className = 'save-msg err'; saveMsg.textContent = err.message; });
+}
+
+// ── Fetch models list ──
+function loadModels() {
+  fetch(apiUrl('/models'))
+    .then(r => r.json())
+    .then(data => { availableModels = data.models || []; })
+    .catch(() => {});
+}
+
+// ── URL hash deep-linking ──
+function parseHashState() {
+  const raw = window.location.hash.replace(/^#/, '');
+  const params = new URLSearchParams(raw);
+  return { cluster: params.get('cluster'), agent: params.get('agent') };
+}
+
+function writeHashState() {
+  const params = new URLSearchParams();
+  if (currentCluster) params.set('cluster', currentCluster);
+  if (viewMode === 'agent' && focusedAgentId) params.set('agent', cleanAgentId(focusedAgentId));
+  const next = '#' + params.toString();
+  if (window.location.hash !== next) history.replaceState(null, '', next);
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') {
+    if (sidecarOpen) { closeSidecar(); return; }
+    if (wireMode) { document.getElementById('wire-cancel').click(); return; }
+    if (viewMode === 'agent') { exitAgentFocus(); return; }
+    if (document.getElementById('inspect').classList.contains('open')) {
+      document.getElementById('inspect-close').click(); return;
+    }
+  }
+  if (e.key === 'i' || e.key === 'I') { toggleSidecar(); }
+});
+
+// ── Init ──
+loadClusters();
+loadRegistryAgents();
+loadModels();
+startPulse();
+
+// ── Restore hash state on load ──
+setTimeout(() => {
+  const hash = parseHashState();
+  if (hash.cluster && hash.cluster !== currentCluster) {
+    selectCluster(hash.cluster);
+  }
+  if (hash.agent) {
+    // Wait for graph data to load, then enter focus
+    const tryFocus = () => {
+      if (graphData && graphData.nodes) {
+        const agentId = 'agent:' + hash.agent;
+        if (getNodeById(agentId)) {
+          enterAgentFocus(agentId);
+        }
+      } else {
+        setTimeout(tryFocus, 500);
+      }
+    };
+    setTimeout(tryFocus, 800);
+  }
+}, 500);
+</script>
+</body>
+</html>

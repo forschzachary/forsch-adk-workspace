@@ -1,0 +1,7 @@
+# client-acme cluster
+name: client-acme
+description: ''
+members:
+  - ops
+config:
+  default_model: gpt-5.5
