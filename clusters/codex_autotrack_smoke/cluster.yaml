@@ -1,0 +1,6 @@
+# codex_autotrack_smoke cluster
+name: codex_autotrack_smoke
+description: ''
+members: []
+config:
+  default_model: gpt-5.5
