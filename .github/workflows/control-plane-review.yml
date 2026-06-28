@@ -1,0 +1,123 @@
+# Control-Plane Reviewer — required status check for control-plane changes.
+#
+# On EVERY pull_request targeting main (no path filter at the workflow level —
+# that would leave the check "Pending" on routine PRs and block merge).
+#
+# Step 1 detects whether the PR touches a control-plane path.  If NOT, the
+# check succeeds immediately (routine PRs are unaffected).  If YES, the full
+# invariant suite runs.  Only a green invariant run produces a passing
+# `control-plane-approved` status.
+#
+# Control-plane paths:
+#   .github/**, .pre-commit-config.yaml, scripts/check_*.py,
+#   agent_specs/agents.yaml, release-please-config.json,
+#   repo_manifest.yaml, factory/**
+#
+# See docs/strategy/2026-06-28-repository-and-git-discipline.md §7.x
+
+name: Control-Plane Review
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  control-plane-approved:
+    name: control-plane-approved
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect control-plane changes
+        id: detect
+        run: |
+          BASE=${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'HEAD~1' }}
+          HEAD=${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || 'HEAD' }}
+
+          git diff --name-only "$BASE" "$HEAD" > /tmp/changed_files.txt || true
+
+          CONTROL_PLANE_PATTERNS=(
+            "^\\.github/"
+            "^\\.pre-commit-config\\.yaml$"
+            "^scripts/check_"
+            "^agent_specs/agents\\.yaml$"
+            "^release-please-config\\.json$"
+            "^repo_manifest\\.yaml$"
+            "^factory/"
+          )
+
+          HIT=0
+          while IFS= read -r f; do
+            for pat in "${CONTROL_PLANE_PATTERNS[@]}"; do
+              if echo "$f" | grep -qE "$pat"; then
+                HIT=1
+                echo "::notice::Control-plane file changed: $f"
+                break
+              fi
+            done
+            if [ "$HIT" -eq 1 ]; then break; fi
+          done < /tmp/changed_files.txt
+
+          echo "is_control_plane=$HIT" >> "$GITHUB_OUTPUT"
+
+      - name: Set up uv
+        if: steps.detect.outputs.is_control_plane == '1'
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        if: steps.detect.outputs.is_control_plane == '1'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── Full invariant suite (only for control-plane PRs) ──────────────
+
+      - name: uv lock --check (builder)
+        if: steps.detect.outputs.is_control_plane == '1'
+        run: uv lock --check
+        working-directory: builder
+
+      - name: Structure check
+        if: steps.detect.outputs.is_control_plane == '1'
+        run: uv run --no-project python scripts/check_structure.py
+
+      - name: Bijection check
+        if: steps.detect.outputs.is_control_plane == '1'
+        run: uv run --no-project python scripts/check_bijection.py
+
+      - name: Build all packages
+        if: steps.detect.outputs.is_control_plane == '1'
+        run: |
+          for pkg in builder chat factory; do
+            if [ -f "$pkg/pyproject.toml" ]; then
+              echo "::group::Building $pkg"
+              cd "$pkg"
+              uv build 2>&1 || { echo "::error::uv build failed in $pkg"; exit 1; }
+              cd "$GITHUB_WORKSPACE"
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Pytest (all packages)
+        if: steps.detect.outputs.is_control_plane == '1'
+        run: |
+          for pkg in builder chat factory; do
+            if [ -d "$pkg/tests" ] && [ -f "$pkg/pyproject.toml" ]; then
+              echo "::group::Testing $pkg"
+              cd "$pkg"
+              uv run --extra dev python -m pytest -q 2>&1 || {
+                echo "::error::pytest failed in $pkg"
+                EXIT=1
+              }
+              cd "$GITHUB_WORKSPACE"
+              echo "::endgroup::"
+            fi
+          done
+          if [ "${EXIT:-0}" -ne 0 ]; then exit 1; fi
