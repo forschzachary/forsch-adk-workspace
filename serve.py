@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 import urllib.request
+import yaml
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -186,8 +187,7 @@ FACTORY_OVERVIEW_SOURCES = [
 
 # Cluster names are interpolated into filesystem paths downstream. Restrict
 # to a safe alphabet so a malicious cluster.yaml can't escape via ../etc.
-import re as _re
-_SAFE_CLUSTER_NAME_RE = _re.compile(r"^[a-zA-Z0-9_\-]+$")
+_SAFE_CLUSTER_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 # ── Rate limiting ──
 _rate_state: dict[str, tuple[int, float]] = {}  # principal → (count, window_start)
@@ -482,14 +482,8 @@ def list_clusters() -> list:
 
 
 def yaml_safe_load(text: str) -> dict:
-    """Parse a YAML string. Wraps yaml.safe_load for backwards compat.
-
-    Replaces an earlier hand-rolled mini-parser that broke on multi-line values,
-    nested dicts, and anything beyond flat `key: value`. PyYAML is in the
-    runtime (verified at startup), so deferring to it is correct.
-    """
-    import yaml as _yaml
-    return _yaml.safe_load(text) or {}
+    """Parse a YAML string. Thin wrapper over yaml.safe_load for backwards compat."""
+    return yaml.safe_load(text) or {}
 
 
 def build_manifest(cluster_name: str) -> dict | None:
@@ -523,15 +517,12 @@ def build_manifest(cluster_name: str) -> dict | None:
 
 
 def _load_yaml(path: Path) -> dict:
-    """Load a YAML file using the factory venv's pyyaml."""
-    py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
-    r = subprocess.run(
-        [py, "-c", f"import yaml, json; print(json.dumps(yaml.safe_load(open({str(path)!r})) or {{}}))"],
-        capture_output=True, text=True, timeout=10,
-    )
-    if r.returncode == 0 and r.stdout.strip():
-        return json.loads(r.stdout.strip())
-    return {}
+    """Load a YAML file in-process. Returns {} on parse failure or missing file."""
+    try:
+        return yaml.safe_load(path.read_text()) or {}
+    except (yaml.YAMLError, OSError) as exc:
+        sys.stderr.write(f"_load_yaml failed for {path}: {exc}\n")
+        return {}
 
 
 def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
@@ -1201,7 +1192,6 @@ def new_cluster(name: str) -> dict:
 
 
 def _yaml_inline(value: str) -> str:
-    import yaml
     dumped = yaml.safe_dump(value or "", default_flow_style=True, width=1000).strip()
     return dumped.replace("\n...", "")
 
@@ -1215,7 +1205,6 @@ def create_graph_agent(agent_id: str, model: str = "gpt-5.5", description: str =
     if not registry_yaml.exists():
         return {"ok": False, "error": "agent registry missing"}
 
-    import yaml
     registry_doc = yaml.safe_load(registry_yaml.read_text()) or {}
     agents = registry_doc.get("agents", {}) or {}
     if agent_id in agents:
@@ -1255,7 +1244,6 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
         return {"ok": False, "error": f"cluster '{cluster_name}' not found"}
     registry_yaml = LAG_HOME / "registry" / "agents" / "agents.yaml"
     if registry_yaml.exists():
-        import yaml
         registry = (yaml.safe_load(registry_yaml.read_text()) or {}).get("agents", {})
         if agent_id not in registry:
             return {"ok": False, "error": f"agent '{agent_id}' not in registry"}
