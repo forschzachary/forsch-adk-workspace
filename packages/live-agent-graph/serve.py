@@ -42,7 +42,7 @@ from workspace_resolver import workspace_root
 # All paths below are derived from LAG_HOME — no hardcoded locations.
 LAG_HOME = Path(__file__).resolve().parent
 WS = workspace_root() / "adk"
-for _components_src in (LAG_HOME.parent / "components" / "src", WS / "components" / "src"):
+for _components_src in (LAG_HOME.parent / "adk-components" / "src", WS / "packages" / "adk-components" / "src", LAG_HOME.parent / "components" / "src", WS / "components" / "src"):
     if _components_src.exists() and str(_components_src) not in sys.path:
         sys.path.insert(0, str(_components_src))
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
@@ -943,7 +943,7 @@ def _build_building_blocks_index() -> dict:
     # ADK_COMPONENTS_DIR env var so Mac dev / alternate installs work.
     components_root = Path(os.environ.get(
         "ADK_COMPONENTS_DIR",
-        "/root/.hermes/workspace/adk/components/src/forsch/adk_components",
+        "/root/.hermes/workspace/adk/packages/adk-components/src/forsch/adk_components",
     ))
     candidates = [
         ("patterns",    components_root / "patterns" / "inventory.yaml"),
@@ -1771,7 +1771,7 @@ def _list_agent_tools() -> dict:
     """List real tools from the ADK components directory via AST parsing."""
     import ast
     tools = []
-    comp = WS / "components" / "src" / "forsch" / "adk_components"
+    comp = WS / "packages" / "adk-components" / "src" / "forsch" / "adk_components"
     if not comp.is_dir():
         return {"ok": True, "tools": []}
     for py in sorted(comp.rglob("*.py")):
@@ -1823,7 +1823,7 @@ def _generate_agent(agent_id: str) -> dict:
     py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
     manifest = str(WS / "agent_specs" / "agents.yaml")
     env = os.environ.copy()
-    components_src = str(WS / "components" / "src")
+    components_src = str(WS / "packages" / "adk-components" / "src")
     if "PYTHONPATH" in env:
         env["PYTHONPATH"] = components_src + ":" + env["PYTHONPATH"]
     else:

@@ -18,7 +18,7 @@ services:
       PYTHONUNBUFFERED: "1"
       BRIDGE_HTTP_HOST: "0.0.0.0"
       # forsch namespace merges across each package's src dir
-      PYTHONPATH: /workspace/bridge/src:/workspace/components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src:/workspace/agents/wow-guild/src:/workspace/agents/shelby/src:/workspace/agents/hubert/src:/workspace/agents/agent_logic_specialist/src
+      PYTHONPATH: /workspace/bridge/src:/workspace/packages/adk-components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src:/workspace/agents/shelby/src
       FORSCH_ADK_WORKSPACE: /workspace   # stability tools inventory the live mount, not the dead /opt/data path
       AGENT_PROFILES_ROOT: /profiles     # per-agent profile homes (creds, config, state)
     volumes:
@@ -41,7 +41,7 @@ services:
       - bridge.env
     environment:
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: /workspace/bridge/src:/workspace/components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src:/workspace/agents/wow-guild/src:/workspace/agents/shelby/src:/workspace/agents/hubert/src:/workspace/agents/agent_logic_specialist/src
+      PYTHONPATH: /workspace/bridge/src:/workspace/packages/adk-components/src:/workspace/agents/stability/src:/workspace/agents/ops/src:/workspace/agents/social/src:/workspace/agents/brand/src:/workspace/agents/assistant/src:/workspace/agents/build/src:/workspace/agents/shelby/src
       FORSCH_ADK_WORKSPACE: /workspace
       FORSCH_ADK_MODEL: openai/gpt-5.5
       LITELLM_BASE_URL: http://127.0.0.1:4000/v1
