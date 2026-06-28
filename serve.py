@@ -42,6 +42,9 @@ from workspace_resolver import workspace_root
 # All paths below are derived from LAG_HOME — no hardcoded locations.
 LAG_HOME = Path(__file__).resolve().parent
 WS = workspace_root() / "adk"
+for _components_src in (LAG_HOME.parent / "components" / "src", WS / "components" / "src"):
+    if _components_src.exists() and str(_components_src) not in sys.path:
+        sys.path.insert(0, str(_components_src))
 FACTORY_PYTHON = WS / "factory" / ".venv" / "bin" / "python3.12"
 BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 
@@ -1362,9 +1365,9 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
 MIMO_WORKDIR = str(WS)
 MIMO_BIN = os.environ.get("MIMO_BIN", "mimo")
 MIMO_TIMEOUT = int(os.environ.get("MIMO_TIMEOUT", "120"))
+CHAT_MODEL_CACHE_TTL = int(os.environ.get("CHAT_MODEL_CACHE_TTL", "60"))
 CHAT_MODEL_FALLBACKS = [
     "default",
-    "openai/gpt-5.5",
     "openai/gpt-5.4",
     "openai/gpt-5.3-codex-spark",
     "openai/gpt-5.3-codex",
@@ -1378,10 +1381,18 @@ CHAT_MODEL_FALLBACKS = [
     "minimax/MiniMax-M3",
     "minimax/MiniMax-M3-thinking",
     "cerebras/gpt-oss-120b",
-    "mimo-v2.5",
-    "mimo-v2.5-pro",
+    "xiaomi/mimo-v2.5",
     "mimo/mimo-auto",
 ]
+CHAT_MODEL_HEALTH = {
+    "default": {"state": "ready", "note": "MiMo default"},
+    "openai/gpt-5.4": {"state": "verified", "note": "fast smoke passed"},
+    "xiaomi/mimo-v2.5": {"state": "verified", "note": "fast smoke passed"},
+    "mimo/mimo-auto": {"state": "verified", "note": "MiMo auto route"},
+    "openai/gpt-5.3-codex-spark": {"state": "flaky", "note": "upstream server_error observed"},
+    "ollama-cloud/deepseek-v4-flash": {"state": "slow", "note": "timed out in chat smoke"},
+    "ollama-cloud/kimi-k2.6": {"state": "slow", "note": "timed out in chat smoke"},
+}
 # Unified model aliases. Display label -> real provider/model id.
 # CHAT_MODEL_FALLBACKS is the canonical list of available model ids; each
 # entry also serves as a self-alias. LEGACY_CHAT_MODEL_ALIASES maps the
@@ -1406,6 +1417,7 @@ _MODEL_LEGACY_ALIASES = {
 
 
 _MODEL_ALIASES = {**_MODEL_LEGACY_ALIASES, **{m: m for m in CHAT_MODEL_FALLBACKS}}
+_chat_model_cache = {"at": 0.0, "models": []}
 
 
 def _normalise_chat_model(model: str | None) -> str | None:
@@ -1416,11 +1428,15 @@ def _normalise_chat_model(model: str | None) -> str | None:
     if clean in _MODEL_ALIASES:
         return _MODEL_ALIASES[clean]
     if "/" not in clean:
-        return None
+        return clean
     return clean
 
 
 def _list_chat_models() -> list[str]:
+    now = time.time()
+    cached = _chat_model_cache.get("models") or []
+    if cached and now - float(_chat_model_cache.get("at") or 0) < CHAT_MODEL_CACHE_TTL:
+        return list(cached)
     try:
         result = subprocess.run(
             [MIMO_BIN, "models"],
@@ -1437,95 +1453,54 @@ def _list_chat_models() -> list[str]:
                 if model not in ordered:
                     ordered.append(model)
             if len(ordered) > 1:
+                _chat_model_cache["at"] = now
+                _chat_model_cache["models"] = ordered
                 return ordered
     except Exception:
         pass
     return CHAT_MODEL_FALLBACKS
 
-    # Stream-parse mimo JSON events. Kill the subprocess as soon as we
-    # see a terminal event (error or step_finish with no preceding text)
-    # so model-not-found errors return in <1s instead of hanging for
-    # the full MIMO_TIMEOUT (120s). The earlier subprocess.run design
-    # waited for process exit, which could be slow on errors.
-    try:
-        proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, cwd=MIMO_WORKDIR,
-        )
-    except FileNotFoundError:
-        return {"ok": False, "error": "mimo not installed on this box"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:500]}
 
-    response_text = ""
-    new_session_id = session_id or ""
-    error_text = ""
-    finished_cleanly = False
-    start = time.time()
-
-    try:
-        # Read stdout line by line; stop as soon as mimo emits an error
-        # event or a step_finish event (tool-less turn completed).
-        assert proc.stdout is not None
-        while True:
-            if time.time() - start > MIMO_TIMEOUT:
-                proc.kill()
-                return {"ok": False, "error": f"timeout after {MIMO_TIMEOUT}s"}
-            line = proc.stdout.readline()
-            if not line:
-                # EOF — process exited.
-                break
-            line = line.strip()
-            if not line or not line.startswith("{"):
-                continue
-            try:
-                evt = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            etype = evt.get("type")
-            if etype == "text" and evt.get("part", {}).get("text"):
-                response_text += evt["part"]["text"]
-            elif etype == "error":
-                # Immediate exit on error — mimo may keep running (and
-                # dump stack-trace garbage) after the error event. Kill it
-                # so we don't block on the subprocess exit.
-                error = evt.get("error") or {}
-                data = error.get("data") if isinstance(error, dict) else {}
-                if isinstance(data, dict):
-                    error_text = data.get("message") or data.get("responseBody") or ""
-                if not error_text and isinstance(error, dict):
-                    error_text = error.get("name") or "MiMo error"
-                proc.kill()
-                break
-            elif etype == "step_finish":
-                # Tool-less turn completed; the response is in.
-                finished_cleanly = True
-                break
-            if evt.get("sessionID") and not new_session_id:
-                new_session_id = evt["sessionID"]
-    except Exception as e:
-        try:
-            proc.kill()
-        except Exception:
-            pass
-        return {"ok": False, "error": f"stream error: {e}"}
-
-    # Wait briefly for the process to exit (we already broke out of the
-    # read loop). If it's stuck, kill it.
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait(timeout=2)
-
-    if error_text and not response_text:
-        return {"ok": False, "error": error_text[:500], "session_id": new_session_id}
+def _chat_model_payload() -> dict:
+    models = _list_chat_models()
     return {
-        "ok": True,
-        "response": response_text or "(no response)",
-        "session_id": new_session_id,
-        "finished_cleanly": finished_cleanly,
+        "models": models,
+        "source": "mimo-cli",
+        "default_model": "default",
+        "health": {model: CHAT_MODEL_HEALTH.get(model, {"state": "available", "note": "listed by mimo models"})
+                   for model in models},
     }
+
+
+def chat_with_mimo(message: str, session_id: str | None = None,
+                   model: str | None = None, principal: str = "unknown") -> dict:
+    """Send a message to MiMo CLI and return the response."""
+    model = _normalise_chat_model(model)
+    available = set(_list_chat_models())
+    if model and model not in available:
+        return {
+            "ok": False,
+            "error": f"model not available on this box: {model}",
+            "response": "",
+            "model": model,
+        }
+    cmd = [MIMO_BIN, "run", "--format", "json", "--dir", MIMO_WORKDIR]
+    if model:
+        cmd.extend(["-m", model])
+    if session_id:
+        cmd.extend(["-s", session_id])
+    cmd.append(message)
+    started = time.time()
+    # Delegate to the patterns library so any future project that needs to
+    # invoke the MiMo CLI gets streaming plus early-kill behaviour for free.
+    try:
+        from forsch.adk_components.patterns import mimo_stream_run
+    except ImportError:
+        return {"ok": False, "error": "patterns library not importable", "response": ""}
+    result = mimo_stream_run(cmd, cwd=MIMO_WORKDIR, timeout=MIMO_TIMEOUT)
+    result["model"] = model or "default"
+    result["elapsed_ms"] = int((time.time() - started) * 1000)
+    return result
 
 
 # ── Box JSON API stubs (cockpit ADK-builder) ──
@@ -2029,7 +2004,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             self._json_response(200, manifest)
         elif path == "/models":
-            self._json_response(200, {"models": _list_chat_models()})
+            self._json_response(200, _chat_model_payload())
         elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_auth():
             # Fail-closed: without a valid Access JWT, block access.
             # than silently opening the endpoints. Standalone dev should set a secret.
@@ -2173,18 +2148,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(500, {"error": str(err)})
 
         elif parsed.path == "/models":
-            # Fetch model list from LiteLLM proxy
-            import urllib.request
-            try:
-                req = urllib.request.Request("http://127.0.0.1:4000/v1/models")
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    data = json.loads(resp.read())
-                    models = [m["id"] for m in data.get("data", [])]
-                    self._json_response(200, {"models": sorted(models)})
-            except Exception:
-                # Hardcoded fallback if proxy unreachable. Use the canonical
-                # CHAT_MODEL_FALLBACKS list as the single source of truth.
-                self._json_response(200, {"models": list(CHAT_MODEL_FALLBACKS)})
+            self._json_response(200, _chat_model_payload())
 
         elif parsed.path == "/promote":
             if not self._check_auth():

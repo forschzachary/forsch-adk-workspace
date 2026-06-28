@@ -425,6 +425,15 @@
     width: 100%; background: #161d26; color: #c9d1d9; border: 1px solid #303a48;
     border-radius: 8px; padding: 8px 10px; font-size: 13px; min-height: 38px;
   }
+  #chat-model-status {
+    grid-column: 1 / -1; min-height: 18px; color: #8b949e; font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #chat-model-status.verified { color: #7ee787; }
+  #chat-model-status.ready, #chat-model-status.available { color: #a8b3c1; }
+  #chat-model-status.slow { color: #f2cc60; }
+  #chat-model-status.flaky, #chat-model-status.error { color: #ffb4a8; }
+  #chat-model-status.running { color: #79c0ff; }
   #hubert-input {
     grid-area: input; background: #0b1016; border: 1px solid #3b82f6;
     border-radius: 12px; color: #e6edf3; font-size: 15px; line-height: 1.45;
@@ -573,6 +582,7 @@
       <div id="chat-model-wrap">
         <label for="chat-model-select">Model</label>
         <select id="chat-model-select" title="Chat model"></select>
+        <div id="chat-model-status">Loading MiMo models...</div>
       </div>
       <div id="hubert-mode-pill">workspace access</div>
     </div>
@@ -2749,16 +2759,13 @@ let hubertMessages = [{
   text: 'Workspace chat is live. Ask about the graph, agents, failures, or what to build next. Hubert can read files, edit code, and run checks in the workspace.'
 }];
 let hubertSending = false;
-// CHAT_MODEL_FALLBACKS: shown briefly while /models loads. Keep this in
-// sync with serve.py's CHAT_MODEL_FALLBACKS (live-agent-graph/serve.py
-// around line 1368). The sidecar will replace this list with the live
-// /models response as soon as the fetch returns. Add new models to BOTH
-// places until the patterns library is on the box and serves the list
-// from a single source.
+let chatModelHealth = {};
+let chatModelSource = 'fallback';
+// CHAT_MODEL_FALLBACKS is only the pre-load safety net. The sidecar replaces
+// it with the live /models payload from serve.py as soon as the fetch returns.
 const CHAT_MODEL_FALLBACKS = [
   'default',
   'mimo/mimo-auto',
-  'openai/gpt-5.5',
   'openai/gpt-5.4',
   'openai/gpt-5.3-codex-spark',
   'ollama-cloud/deepseek-v4-flash',
@@ -2773,6 +2780,7 @@ const CHAT_MODEL_FALLBACKS = [
   'minimax/MiniMax-M3',
   'minimax/MiniMax-M3-thinking',
   'cerebras/gpt-oss-120b',
+  'xiaomi/mimo-v2.5',
 ];
 const CHAT_MODEL_LABELS = {
   'default': 'Default',
@@ -2790,6 +2798,7 @@ const CHAT_MODEL_LABELS = {
   'minimax/MiniMax-M3': 'MiniMax M3',
   'minimax/MiniMax-M3-thinking': 'MiniMax M3 Thinking',
   'cerebras/gpt-oss-120b': 'Cerebras GPT OSS 120B',
+  'xiaomi/mimo-v2.5': 'Xiaomi MiMo v2.5',
   'mimo-v2.5': 'MiMo v2.5',
   'mimo-v2.5-pro': 'MiMo v2.5 Pro',
   'mimo/mimo-auto': 'MiMo auto'
@@ -2799,24 +2808,77 @@ function chatModelLabel(model) {
   return CHAT_MODEL_LABELS[model] || model;
 }
 
-function renderChatModelOptions(models) {
+function normaliseChatModel(model) {
+  if (model === 'codex/gpt-5.5') return 'openai/gpt-5.5';
+  if (model === 'codex/gpt-5.4') return 'openai/gpt-5.4';
+  if (model === 'codex/gpt-5.3-codex-spark') return 'openai/gpt-5.3-codex-spark';
+  if (model === 'gpt-5.5') return 'openai/gpt-5.5';
+  if (model === 'gpt-5.4') return 'openai/gpt-5.4';
+  if (model === 'deepseek-v4-flash') return 'ollama-cloud/deepseek-v4-flash';
+  if (model === 'deepseek-v4-pro') return 'ollama-cloud/deepseek-v4-pro';
+  return model;
+}
+
+function modelProviderLabel(model) {
+  if (model === 'default') return 'Default';
+  const provider = (model || '').split('/')[0] || 'Other';
+  return {
+    openai: 'OpenAI / Codex',
+    'ollama-cloud': 'Ollama Cloud',
+    google: 'Google',
+    minimax: 'MiniMax',
+    cerebras: 'Cerebras',
+    xiaomi: 'Xiaomi',
+    mimo: 'MiMo'
+  }[provider] || provider;
+}
+
+function modelStateLabel(model) {
+  const state = chatModelHealth[model]?.state || 'available';
+  if (state === 'verified') return 'ready';
+  if (state === 'ready') return 'ready';
+  if (state === 'slow') return 'slow';
+  if (state === 'flaky') return 'flaky';
+  if (state === 'error') return 'error';
+  return 'listed';
+}
+
+function updateChatModelStatus(stateOverride, noteOverride) {
+  const sel = document.getElementById('chat-model-select');
+  const el = document.getElementById('chat-model-status');
+  if (!sel || !el) return;
+  const model = sel.value || 'default';
+  const health = chatModelHealth[model] || { state: 'available', note: 'listed by ' + chatModelSource };
+  const state = stateOverride || health.state || 'available';
+  const note = noteOverride || health.note || 'listed by ' + chatModelSource;
+  el.className = state;
+  el.textContent = `${chatModelLabel(model)}: ${state} · ${note}`;
+}
+
+function renderChatModelOptions(payload) {
   const sel = document.getElementById('chat-model-select');
   if (!sel) return;
   const current = sel.value || localStorage.getItem('hubert-chat-model') || 'default';
+  const models = Array.isArray(payload) ? payload : (payload && payload.models);
+  chatModelSource = Array.isArray(payload) ? 'fallback' : (payload?.source || 'mimo-cli');
+  chatModelHealth = Array.isArray(payload) ? chatModelHealth : (payload?.health || {});
   const safeModels = Array.from(new Set((models && models.length ? models : CHAT_MODEL_FALLBACKS)
     .filter(m => typeof m === 'string' && m.trim())
-    .map(m => {
-      if (m === 'codex/gpt-5.5') return 'openai/gpt-5.5';
-      if (m === 'codex/gpt-5.4') return 'openai/gpt-5.4';
-      if (m === 'codex/gpt-5.3-codex-spark') return 'openai/gpt-5.3-codex-spark';
-      if (m === 'gpt-5.5') return 'openai/gpt-5.5';
-      if (m === 'gpt-5.4') return 'openai/gpt-5.4';
-      if (m === 'deepseek-v4-flash') return 'ollama-cloud/deepseek-v4-flash';
-      if (m === 'deepseek-v4-pro') return 'ollama-cloud/deepseek-v4-pro';
-      return m;
-    })));
+    .map(normaliseChatModel)));
   if (!safeModels.includes('default')) safeModels.unshift('default');
-  sel.innerHTML = safeModels.map(m => `<option value="${esc(m)}">${esc(chatModelLabel(m))}</option>`).join('');
+  const groups = new Map();
+  safeModels.forEach(model => {
+    const provider = modelProviderLabel(model);
+    if (!groups.has(provider)) groups.set(provider, []);
+    groups.get(provider).push(model);
+  });
+  sel.innerHTML = Array.from(groups.entries()).map(([provider, groupModels]) => {
+    const options = groupModels.map(m => {
+      const state = modelStateLabel(m);
+      return `<option value="${esc(m)}">${esc(chatModelLabel(m))} (${esc(state)})</option>`;
+    }).join('');
+    return `<optgroup label="${esc(provider)}">${options}</optgroup>`;
+  }).join('');
   const nextCurrent = CHAT_MODEL_LABELS[current] ? current : {
     'codex/gpt-5.5': 'openai/gpt-5.5',
     'codex/gpt-5.4': 'openai/gpt-5.4',
@@ -2827,6 +2889,7 @@ function renderChatModelOptions(models) {
     'deepseek-v4-pro': 'ollama-cloud/deepseek-v4-pro'
   }[current] || current;
   sel.value = safeModels.includes(nextCurrent) ? nextCurrent : 'default';
+  updateChatModelStatus();
 }
 
 function initSidecarResize() {
@@ -2939,13 +3002,16 @@ async function loadChatModels() {
     const r = await fetch(apiUrl('/models'));
     if (r.ok) {
       const d = await r.json();
-      renderChatModelOptions(d.models || CHAT_MODEL_FALLBACKS);
+      renderChatModelOptions(d || CHAT_MODEL_FALLBACKS);
     }
-  } catch(_) {}
+  } catch(_) {
+    updateChatModelStatus('error', 'could not load live model list');
+  }
 }
 loadChatModels();
 document.getElementById('chat-model-select')?.addEventListener('change', (ev) => {
   localStorage.setItem('hubert-chat-model', ev.target.value || 'default');
+  updateChatModelStatus();
 });
 
 // Hubert chat tab
@@ -3005,6 +3071,7 @@ async function sendHubertMessage() {
     const hdrs = { 'Content-Type': 'application/json' };
     const modelSel = document.getElementById('chat-model-select');
     const model = modelSel ? modelSel.value : null;
+    updateChatModelStatus('running', 'MiMo is working in the live workspace');
     const body = JSON.stringify({
       message: context + text,
       session_id: hubertSessionId,
@@ -3015,14 +3082,23 @@ async function sendHubertMessage() {
     if (data.ok) {
       hubertMessages.push({ role: 'assistant', text: data.response || '(no response)' });
       hubertSessionId = data.session_id || hubertSessionId;
+      if (data.model) {
+        chatModelHealth[data.model] = {
+          state: 'verified',
+          note: `last reply in ${Math.max(1, Math.round((data.elapsed_ms || 0) / 1000))}s`
+        };
+      }
     } else {
       hubertMessages.push({ role: 'system', text: 'Error: ' + (data.error || 'unknown') });
+      if (data.model) chatModelHealth[data.model] = { state: 'error', note: data.error || 'chat failed' };
     }
   } catch (e) {
     hubertMessages.push({ role: 'system', text: 'Network error: ' + e.message });
+    updateChatModelStatus('error', e.message);
   }
   hubertSending = false;
   document.getElementById('hubert-send').disabled = false;
+  updateChatModelStatus();
   renderHubertMessages();
 }
 
