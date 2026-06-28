@@ -1472,35 +1472,146 @@ def _chat_model_payload() -> dict:
     }
 
 
+def _chat_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _chat_event(event_type: str, label: str, *, status: str = "", at_ms: int | None = None,
+                detail: str = "", tool: str = "") -> dict:
+    event = {"type": event_type, "label": label, "status": status, "ts": _chat_iso()}
+    if at_ms is not None:
+        event["at_ms"] = int(at_ms)
+    if detail:
+        event["detail"] = str(detail)[:240]
+    if tool:
+        event["tool"] = str(tool)[:120]
+    return event
+
+
+def _chat_diagnostic(error: str, *, status_code: int = 500, model: str | None = None) -> dict:
+    clean = str(error or "unknown error")[:500]
+    lowered = clean.lower()
+    code = "CHAT_FAILED"
+    action = "Open the run receipt, check the latest event, then retry or choose another model."
+    if status_code == 401:
+        code = "AUTH_REQUIRED"
+        action = "Refresh through Cloudflare Access, then send the message again."
+    elif status_code == 403:
+        code = "SESSION_FORBIDDEN"
+        action = "Start a new chat session or refresh the page before continuing."
+    elif status_code == 429:
+        code = "RATE_LIMITED"
+        action = "Wait a minute before sending another chat request."
+    elif "model not available" in lowered:
+        code = "MODEL_UNAVAILABLE"
+        action = "Choose a listed model from the selector and retry."
+    elif "timeout" in lowered:
+        code = "MIMO_TIMEOUT"
+        action = "Retry with a faster model or a smaller request."
+    elif "not importable" in lowered:
+        code = "BACKEND_IMPORT_FAILED"
+        action = "Check the ADK components path and restart the graph service."
+    elif "api key" in lowered or "unauthorized" in lowered:
+        code = "PROVIDER_AUTH_FAILED"
+        action = "Check provider auth on the box, then retry."
+    return {
+        "code": code,
+        "message": clean,
+        "status_code": status_code,
+        "model": model or "default",
+        "next_action": action,
+    }
+
+
+def _chat_failure(error: str, *, status_code: int = 500, model: str | None = None,
+                  events: list[dict] | None = None, tools: list[dict] | None = None,
+                  elapsed_ms: int = 0) -> dict:
+    diagnostic = _chat_diagnostic(error, status_code=status_code, model=model)
+    event_list = list(events or [])
+    event_list.append(_chat_event("failed", diagnostic["code"], status="error", at_ms=elapsed_ms, detail=error))
+    return {
+        "ok": False,
+        "error": diagnostic["message"],
+        "response": "",
+        "model": model or "default",
+        "elapsed_ms": elapsed_ms,
+        "progress": {
+            "state": "error",
+            "label": diagnostic["code"],
+            "current_event": event_list[-1],
+        },
+        "events": event_list,
+        "tools": list(tools or []),
+        "diagnostic": diagnostic,
+    }
+
+
+def _augment_chat_result(result: dict, *, model: str | None, started: float,
+                         pre_events: list[dict]) -> dict:
+    elapsed_ms = int((time.time() - started) * 1000)
+    result["model"] = model or "default"
+    result["elapsed_ms"] = elapsed_ms
+    raw_events = result.get("events") if isinstance(result.get("events"), list) else []
+    raw_tools = result.get("tools") if isinstance(result.get("tools"), list) else []
+    terminal = _chat_event(
+        "completed" if result.get("ok") else "failed",
+        "assistant response ready" if result.get("ok") else "MiMo run failed",
+        status="ok" if result.get("ok") else "error",
+        at_ms=elapsed_ms,
+        detail=result.get("error") or "",
+    )
+    events = [*pre_events, *raw_events, terminal]
+    result["events"] = events
+    result["tools"] = raw_tools
+    result["progress"] = {
+        "state": "complete" if result.get("ok") else "error",
+        "label": terminal["label"],
+        "current_event": terminal,
+    }
+    if not result.get("ok"):
+        result["diagnostic"] = _chat_diagnostic(result.get("error", "MiMo chat failed"), model=model)
+    return result
+
+
 def chat_with_mimo(message: str, session_id: str | None = None,
                    model: str | None = None, principal: str = "unknown") -> dict:
     """Send a message to MiMo CLI and return the response."""
     model = _normalise_chat_model(model)
+    started = time.time()
+    pre_events = [
+        _chat_event("queued", "request accepted", status="ok", at_ms=0),
+        _chat_event("context", "workspace context attached", status="ok", at_ms=0),
+        _chat_event("model", model or "default model selected", status="ok", at_ms=0),
+    ]
     available = set(_list_chat_models())
     if model and model not in available:
-        return {
-            "ok": False,
-            "error": f"model not available on this box: {model}",
-            "response": "",
-            "model": model,
-        }
+        return _chat_failure(
+            f"model not available on this box: {model}",
+            status_code=400,
+            model=model,
+            events=pre_events,
+        )
     cmd = [MIMO_BIN, "run", "--format", "json", "--dir", MIMO_WORKDIR]
     if model:
         cmd.extend(["-m", model])
     if session_id:
         cmd.extend(["-s", session_id])
     cmd.append(message)
-    started = time.time()
+    pre_events.append(_chat_event("subprocess", "MiMo CLI started", status="running", at_ms=0))
     # Delegate to the patterns library so any future project that needs to
     # invoke the MiMo CLI gets streaming plus early-kill behaviour for free.
     try:
         from forsch.adk_components.patterns import mimo_stream_run
     except ImportError:
-        return {"ok": False, "error": "patterns library not importable", "response": ""}
+        return _chat_failure(
+            "patterns library not importable",
+            status_code=500,
+            model=model,
+            events=pre_events,
+            elapsed_ms=int((time.time() - started) * 1000),
+        )
     result = mimo_stream_run(cmd, cwd=MIMO_WORKDIR, timeout=MIMO_TIMEOUT)
-    result["model"] = model or "default"
-    result["elapsed_ms"] = int((time.time() - started) * 1000)
-    return result
+    return _augment_chat_result(result, model=model, started=started, pre_events=pre_events)
 
 
 # ── Box JSON API stubs (cockpit ADK-builder) ──
@@ -2188,7 +2299,10 @@ class Handler(SimpleHTTPRequestHandler):
         elif parsed.path == "/chat":
             principal = self._check_auth() and (self._get_principal() or "smoke-test")
             if not principal:
-                self._json_response(401, {"error": "unauthorized: Cloudflare Access required"})
+                self._json_response(401, _chat_failure(
+                    "unauthorized: Cloudflare Access required",
+                    status_code=401,
+                ))
                 return
             message = None
             session_id = None
@@ -2204,12 +2318,20 @@ class Handler(SimpleHTTPRequestHandler):
                 message = params.get("message", [None])[0]
                 session_id = params.get("session_id", [None])[0]
             if not message:
-                self._json_response(400, {"error": "missing message"})
+                self._json_response(400, _chat_failure(
+                    "missing message",
+                    status_code=400,
+                    model=model,
+                ))
                 return
 
             # Rate limit
             if not _check_rate(principal):
-                self._json_response(429, {"error": "rate limit exceeded"})
+                self._json_response(429, _chat_failure(
+                    "rate limit exceeded",
+                    status_code=429,
+                    model=model,
+                ))
                 return
 
             # Session ownership
@@ -2219,7 +2341,11 @@ class Handler(SimpleHTTPRequestHandler):
                     if entry:
                         owner, _ = entry
                         if owner != principal:
-                            self._json_response(403, {"error": "session owned by another principal"})
+                            self._json_response(403, _chat_failure(
+                                "session owned by another principal",
+                                status_code=403,
+                                model=model,
+                            ))
                             return
 
             result = chat_with_mimo(message, session_id, model, principal)
@@ -2231,7 +2357,8 @@ class Handler(SimpleHTTPRequestHandler):
 
             outcome = "ok" if result.get("ok") else f"error: {result.get('error', 'unknown')[:100]}"
             _audit(principal, message, session_id, outcome)
-            self._json_response(200 if result.get("ok") else 500, result)
+            status_code = 200 if result.get("ok") else int(result.get("diagnostic", {}).get("status_code", 500))
+            self._json_response(status_code, result)
 
         elif parsed.path == "/agent-config":
             if not self._check_auth():

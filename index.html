@@ -375,7 +375,12 @@
   }
   .hubert-msg.pending {
     align-self: flex-start; color: #8b949e; background: #121821;
-    border: 1px solid #2d3643; max-width: 220px;
+    border: 1px solid #2d3643; max-width: min(74ch, 100%);
+  }
+  .hubert-msg.error {
+    align-self: stretch; color: #ffd8d3;
+    background: rgba(248,81,73,0.09); border: 1px solid rgba(248,81,73,0.28);
+    max-width: none;
   }
   .hubert-msg .msg-meta {
     display: flex; align-items: center; gap: 8px;
@@ -384,6 +389,59 @@
   }
   .hubert-msg.user .msg-meta { justify-content: flex-end; }
   .hubert-msg .msg-body { white-space: pre-wrap; }
+  .hubert-run-card {
+    margin-top: 12px; display: grid; gap: 10px;
+    background: #0c1219; border: 1px solid #283442; border-radius: 10px;
+    padding: 10px;
+  }
+  .hubert-run-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    color: #a8b3c1; font-size: 12px; font-weight: 700;
+  }
+  .hubert-run-head span:last-child {
+    color: #7d8997; font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; font-weight: 600;
+  }
+  .hubert-run-track { display: grid; gap: 7px; }
+  .hubert-run-stage {
+    display: grid; grid-template-columns: 12px minmax(0, 1fr) auto;
+    gap: 8px; align-items: center; min-height: 24px;
+    color: #8f9baa; font-size: 12px;
+  }
+  .hubert-run-stage .dot {
+    width: 9px; height: 9px; border-radius: 999px; background: #303a48;
+    box-shadow: 0 0 0 3px rgba(48,58,72,0.22);
+  }
+  .hubert-run-stage.active .dot { background: #58a6ff; box-shadow: 0 0 0 3px rgba(88,166,255,0.18); }
+  .hubert-run-stage.done .dot { background: #3fb950; box-shadow: 0 0 0 3px rgba(63,185,80,0.16); }
+  .hubert-run-stage.error .dot { background: #ff7b72; box-shadow: 0 0 0 3px rgba(255,123,114,0.16); }
+  .hubert-run-stage strong {
+    min-width: 0; color: #c9d1d9; font-weight: 650;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .hubert-run-stage small {
+    color: #6f7a87; font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .hubert-tool-list {
+    display: grid; gap: 6px; border-top: 1px solid #25303c; padding-top: 9px;
+  }
+  .hubert-tool-row {
+    display: grid; grid-template-columns: minmax(0, 0.8fr) auto; gap: 10px; align-items: center;
+    color: #a8b3c1; font-size: 12px; background: #111820; border: 1px solid #25303c;
+    border-radius: 8px; padding: 7px 9px;
+  }
+  .hubert-tool-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hubert-tool-row span { color: #7d8997; font-size: 11px; }
+  .hubert-error-detail {
+    display: grid; gap: 6px; margin-top: 10px; padding: 10px;
+    border: 1px solid rgba(255,123,114,0.24); border-radius: 10px;
+    background: rgba(255,123,114,0.06); color: #ffd8d3; font-size: 13px;
+  }
+  .hubert-error-detail .error-code {
+    color: #ffb4a8; font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; font-weight: 800;
+  }
   .hubert-msg p { margin: 0 0 10px; }
   .hubert-msg p:last-child { margin-bottom: 0; }
   .hubert-msg pre {
@@ -2761,6 +2819,8 @@ let hubertMessages = [{
 let hubertSending = false;
 let chatModelHealth = {};
 let chatModelSource = 'fallback';
+let pendingHubertRun = null;
+let pendingHubertTimers = [];
 // CHAT_MODEL_FALLBACKS is only the pre-load safety net. The sidecar replaces
 // it with the live /models payload from serve.py as soon as the fetch returns.
 const CHAT_MODEL_FALLBACKS = [
@@ -3028,17 +3088,126 @@ function hubertRoleLabel(role) {
   if (role === 'assistant') return 'Hubert';
   if (role === 'user') return 'You';
   if (role === 'pending') return 'Hubert';
+  if (role === 'error') return 'Error';
   return 'Status';
+}
+
+function clearPendingHubertRun() {
+  pendingHubertTimers.forEach(t => clearTimeout(t));
+  pendingHubertTimers = [];
+  pendingHubertRun = null;
+}
+
+function startPendingHubertRun(model, contextLabel) {
+  clearPendingHubertRun();
+  pendingHubertRun = {
+    state: 'running',
+    model: model || 'default',
+    startedAt: Date.now(),
+    stages: [
+      { label: 'request queued', state: 'active', at_ms: 0 },
+      { label: contextLabel || 'workspace context', state: 'pending' },
+      { label: `${chatModelLabel(model || 'default')} selected`, state: 'pending' },
+      { label: 'MiMo CLI running', state: 'pending' }
+    ],
+    tools: []
+  };
+  const advance = (index) => {
+    if (!pendingHubertRun) return;
+    pendingHubertRun.stages.forEach((stage, i) => {
+      if (i < index) stage.state = 'done';
+      else if (i === index) {
+        stage.state = 'active';
+        stage.at_ms = Date.now() - pendingHubertRun.startedAt;
+      }
+    });
+    renderHubertMessages();
+  };
+  pendingHubertTimers.push(setTimeout(() => advance(1), 180));
+  pendingHubertTimers.push(setTimeout(() => advance(2), 420));
+  pendingHubertTimers.push(setTimeout(() => advance(3), 900));
+}
+
+function normalizeRunReceipt(data, fallbackModel, ok) {
+  const events = Array.isArray(data?.events) ? data.events : [];
+  const tools = Array.isArray(data?.tools) ? data.tools : [];
+  const terminal = data?.progress?.current_event || events[events.length - 1] || {};
+  return {
+    state: ok ? 'complete' : 'error',
+    model: data?.model || fallbackModel || 'default',
+    elapsed_ms: Number(data?.elapsed_ms || terminal.at_ms || 0),
+    stages: events.slice(-8).map((event, index, arr) => ({
+      label: event.label || event.type || 'event',
+      state: ok ? 'done' : (index === arr.length - 1 ? 'error' : 'done'),
+      at_ms: Number(event.at_ms || 0),
+      detail: event.detail || event.preview || '',
+      type: event.type || ''
+    })),
+    tools: tools.slice(-10).map(tool => ({
+      name: tool.name || tool.tool || tool.label || 'tool',
+      status: tool.status || tool.type || 'event',
+      at_ms: Number(tool.at_ms || 0),
+      preview: tool.preview || tool.detail || ''
+    })),
+    diagnostic: data?.diagnostic || null
+  };
+}
+
+function renderRunPanel(run) {
+  if (!run) return '';
+  const elapsed = run.elapsed_ms ? `${Math.max(1, Math.round(run.elapsed_ms / 1000))}s` : 'running';
+  const stages = (run.stages || []).length ? run.stages : [{ label: 'working', state: run.state || 'active' }];
+  const stageHtml = stages.map(stage => {
+    const state = stage.state || (run.state === 'error' ? 'error' : 'done');
+    const timing = Number.isFinite(stage.at_ms) && stage.at_ms > 0 ? `${Math.round(stage.at_ms / 1000)}s` : '';
+    const detail = stage.detail ? ` title="${esc(stage.detail)}"` : '';
+    return `<div class="hubert-run-stage ${esc(state)}"${detail}><span class="dot"></span><strong>${esc(stage.label || 'event')}</strong><small>${esc(timing)}</small></div>`;
+  }).join('');
+  const toolHtml = (run.tools || []).length ? `
+    <div class="hubert-tool-list">
+      ${(run.tools || []).map(tool => `
+        <div class="hubert-tool-row" title="${esc(tool.preview || '')}">
+          <strong>${esc(tool.name || 'tool')}</strong>
+          <span>${esc(tool.status || 'used')}</span>
+        </div>
+      `).join('')}
+    </div>` : '';
+  const diagnosticHtml = run.diagnostic ? `
+    <div class="hubert-error-detail">
+      <div class="error-code">${esc(run.diagnostic.code || 'CHAT_FAILED')}</div>
+      <div>${esc(run.diagnostic.message || '')}</div>
+      <div>${esc(run.diagnostic.next_action || '')}</div>
+    </div>` : '';
+  return `
+    <div class="hubert-run-card">
+      <div class="hubert-run-head"><span>${esc(chatModelLabel(run.model || 'default'))}</span><span>${esc(elapsed)}</span></div>
+      <div class="hubert-run-track">${stageHtml}</div>
+      ${toolHtml}
+      ${diagnosticHtml}
+    </div>
+  `;
+}
+
+function chatFailureText(status, data, err) {
+  if (err) return `Network error: ${err.message || err}`;
+  const diagnostic = data?.diagnostic || {};
+  const message = diagnostic.message || data?.error || 'Chat request failed';
+  if (status === 401) return 'Cloudflare Access did not authenticate this chat request. Refresh the graph and try again.';
+  if (status === 403) return 'This chat session belongs to another browser session. Refresh to start a clean one.';
+  if (status === 429) return 'The chat rate limit is protecting the box. Wait a minute and send it again.';
+  if (status === 400) return message;
+  if (status >= 500) return `MiMo could not finish the run: ${message}`;
+  return message;
 }
 
 function renderHubertMessages() {
   const el = document.getElementById('hubert-messages');
   const rows = hubertMessages.map(m => {
     const role = esc(m.role);
-    return `<div class="hubert-msg ${role}"><div class="msg-meta">${esc(hubertRoleLabel(m.role))}</div><div class="msg-body">${formatHubertText(m.text)}</div></div>`;
+    return `<div class="hubert-msg ${role}"><div class="msg-meta">${esc(hubertRoleLabel(m.role))}</div><div class="msg-body">${formatHubertText(m.text)}${renderRunPanel(m.run)}</div></div>`;
   });
-  if (hubertSending) {
-    rows.push(`<div class="hubert-msg pending"><div class="msg-meta">Hubert</div><div class="msg-body">working...</div></div>`);
+  if (hubertSending && pendingHubertRun) {
+    rows.push(`<div class="hubert-msg pending"><div class="msg-meta">Hubert</div><div class="msg-body">working${renderRunPanel(pendingHubertRun)}</div></div>`);
   }
   el.innerHTML = rows.join('');
   el.scrollTop = el.scrollHeight;
@@ -3050,13 +3219,20 @@ async function sendHubertMessage() {
   const text = input.value.trim();
   if (!text || hubertSending) return;
   if (!(await ensureGraphSecret())) {
-    hubertMessages.push({ role: 'system', text: 'Edits are locked. Unlock edits before asking Hubert to act on the graph.' });
+    hubertMessages.push({
+      role: 'error',
+      text: 'Edits are locked. Unlock edits before asking Hubert to act on the graph.',
+      run: normalizeRunReceipt({
+        model: document.getElementById('chat-model-select')?.value || 'default',
+        diagnostic: { code: 'EDITS_LOCKED', message: 'Mutation auth is not available.', next_action: 'Unlock edits and retry.' },
+        events: [{ label: 'edit auth missing', type: 'auth', at_ms: 0 }]
+      }, null, false)
+    });
     renderHubertMessages();
     return;
   }
   hubertSending = true;
   hubertMessages.push({ role: 'user', text });
-  renderHubertMessages();
   input.value = '';
   input.style.height = '';
   document.getElementById('hubert-send').disabled = true;
@@ -3067,10 +3243,14 @@ async function sendHubertMessage() {
   if (inspectedNode) context += '[selected: ' + inspectedNode.name + ' (' + inspectedNode.type + ')] ';
   if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
 
+  const modelSel = document.getElementById('chat-model-select');
+  const model = modelSel ? modelSel.value : 'default';
+  const contextLabel = currentCluster ? `${currentCluster} context` : 'workspace context';
+  startPendingHubertRun(model, contextLabel);
+  renderHubertMessages();
+
   try {
-    const hdrs = { 'Content-Type': 'application/json' };
-    const modelSel = document.getElementById('chat-model-select');
-    const model = modelSel ? modelSel.value : null;
+    const hdrs = { 'Content-Type': 'application/json', ...graphSecretHeaders() };
     updateChatModelStatus('running', 'MiMo is working in the live workspace');
     const body = JSON.stringify({
       message: context + text,
@@ -3078,9 +3258,18 @@ async function sendHubertMessage() {
       model
     });
     const r = await fetch(apiUrl('/chat'), { method: 'POST', headers: hdrs, body });
-    const data = await r.json();
+    let data = {};
+    try {
+      data = await r.json();
+    } catch (_) {
+      data = { ok: false, error: `HTTP ${r.status}` };
+    }
     if (data.ok) {
-      hubertMessages.push({ role: 'assistant', text: data.response || '(no response)' });
+      hubertMessages.push({
+        role: 'assistant',
+        text: data.response || '(no response)',
+        run: normalizeRunReceipt(data, model, true)
+      });
       hubertSessionId = data.session_id || hubertSessionId;
       if (data.model) {
         chatModelHealth[data.model] = {
@@ -3089,14 +3278,27 @@ async function sendHubertMessage() {
         };
       }
     } else {
-      hubertMessages.push({ role: 'system', text: 'Error: ' + (data.error || 'unknown') });
+      hubertMessages.push({
+        role: 'error',
+        text: chatFailureText(r.status, data),
+        run: normalizeRunReceipt(data, model, false)
+      });
       if (data.model) chatModelHealth[data.model] = { state: 'error', note: data.error || 'chat failed' };
     }
   } catch (e) {
-    hubertMessages.push({ role: 'system', text: 'Network error: ' + e.message });
+    hubertMessages.push({
+      role: 'error',
+      text: chatFailureText(0, null, e),
+      run: normalizeRunReceipt({
+        model,
+        diagnostic: { code: 'NETWORK_ERROR', message: e.message, next_action: 'Check the graph service and try again.' },
+        events: [{ label: 'network request failed', type: 'network', at_ms: 0 }]
+      }, model, false)
+    });
     updateChatModelStatus('error', e.message);
   }
   hubertSending = false;
+  clearPendingHubertRun();
   document.getElementById('hubert-send').disabled = false;
   updateChatModelStatus();
   renderHubertMessages();
