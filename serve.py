@@ -1117,6 +1117,66 @@ def _build_factory_overview() -> dict:
     }
 
 
+def _git_run(args: list[str], timeout: int = 20) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=LAG_HOME,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _git_checkpoint(paths: list[Path], message: str) -> dict:
+    """Commit exactly the changed graph-state paths from a mutation."""
+    rels = []
+    for path in paths:
+        try:
+            rels.append(path.resolve().relative_to(LAG_HOME).as_posix())
+        except ValueError:
+            return {"ok": False, "error": f"path outside live graph repo: {path}"}
+    if not rels:
+        return {"ok": True, "committed": False, "paths": []}
+
+    try:
+        add = _git_run(["add", "--", *rels])
+        if add.returncode != 0:
+            return {
+                "ok": False,
+                "stage": "git add",
+                "error": add.stderr.strip() or add.stdout.strip() or "git add failed",
+                "paths": rels,
+            }
+
+        diff = _git_run(["diff", "--cached", "--quiet", "--", *rels])
+        if diff.returncode == 0:
+            return {"ok": True, "committed": False, "paths": rels}
+        if diff.returncode != 1:
+            return {
+                "ok": False,
+                "stage": "git diff --cached",
+                "error": diff.stderr.strip() or diff.stdout.strip() or "git diff failed",
+                "paths": rels,
+            }
+
+        commit = _git_run(["commit", "-m", message, "--", *rels], timeout=30)
+        if commit.returncode != 0:
+            return {
+                "ok": False,
+                "stage": "git commit",
+                "error": commit.stderr.strip() or commit.stdout.strip() or "git commit failed",
+                "paths": rels,
+            }
+
+        rev = _git_run(["rev-parse", "--short", "HEAD"])
+        commit_sha = rev.stdout.strip() if rev.returncode == 0 else ""
+        return {"ok": True, "committed": True, "commit": commit_sha, "paths": rels}
+    except subprocess.TimeoutExpired as exc:
+        return {"ok": False, "stage": "git checkpoint", "error": f"timeout: {exc}", "paths": rels}
+    except Exception as exc:
+        return {"ok": False, "stage": "git checkpoint", "error": str(exc), "paths": rels}
+
+
 def new_cluster(name: str) -> dict:
     """Scaffold a new cluster directory with cluster.yaml + project.md."""
     if not name or not name.replace("-", "").replace("_", "").isalnum():
@@ -1124,10 +1184,20 @@ def new_cluster(name: str) -> dict:
     cluster_dir = LAG_HOME / "clusters" / name
     if cluster_dir.exists():
         return {"ok": False, "error": f"cluster '{name}' already exists"}
+    cluster_yaml = cluster_dir / "cluster.yaml"
+    project_md = cluster_dir / "project.md"
     cluster_dir.mkdir(parents=True, exist_ok=True)
-    (cluster_dir / "cluster.yaml").write_text(f"# {name} cluster\nname: {name}\ndescription: ''\nmembers: []\nconfig:\n  default_model: gpt-5.5\n")
-    (cluster_dir / "project.md").write_text(f"---\ngoal: ''\nstatus: blank\nhandoff_pct: 0\ndata_connectors: []\n---\n# {name}\n\nNew cluster.\n")
-    return {"ok": True, "name": name}
+    cluster_yaml.write_text(f"# {name} cluster\nname: {name}\ndescription: ''\nmembers: []\nconfig:\n  default_model: gpt-5.5\n")
+    project_md.write_text(f"---\ngoal: ''\nstatus: blank\nhandoff_pct: 0\ndata_connectors: []\n---\n# {name}\n\nNew cluster.\n")
+    checkpoint = _git_checkpoint([cluster_yaml, project_md], f"Add graph cluster {name}")
+    if not checkpoint.get("ok"):
+        return {
+            "ok": False,
+            "name": name,
+            "error": "cluster created but git checkpoint failed",
+            "git": checkpoint,
+        }
+    return {"ok": True, "name": name, "git": checkpoint}
 
 
 def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
@@ -1147,7 +1217,16 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
     if "members: []" in text:
         new_text = text.replace("members: []", f"members:\n  - {agent_id}")
         cluster_yaml.write_text(new_text)
-        return {"ok": True, "name": cluster_name, "agent_id": agent_id}
+        checkpoint = _git_checkpoint([cluster_yaml], f"Add {agent_id} to {cluster_name} cluster")
+        if not checkpoint.get("ok"):
+            return {
+                "ok": False,
+                "name": cluster_name,
+                "agent_id": agent_id,
+                "error": "cluster membership updated but git checkpoint failed",
+                "git": checkpoint,
+            }
+        return {"ok": True, "name": cluster_name, "agent_id": agent_id, "git": checkpoint}
     lines = text.split("\n")
     new_lines = []
     in_members = False
@@ -1168,7 +1247,16 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
     if in_members and not appended:
         new_lines.append(f"  - {agent_id}")
     cluster_yaml.write_text("\n".join(new_lines) + "\n")
-    return {"ok": True, "name": cluster_name, "agent_id": agent_id}
+    checkpoint = _git_checkpoint([cluster_yaml], f"Add {agent_id} to {cluster_name} cluster")
+    if not checkpoint.get("ok"):
+        return {
+            "ok": False,
+            "name": cluster_name,
+            "agent_id": agent_id,
+            "error": "cluster membership updated but git checkpoint failed",
+            "git": checkpoint,
+        }
+    return {"ok": True, "name": cluster_name, "agent_id": agent_id, "git": checkpoint}
 
 
 # ── MiMo Chat endpoint ──
