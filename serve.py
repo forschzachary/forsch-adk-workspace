@@ -1821,6 +1821,11 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(LAG_HOME), **kwargs)
 
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        super().end_headers()
+
     def _get_principal(self) -> str | None:
         """Verify Cloudflare Access JWT and return the verified email, or None.
 
