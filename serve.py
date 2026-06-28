@@ -1176,6 +1176,54 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
 MIMO_WORKDIR = str(WS)
 MIMO_BIN = os.environ.get("MIMO_BIN", "mimo")
 MIMO_TIMEOUT = int(os.environ.get("MIMO_TIMEOUT", "120"))
+CHAT_MODEL_FALLBACKS = [
+    "default",
+    "mimo/mimo-auto",
+    "xiaomi/mimo-v2.5",
+    "xiaomi/mimo-v2.5-pro",
+    "xiaomi/mimo-v2.5-pro-ultraspeed",
+]
+LEGACY_CHAT_MODEL_ALIASES = {
+    "mimo-v2.5": "mimo/mimo-auto",
+    "mimo-v2.5-pro": "mimo/mimo-auto",
+    "gpt-5.5": None,
+    "gpt-5.4": None,
+    "gpt-4.1": None,
+}
+
+
+def _normalise_chat_model(model: str | None) -> str | None:
+    """Convert display/legacy model labels into MiMo CLI model ids."""
+    clean = (model or "").strip()
+    if not clean or clean == "default":
+        return None
+    if clean in LEGACY_CHAT_MODEL_ALIASES:
+        return LEGACY_CHAT_MODEL_ALIASES[clean]
+    if "/" not in clean:
+        return None
+    return clean
+
+
+def _list_chat_models() -> list[str]:
+    try:
+        result = subprocess.run(
+            [MIMO_BIN, "models"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=MIMO_WORKDIR,
+        )
+        if result.returncode == 0:
+            models = [line.strip() for line in result.stdout.splitlines() if "/" in line.strip()]
+            ordered = ["default"]
+            for model in models:
+                if model not in ordered:
+                    ordered.append(model)
+            if len(ordered) > 1:
+                return ordered
+    except Exception:
+        pass
+    return CHAT_MODEL_FALLBACKS
 
 def chat_with_mimo(message: str, session_id: str | None = None,
                    model: str | None = None, principal: str = "unknown") -> dict:
@@ -1185,6 +1233,7 @@ def chat_with_mimo(message: str, session_id: str | None = None,
     the ADK workspace. Session-aware: pass session_id to continue a conversation.
     Model can be overridden per-request via the -m flag.
     """
+    model = _normalise_chat_model(model)
     cmd = [MIMO_BIN, "run", "--format", "json", "--dir", MIMO_WORKDIR]
     if model:
         cmd.extend(["-m", model])
@@ -1197,6 +1246,7 @@ def chat_with_mimo(message: str, session_id: str | None = None,
         if result.returncode == 0:
             response_text = ""
             new_session_id = session_id or ""
+            error_text = ""
             for line in result.stdout.strip().split("\n"):
                 line = line.strip()
                 if not line or not line.startswith("{"):
@@ -1207,8 +1257,17 @@ def chat_with_mimo(message: str, session_id: str | None = None,
                     continue
                 if evt.get("type") == "text" and evt.get("part", {}).get("text"):
                     response_text += evt["part"]["text"]
+                if evt.get("type") == "error":
+                    error = evt.get("error") or {}
+                    data = error.get("data") if isinstance(error, dict) else {}
+                    if isinstance(data, dict):
+                        error_text = data.get("message") or data.get("responseBody") or ""
+                    if not error_text and isinstance(error, dict):
+                        error_text = error.get("name") or "MiMo error"
                 if evt.get("sessionID") and not new_session_id:
                     new_session_id = evt["sessionID"]
+            if error_text and not response_text:
+                return {"ok": False, "error": error_text[:500], "session_id": new_session_id}
             return {"ok": True, "response": response_text or "(no response)",
                     "session_id": new_session_id}
         return {"ok": False, "error": result.stderr[:500] or f"exit {result.returncode}"}
@@ -1694,19 +1753,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             self._json_response(200, manifest)
         elif path == "/models":
-            try:
-                r = subprocess.run([MIMO_BIN, "models", "--format", "json"],
-                                   capture_output=True, text=True, timeout=10)
-                if r.returncode == 0:
-                    models = [m.strip() for m in r.stdout.strip().split("\n") if m.strip()]
-                    self._json_response(200, {"models": sorted(models)})
-                else:
-                    raise Exception(r.stderr[:200])
-            except Exception:
-                self._json_response(200, {"models": [
-                    "mimo-v2.5", "mimo-v2.5-pro", "gpt-5.5", "gpt-5.4",
-                    "deepseek-v4-pro", "glm-5.2", "gemini-3-pro-preview",
-                ]})
+            self._json_response(200, {"models": _list_chat_models()})
         elif path in ("/agent-config", "/agent-tools", "/agent-models", "/agent-verify", "/agent-evals") and not self._check_auth():
             # Fail-closed: without a valid Access JWT, block access.
             # than silently opening the endpoints. Standalone dev should set a secret.
