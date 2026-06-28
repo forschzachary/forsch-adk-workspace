@@ -1442,60 +1442,90 @@ def _list_chat_models() -> list[str]:
         pass
     return CHAT_MODEL_FALLBACKS
 
-def chat_with_mimo(message: str, session_id: str | None = None,
-                   model: str | None = None, principal: str = "unknown") -> dict:
-    """Send a message to MiMo (CLI coding agent) and return the response.
-
-    MiMo runs as a subprocess with full tool access (bash, file, search) in
-    the ADK workspace. Session-aware: pass session_id to continue a conversation.
-    Model can be overridden per-request via the -m flag.
-    """
-    if isinstance(message, str) and len(message.encode("utf-8")) > MAX_MIMO_MESSAGE_BYTES:
-        return {"ok": False, "error": f"message too large (max {MAX_MIMO_MESSAGE_BYTES} bytes)"}
-    model = _normalise_chat_model(model)
-    cmd = [MIMO_BIN, "run", "--format", "json", "--dir", MIMO_WORKDIR]
-    if model:
-        cmd.extend(["-m", model])
-    if session_id:
-        cmd.extend(["-s", session_id])
-    cmd.append(message)
+    # Stream-parse mimo JSON events. Kill the subprocess as soon as we
+    # see a terminal event (error or step_finish with no preceding text)
+    # so model-not-found errors return in <1s instead of hanging for
+    # the full MIMO_TIMEOUT (120s). The earlier subprocess.run design
+    # waited for process exit, which could be slow on errors.
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True,
-                                timeout=MIMO_TIMEOUT, cwd=MIMO_WORKDIR)
-        if result.returncode == 0:
-            response_text = ""
-            new_session_id = session_id or ""
-            error_text = ""
-            for line in result.stdout.strip().split("\n"):
-                line = line.strip()
-                if not line or not line.startswith("{"):
-                    continue
-                try:
-                    evt = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if evt.get("type") == "text" and evt.get("part", {}).get("text"):
-                    response_text += evt["part"]["text"]
-                if evt.get("type") == "error":
-                    error = evt.get("error") or {}
-                    data = error.get("data") if isinstance(error, dict) else {}
-                    if isinstance(data, dict):
-                        error_text = data.get("message") or data.get("responseBody") or ""
-                    if not error_text and isinstance(error, dict):
-                        error_text = error.get("name") or "MiMo error"
-                if evt.get("sessionID") and not new_session_id:
-                    new_session_id = evt["sessionID"]
-            if error_text and not response_text:
-                return {"ok": False, "error": error_text[:500], "session_id": new_session_id}
-            return {"ok": True, "response": response_text or "(no response)",
-                    "session_id": new_session_id}
-        return {"ok": False, "error": result.stderr[:500] or f"exit {result.returncode}"}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"timeout after {MIMO_TIMEOUT}s"}
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, cwd=MIMO_WORKDIR,
+        )
     except FileNotFoundError:
         return {"ok": False, "error": "mimo not installed on this box"}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": str(e)[:500]}
+
+    response_text = ""
+    new_session_id = session_id or ""
+    error_text = ""
+    finished_cleanly = False
+    start = time.time()
+
+    try:
+        # Read stdout line by line; stop as soon as mimo emits an error
+        # event or a step_finish event (tool-less turn completed).
+        assert proc.stdout is not None
+        while True:
+            if time.time() - start > MIMO_TIMEOUT:
+                proc.kill()
+                return {"ok": False, "error": f"timeout after {MIMO_TIMEOUT}s"}
+            line = proc.stdout.readline()
+            if not line:
+                # EOF — process exited.
+                break
+            line = line.strip()
+            if not line or not line.startswith("{"):
+                continue
+            try:
+                evt = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            etype = evt.get("type")
+            if etype == "text" and evt.get("part", {}).get("text"):
+                response_text += evt["part"]["text"]
+            elif etype == "error":
+                # Immediate exit on error — mimo may keep running (and
+                # dump stack-trace garbage) after the error event. Kill it
+                # so we don't block on the subprocess exit.
+                error = evt.get("error") or {}
+                data = error.get("data") if isinstance(error, dict) else {}
+                if isinstance(data, dict):
+                    error_text = data.get("message") or data.get("responseBody") or ""
+                if not error_text and isinstance(error, dict):
+                    error_text = error.get("name") or "MiMo error"
+                proc.kill()
+                break
+            elif etype == "step_finish":
+                # Tool-less turn completed; the response is in.
+                finished_cleanly = True
+                break
+            if evt.get("sessionID") and not new_session_id:
+                new_session_id = evt["sessionID"]
+    except Exception as e:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return {"ok": False, "error": f"stream error: {e}"}
+
+    # Wait briefly for the process to exit (we already broke out of the
+    # read loop). If it's stuck, kill it.
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2)
+
+    if error_text and not response_text:
+        return {"ok": False, "error": error_text[:500], "session_id": new_session_id}
+    return {
+        "ok": True,
+        "response": response_text or "(no response)",
+        "session_id": new_session_id,
+        "finished_cleanly": finished_cleanly,
+    }
 
 
 # ── Box JSON API stubs (cockpit ADK-builder) ──
