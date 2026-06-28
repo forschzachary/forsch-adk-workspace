@@ -11,7 +11,7 @@
 # Control-plane paths:
 #   .github/**, .pre-commit-config.yaml, scripts/check_*.py,
 #   agent_specs/agents.yaml, release-please-config.json,
-#   repo_manifest.yaml, factory/**
+#   repo_manifest.yaml, packages/live-agent-graph/registry/**
 #
 # See docs/strategy/2026-06-28-repository-and-git-discipline.md §7.x
 
@@ -50,7 +50,7 @@ jobs:
             "^agent_specs/agents\\.yaml$"
             "^release-please-config\\.json$"
             "^repo_manifest\\.yaml$"
-            "^factory/"
+            "^packages/live-agent-graph/registry/"
           )
 
           HIT=0
@@ -79,45 +79,22 @@ jobs:
 
       # ── Full invariant suite (only for control-plane PRs) ──────────────
 
-      - name: uv lock --check (builder)
+      - name: Sync workspace (locked)
         if: steps.detect.outputs.is_control_plane == '1'
-        run: uv lock --check
-        working-directory: builder
+        run: uv sync --locked --all-packages
 
       - name: Structure check
         if: steps.detect.outputs.is_control_plane == '1'
-        run: uv run --no-project python scripts/check_structure.py
+        run: uv run python scripts/check_structure.py
 
       - name: Bijection check
         if: steps.detect.outputs.is_control_plane == '1'
-        run: uv run --no-project python scripts/check_bijection.py
+        run: uv run python scripts/check_bijection.py
 
       - name: Build all packages
         if: steps.detect.outputs.is_control_plane == '1'
-        run: |
-          for pkg in builder chat factory; do
-            if [ -f "$pkg/pyproject.toml" ]; then
-              echo "::group::Building $pkg"
-              cd "$pkg"
-              uv build 2>&1 || { echo "::error::uv build failed in $pkg"; exit 1; }
-              cd "$GITHUB_WORKSPACE"
-              echo "::endgroup::"
-            fi
-          done
+        run: uv build --all-packages
 
       - name: Pytest (all packages)
         if: steps.detect.outputs.is_control_plane == '1'
-        run: |
-          for pkg in builder chat factory; do
-            if [ -d "$pkg/tests" ] && [ -f "$pkg/pyproject.toml" ]; then
-              echo "::group::Testing $pkg"
-              cd "$pkg"
-              uv run --extra dev python -m pytest -q 2>&1 || {
-                echo "::error::pytest failed in $pkg"
-                EXIT=1
-              }
-              cd "$GITHUB_WORKSPACE"
-              echo "::endgroup::"
-            fi
-          done
-          if [ "${EXIT:-0}" -ne 0 ]; then exit 1; fi
+        run: uv run --all-packages python -m pytest -q

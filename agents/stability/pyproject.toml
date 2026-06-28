@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Stability agent - read-only workspace and runtime auditor"
 requires-python = ">=3.10"
 dependencies = [
-    "forsch-adk-components>=0.1.0",
+    "forsch-adk-components==0.1.0",  # R-STRUCT-11: explicit == intra-dep pin (ships into the wheel)
     "google-adk[extensions]>=2.3.0",
 ]
 
@@ -14,6 +14,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
 ]
+
+[tool.uv.sources]
+forsch-adk-components = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

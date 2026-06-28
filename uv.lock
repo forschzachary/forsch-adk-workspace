@@ -13,27 +13,14 @@ resolution-markers = [
 members = [
     "forsch-adk-components",
     "forsch-adk-workspace",
-    "forsch-agent-api-spawn-test",
     "forsch-agent-assistant",
     "forsch-agent-brand",
     "forsch-agent-build",
-    "forsch-agent-cookie-spawn-test",
-    "forsch-agent-e2e-proof",
-    "forsch-agent-e2e-proof-2026",
-    "forsch-agent-guild-herald",
-    "forsch-agent-guild-quartermaster",
-    "forsch-agent-guild-treasurer",
     "forsch-agent-ops",
-    "forsch-agent-proxy-spawn-test",
-    "forsch-agent-raid-scheduler",
     "forsch-agent-screening",
     "forsch-agent-shelby",
     "forsch-agent-social",
     "forsch-agent-stability",
-    "forsch-agent-test-autospawn",
-    "forsch-agent-test-ui-spawn",
-    "forsch-agent-wow-guild-bot",
-    "forsch-agent-wow-guild-helper",
     "live-agent-graph",
 ]
 
@@ -898,7 +885,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11' or python_full_version == '3.12.*'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1044,32 +1031,6 @@ version = "0.0.0"
 source = { virtual = "." }
 
 [[package]]
-name = "forsch-agent-api-spawn-test"
-version = "0.1.0"
-source = { editable = "agents/api_spawn_test" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "forsch-agent-assistant"
 version = "0.1.0"
 source = { editable = "agents/assistant" }
@@ -1148,217 +1109,9 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
-name = "forsch-agent-cookie-spawn-test"
-version = "0.1.0"
-source = { editable = "agents/cookie_spawn_test" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-e2e-proof"
-version = "0.1.0"
-source = { editable = "agents/e2e_proof" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-e2e-proof-2026"
-version = "0.1.0"
-source = { editable = "agents/e2e_proof_2026" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-guild-herald"
-version = "0.1.0"
-source = { editable = "agents/guild_herald" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-guild-quartermaster"
-version = "0.1.0"
-source = { editable = "agents/guild_quartermaster" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-guild-treasurer"
-version = "0.1.0"
-source = { editable = "agents/guild_treasurer" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "forsch-agent-ops"
 version = "0.1.0"
 source = { editable = "agents/ops" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-proxy-spawn-test"
-version = "0.1.0"
-source = { editable = "agents/proxy_spawn_test" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-raid-scheduler"
-version = "0.1.0"
-source = { editable = "agents/raid_scheduler" }
 dependencies = [
     { name = "forsch-adk-components" },
     { name = "google-adk" },
@@ -1479,110 +1232,6 @@ dev = [
 requires-dist = [
     { name = "forsch-adk-components", editable = "packages/adk-components" },
     { name = "google-adk", extras = ["extensions"], specifier = ">=2.3.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-test-autospawn"
-version = "0.1.0"
-source = { editable = "agents/test_autospawn" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-test-ui-spawn"
-version = "0.1.0"
-source = { editable = "agents/test_ui_spawn" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-wow-guild-bot"
-version = "0.1.0"
-source = { editable = "agents/wow_guild_bot" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "forsch-agent-wow-guild-helper"
-version = "0.1.0"
-source = { editable = "agents/wow_guild_helper" }
-dependencies = [
-    { name = "forsch-adk-components" },
-    { name = "google-adk" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "forsch-adk-components", editable = "packages/adk-components" },
-    { name = "google-adk", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },

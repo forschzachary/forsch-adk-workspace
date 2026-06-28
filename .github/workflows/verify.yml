@@ -4,6 +4,10 @@
 # check alone (once the ruleset is armed).  Control-plane PRs additionally
 # require the `control-plane-approved` check from control-plane-review.yml.
 #
+# Workspace-wide: the consolidated uv workspace (root pyproject.toml
+# [tool.uv.workspace] members = packages/*, agents/*, clusters/*) is resolved
+# by a single root uv.lock.  All steps run from the repo root.
+#
 # See docs/strategy/2026-06-28-repository-and-git-discipline.md §7.x
 
 name: Verify
@@ -34,41 +38,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: uv lock --check (builder)
-        run: uv lock --check
-        working-directory: builder
+      - name: Sync workspace (locked)
+        run: uv sync --locked --all-packages
 
       - name: Structure check
-        run: uv run --no-project python scripts/check_structure.py
+        run: uv run python scripts/check_structure.py
 
       - name: Bijection check
-        run: uv run --no-project python scripts/check_bijection.py
+        run: uv run python scripts/check_bijection.py
 
       - name: Build all packages
-        run: |
-          for pkg in builder chat factory; do
-            if [ -f "$pkg/pyproject.toml" ]; then
-              echo "::group::Building $pkg"
-              cd "$pkg"
-              uv build 2>&1 || { echo "::error::uv build failed in $pkg"; exit 1; }
-              cd "$GITHUB_WORKSPACE"
-              echo "::endgroup::"
-            fi
-          done
+        run: uv build --all-packages
 
       - name: Pytest (all packages)
-        run: |
-          EXIT=0
-          for pkg in builder chat factory; do
-            if [ -d "$pkg/tests" ] && [ -f "$pkg/pyproject.toml" ]; then
-              echo "::group::Testing $pkg"
-              cd "$pkg"
-              uv run --extra dev python -m pytest -q 2>&1 || {
-                echo "::error::pytest failed in $pkg"
-                EXIT=1
-              }
-              cd "$GITHUB_WORKSPACE"
-              echo "::endgroup::"
-            fi
-          done
-          exit $EXIT
+        run: uv run --all-packages python -m pytest -q

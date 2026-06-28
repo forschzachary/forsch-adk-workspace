@@ -254,12 +254,44 @@ def validate_cluster(cluster_name: str) -> list[str]:
 
 parser = argparse.ArgumentParser(description="Build per-cluster agent graph manifest")
 parser.add_argument("--cluster", help="Cluster name (reads clusters/<name>/cluster.yaml)")
+parser.add_argument(
+    "--all",
+    action="store_true",
+    help="Full-graph mode: union every cluster's members + tool families "
+    "(mirrors serve.py's sorted(clusters_dir.iterdir()) convention)",
+)
 parser.add_argument("--validate", action="store_true", help="Validate cluster configs only (no manifest output)")
 args = parser.parse_args()
 
+CLUSTERS_DIR = SPIKE_DIR / "clusters"
+
+
+def _all_cluster_names() -> list[str]:
+    """Sorted cluster names (the all-clusters iteration convention)."""
+    if not CLUSTERS_DIR.exists():
+        return []
+    return sorted(
+        p.name
+        for p in CLUSTERS_DIR.iterdir()
+        if p.is_dir() and (p / "cluster.yaml").exists()
+    )
+
 # ── Validation gate (disk-first — fail loud before anything touches the graph) ──
 
-if args.cluster:
+if args.all:
+    all_errors: list[str] = []
+    for cname in _all_cluster_names():
+        for e in validate_cluster(cname):
+            all_errors.append(f"[{cname}] {e}")
+    if all_errors:
+        print("VALIDATION FAILED for --all:", file=sys.stderr)
+        for e in all_errors:
+            print(f"  • {e}", file=sys.stderr)
+        sys.exit(1)
+    if args.validate:
+        print("All clusters — all checks passed.")
+        sys.exit(0)
+elif args.cluster:
     errors = validate_cluster(args.cluster)
     if errors:
         print(f"VALIDATION FAILED for cluster '{args.cluster}':", file=sys.stderr)
@@ -272,7 +304,53 @@ if args.cluster:
 
 # ── Load data sources ──
 
-if args.cluster:
+def _resolve_cluster_allowed(cluster_config: dict, shared_tools: set, families: dict) -> set:
+    """Resolve a single cluster's allowed tools (tool_families minus excludes,
+    or all shared tools when no families are declared)."""
+    cluster_families = cluster_config.get("tool_families", [])
+    cluster_excludes = set(cluster_config.get("exclude_tools", []))
+    if cluster_families:
+        allowed: set = set()
+        for family in cluster_families:
+            allowed.update(families.get(family, []))
+        allowed -= cluster_excludes
+    else:
+        allowed = shared_tools - cluster_excludes
+    return allowed
+
+
+if args.all:
+    # Full-graph mode: union every cluster's members + allowed tools.
+    registry_yaml = SPIKE_DIR / "registry" / "agents" / "agents.yaml"
+    shared_yaml = SPIKE_DIR / "shared" / "components.yaml"
+
+    registry = (yaml.safe_load(registry_yaml.read_text()) or {}).get("agents", {}) if registry_yaml.exists() else {}
+    shared = yaml.safe_load(shared_yaml.read_text()) if shared_yaml.exists() else {}
+
+    TOOL_FAMILIES = shared.get("tool_families", {})
+    TOOL_FAMILY_MAP = {}
+    for family, tool_list in TOOL_FAMILIES.items():
+        for tname in tool_list:
+            TOOL_FAMILY_MAP[tname] = family
+    if not TOOL_FAMILY_MAP and shared.get("tools"):
+        for tname in shared.get("tools", []):
+            TOOL_FAMILY_MAP[tname] = "shared"
+    SHARED_TOOLS = set(TOOL_FAMILY_MAP.keys())
+    SHARED_MODELS = set(shared.get("models", []))
+    CONNECTIONS = shared.get("connections", {})
+    TOOL_CONN = shared.get("tool_connections", {})
+
+    # Union members across all clusters (deterministic: sorted cluster names,
+    # then registry agents in sorted order so the agent node set is stable).
+    member_union: set = set()
+    ALLOWED_TOOLS = set()
+    for cname in _all_cluster_names():
+        cdef = yaml.safe_load((CLUSTERS_DIR / cname / "cluster.yaml").read_text()) or {}
+        member_union.update(cdef.get("members", []))
+        ALLOWED_TOOLS |= _resolve_cluster_allowed(cdef.get("config", {}), SHARED_TOOLS, TOOL_FAMILIES)
+
+    agents = {aid: registry[aid] for aid in sorted(member_union) if aid in registry}
+elif args.cluster:
     # Cluster-tabs model
     registry_yaml = SPIKE_DIR / "registry" / "agents" / "agents.yaml"
     shared_yaml = SPIKE_DIR / "shared" / "components.yaml"
@@ -309,19 +387,7 @@ if args.cluster:
     TOOL_CONN = shared.get("tool_connections", {})
 
     # Cluster-level tool family selection + excludes
-    cluster_families = cluster_config.get("tool_families", [])
-    cluster_excludes = set(cluster_config.get("exclude_tools", []))
-
-    # Resolve which shared tools this cluster gets:
-    # - If tool_families is specified, only include tools from those families
-    # - If not specified, include all shared tools (backward compat)
-    if cluster_families:
-        ALLOWED_TOOLS = set()
-        for family in cluster_families:
-            ALLOWED_TOOLS.update(TOOL_FAMILIES.get(family, []))
-        ALLOWED_TOOLS -= cluster_excludes
-    else:
-        ALLOWED_TOOLS = SHARED_TOOLS - cluster_excludes
+    ALLOWED_TOOLS = _resolve_cluster_allowed(cluster_config, SHARED_TOOLS, TOOL_FAMILIES)
 else:
     # Legacy mode: read from ADK workspace
     agents_yaml = ADK_WS / "agent_specs" / "agents.yaml"
@@ -528,10 +594,10 @@ def link(s, t, kind):
 
 # ── Shared layer: tools (from allowed families), models, connections ──
 
-for tname in ALLOWED_TOOLS:
+for tname in sorted(ALLOWED_TOOLS):
     family = TOOL_FAMILY_MAP.get(tname, "shared")
     node(f"tool:{tname}", tname, "tool", shared=True, family=family)
-for mname in SHARED_MODELS:
+for mname in sorted(SHARED_MODELS):
     node(f"model:{mname}", mname, "logic", shared=True)
 
 node("authsome", "authsome (broker)", "database", shared=True)
@@ -590,7 +656,7 @@ for n in list(nodes.values()):
         n["model"] = agents.get(aid, {}).get("model", "nvidia-deepseek-v4-flash") if aid else "nvidia-deepseek-v4-flash"
     elif ntype == "tool":
         tname = nid.replace("tool:", "")
-        n["artifact"] = f"components/src/forsch/adk_components/tools/*.py (def {tname})"
+        n["artifact"] = f"packages/adk-components/src/forsch/adk_components/tools/*.py (def {tname})"
     elif ntype in ("intake", "channel"):
         n["artifact"] = "Discord channel config"
     elif ntype in ("router", "group"):
@@ -633,8 +699,14 @@ if cap_file.exists():
     except Exception:
         pass
 
-all_nodes = list(nodes.values()) + extra_nodes
-all_links = links + extra_links
+all_nodes = sorted(
+    list(nodes.values()) + extra_nodes,
+    key=lambda n: str(n.get("id", "")),
+)
+all_links = sorted(
+    links + extra_links,
+    key=lambda l: (_lid(l["source"]), _lid(l["target"]), l.get("kind", "")),
+)
 
 # ── Prune orphan shared tools (shared tools not linked to any cluster agent) ──
 
@@ -675,16 +747,26 @@ output_node_count = len(all_nodes)
 
 # ── Emit ──
 
+if args.all:
+    _cluster_label = "all"
+    _source = "registry/agents/agents.yaml + shared/components.yaml + clusters/* (all-clusters union)"
+elif args.cluster:
+    _cluster_label = args.cluster
+    _source = f"registry/agents/agents.yaml + shared/components.yaml + clusters/{args.cluster}/cluster.yaml"
+else:
+    _cluster_label = "legacy"
+    _source = "agents.yaml + filesystem scan + capabilities.json"
+
 output = {
     "version": 2,
-    "cluster": args.cluster or "legacy",
+    "cluster": _cluster_label,
     "nodes": all_nodes,
     "links": all_links,
     "node_count": len(all_nodes),
     "link_count": len(all_links),
     "meta": {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source": f"registry/agents/agents.yaml + shared/components.yaml + clusters/{args.cluster}/cluster.yaml" if args.cluster else "agents.yaml + filesystem scan + capabilities.json",
+        "source": _source,
     },
 }
 
