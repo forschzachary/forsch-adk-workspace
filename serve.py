@@ -1699,12 +1699,7 @@ def _list_agent_models() -> dict:
         pass
     return {
         "ok": True,
-        "models": [
-            "gpt-5.5", "gpt-5.4", "gpt-4.1", "glm-5.2", "glm-5.1",
-            "deepseek-v4-pro", "deepseek-v4-flash", "gemini-3-pro-preview",
-            "gemini-3-flash-preview", "kimi-k2.6", "kimi-k2.7-code",
-            "minimax-m3", "qwen3-coder-480b", "cerebras-120b",
-        ],
+        "models": list(CHAT_MODEL_FALLBACKS),
     }
 
 
@@ -2145,17 +2140,9 @@ class Handler(SimpleHTTPRequestHandler):
                     models = [m["id"] for m in data.get("data", [])]
                     self._json_response(200, {"models": sorted(models)})
             except Exception:
-                # Hardcoded fallback if proxy unreachable
-                self._json_response(200, {"models": [
-                    "mimo-v2.5", "mimo-v2.5-pro", "gpt-5.5", "gpt-5.4", "gpt-4.1",
-                    "deepseek-v4-pro", "deepseek-v4-flash", "glm-5.2",
-                    "gemini-3-pro-preview", "gemini-3-flash-preview",
-                    "nvidia-deepseek-v4-flash", "qwen3-coder:480b",
-                    "groq-compound-mini", "groq-gpt-oss-20b",
-                    "groq-llama-4-scout", "groq-llama-8b",
-                    "nvidia-llama-vision-11b", "nvidia-llama-vision-90b",
-                    "nvidia-nemotron-30b", "mistral-large",
-                ]})
+                # Hardcoded fallback if proxy unreachable. Use the canonical
+                # CHAT_MODEL_FALLBACKS list as the single source of truth.
+                self._json_response(200, {"models": list(CHAT_MODEL_FALLBACKS)})
 
         elif parsed.path == "/promote":
             if not self._check_auth():
