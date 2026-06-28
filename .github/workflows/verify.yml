@@ -39,7 +39,7 @@ jobs:
           python-version: "3.12"
 
       - name: Sync workspace (locked)
-        run: uv sync --locked --all-packages
+        run: uv sync --locked --all-packages --all-extras
 
       - name: Structure check
         run: uv run python scripts/check_structure.py
@@ -51,4 +51,4 @@ jobs:
         run: uv build --all-packages
 
       - name: Pytest (all packages)
-        run: uv run --all-packages python -m pytest -q
+        run: uv run --all-packages --all-extras python -m pytest -q || { rc=$?; [ "$rc" = "5" ] && exit 0 || exit $rc; }

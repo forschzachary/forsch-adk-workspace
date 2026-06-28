@@ -81,7 +81,7 @@ jobs:
 
       - name: Sync workspace (locked)
         if: steps.detect.outputs.is_control_plane == '1'
-        run: uv sync --locked --all-packages
+        run: uv sync --locked --all-packages --all-extras
 
       - name: Structure check
         if: steps.detect.outputs.is_control_plane == '1'
@@ -97,4 +97,4 @@ jobs:
 
       - name: Pytest (all packages)
         if: steps.detect.outputs.is_control_plane == '1'
-        run: uv run --all-packages python -m pytest -q
+        run: uv run --all-packages --all-extras python -m pytest -q || { rc=$?; [ "$rc" = "5" ] && exit 0 || exit $rc; }
