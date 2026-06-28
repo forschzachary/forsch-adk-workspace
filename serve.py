@@ -327,7 +327,7 @@ def promote_agent(agent_id: str, target_role: str) -> dict:
     )
     if result.returncode == 0:
         try:
-            return json.loads(result.stdout.strip().split("\n")[-1])
+            return json.loads(result.stdout.strip())
         except json.JSONDecodeError:
             return {"ok": False, "error": f"parse error: {result.stdout[:200]}"}
     return {"ok": False, "error": result.stderr[:300] or f"exit {result.returncode}"}
