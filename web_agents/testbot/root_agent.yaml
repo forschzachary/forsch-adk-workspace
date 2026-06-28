@@ -1,0 +1,10 @@
+agent_class: LlmAgent
+name: testbot_agent
+description: E2E test agent — proves the cockpit-as-ADK-builder flow.
+instruction: |
+  You are a test agent. Reply with exactly: E2E test passed.
+model_code:
+  name: forsch.agent_testbot.agent.testbot_model
+tools:
+  - name: forsch.adk_components.tools.list_recent_crm_leads
+  - name: forsch.adk_components.tools.check_service_health

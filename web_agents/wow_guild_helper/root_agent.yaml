@@ -1,0 +1,14 @@
+agent_class: LlmAgent
+name: wow_guild_helper_agent
+description: wow_guild_helper agent
+instruction: |
+  You are a WoW guild helper bot. Help coordinate raid signups, answer lore questions, and track guild member activity. Be knowledgeable about Classic WoW (patch 1.12).
+model_code:
+  name: forsch.agent_wow_guild_helper.agent.wow_guild_helper_model
+tools:
+  - name: forsch.adk_components.tools.search_items
+  - name: forsch.adk_components.tools.get_item_details
+  - name: forsch.adk_components.tools.search_quests
+  - name: forsch.adk_components.tools.get_dungeon_bosses
+  - name: forsch.adk_components.tools.get_boss_loot
+  - name: forsch.adk_components.tools.search_npcs

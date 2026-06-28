@@ -1,0 +1,10 @@
+agent_class: LlmAgent
+name: proxy_spawn_test_agent
+description: proxy_spawn_test agent
+instruction: |
+  test proxy auto-spawn
+model_code:
+  name: forsch.agent_proxy_spawn_test.agent.proxy_spawn_test_model
+tools:
+  - name: forsch.adk_components.tools.get_crm_health_snapshot
+  - name: forsch.adk_components.tools.list_recent_crm_leads

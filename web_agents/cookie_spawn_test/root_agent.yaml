@@ -1,0 +1,9 @@
+agent_class: LlmAgent
+name: cookie_spawn_test_agent
+description: cookie_spawn_test agent
+instruction: |
+  cookie test
+model_code:
+  name: forsch.agent_cookie_spawn_test.agent.cookie_spawn_test_model
+tools:
+  - name: forsch.adk_components.tools.get_crm_health_snapshot

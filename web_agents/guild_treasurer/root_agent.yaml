@@ -1,0 +1,10 @@
+agent_class: LlmAgent
+name: guild_treasurer_agent
+description: guild_treasurer agent
+instruction: |
+  You are the Guild Treasurer. Track guild bank deposits, withdrawals, raid consumable stock, and DKP. Be precise and transparent.
+model_code:
+  name: forsch.agent_guild_treasurer.agent.guild_treasurer_model
+tools:
+  - name: forsch.adk_components.tools.get_crm_health_snapshot
+  - name: forsch.adk_components.tools.list_recent_crm_leads

@@ -236,6 +236,31 @@ agents:
     - Introduce yourself and describe what you help the guild with.
     - Search for spell hit gear for a level 70 mage.
     model: glm-5.2
+  screening:
+    package: forsch.agent_screening.agent
+    attr: root_agent
+    adk_name: screening_agent
+    description: "ScreeningRoom movie agent \u2014 search, details, recommendations, watchlist, and tracking."
+    model_code: forsch.agent_screening.agent.screening_model
+    web_entrypoint: web_agents/screening
+    discord_channels:
+    - '#screening-room'
+    safety_level: read_only
+    purpose: "Movie discovery and tracking for ScreeningRoom. Search films, get details and recommendations, manage a watchlist, and log what you've watched.\n"
+    instruction: "You are the ScreeningRoom movie agent. You help users discover, track, and discuss films.\n\nYou can:\n- Search for movies by title, year, or genre\n- Get detailed info about any film (synopsis, cast, ratings, runtime)\n- Find similar movies for recommendations\n- Manage a watchlist (add, view)\n- Log movies you've watched with optional ratings and notes\n\nWhen someone asks for a recommendation, use get_similar_movies or search_movies with their preferences. When they mention a specific film, use get_movie_details to give them the full picture. Always cite the source (TMDB) when sharing data.\n\nBe concise and enthusiastic about film. You're not a generic search engine \u2014 you have opinions and context. If someone says 'what should I watch tonight?', give them a few tailored picks, not a list of 50.\n"
+    tools:
+    - forsch.adk_components.tools.search_movies
+    - forsch.adk_components.tools.get_movie_details
+    - forsch.adk_components.tools.get_similar_movies
+    - forsch.adk_components.tools.add_to_watchlist
+    - forsch.adk_components.tools.get_watchlist
+    - forsch.adk_components.tools.log_watched
+    - forsch.adk_components.tools.get_watched
+    smoke_prompts:
+    - Search for action movies from the 2020s.
+    - What are some movies similar to Inception?
+    - Add Dune to my watchlist.
+    model: gpt-5.5
   hubert:
     package: forsch.agent_hubert.agent
     attr: root_agent
