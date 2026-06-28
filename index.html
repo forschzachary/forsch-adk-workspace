@@ -673,10 +673,6 @@ function mutationHeaders(extra = {}) {
 function updateEditAuthStatus() {}
 async function unlockGraphEdits() { return true; }
 async function ensureGraphSecret() { return true; }
-function mutationHeaders(extra = {}) {
-  return { 'Content-Type': 'application/x-www-form-urlencoded', ...graphSecretHeaders(), ...extra };
-}
-async function ensureGraphSecret() { return true; }
 
 // ── State ──
 let graphData, currentLens = 'padi', lineageRoot = null, showDepRail = false, showInfraRail = false;

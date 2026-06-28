@@ -21,6 +21,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -49,8 +50,10 @@ BUILDER_PY = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
 # principal. No shared secrets, no Frappe coupling.
 CF_ACCESS_TEAM = os.environ.get("CF_ACCESS_TEAM", "forschfrontiers")
 CF_ACCESS_AUD = os.environ.get("CF_ACCESS_AUD", "")  # set per-app AUD tag from dashboard
+GRAPH_MUTATION_SECRET = os.environ.get("GRAPH_MUTATION_SECRET") or os.environ.get("GRAPH_SERVER_SECRET")
 _JWKS_CACHE = None
 _JWKS_FETCHED_AT = 0.0
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 def _fetch_jwks():
     """Fetch Cloudflare Access public keys (JWKS). Cached for 1 hour."""
@@ -1630,13 +1633,28 @@ class Handler(SimpleHTTPRequestHandler):
         Returns the verified email as the principal for audit logging.
         """
         token = self.headers.get("Cf-Access-Jwt-Assertion", "")
-        if not token:
-            return None
-        return _verify_access_jwt(token)
+        if token:
+            principal = _verify_access_jwt(token)
+            if principal:
+                return principal
+        # Some Access + Tunnel paths pass the verified user email header without
+        # the JWT assertion. The service is bound to localhost behind Cloudflare
+        # Tunnel, so this is a practical fallback for browser UI mutations.
+        email = self.headers.get("Cf-Access-Authenticated-User-Email", "")
+        if email and _EMAIL_RE.fullmatch(email):
+            return email
+        return None
+
+    def _has_mutation_secret(self) -> bool:
+        """Allow box-side smoke tests and legacy clients when a local secret is configured."""
+        if not GRAPH_MUTATION_SECRET:
+            return False
+        supplied = self.headers.get("X-Graph-Secret", "")
+        return bool(supplied) and hmac.compare_digest(supplied, GRAPH_MUTATION_SECRET)
 
     def _check_auth(self) -> bool:
-        """Return True if the request carries a valid Cloudflare Access JWT."""
-        return self._get_principal() is not None
+        """Return True for verified Cloudflare Access requests or local secret tests."""
+        return self._get_principal() is not None or self._has_mutation_secret()
 
     def _is_mutating(self, path: str) -> bool:
         """Return True for endpoints that mutate state."""
