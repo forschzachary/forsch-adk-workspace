@@ -1,6 +1,6 @@
 """Shared tools for ADK agents."""
 
-from . import household, stability_tools
+from . import household, stability_tools, screening_tools
 from .authsome_client import AuthsomeHTTPClient, AuthsomeHTTPError
 from .crm_tools import get_crm_health_snapshot, list_recent_crm_leads
 from .email_groceries import (
@@ -25,6 +25,15 @@ from .wow_tools import (
     search_items,
     search_npcs,
     search_quests,
+)
+from .screening_tools import (
+    add_to_watchlist,
+    get_movie_details,
+    get_similar_movies,
+    get_watched,
+    get_watchlist,
+    log_watched,
+    search_movies,
 )
 
 __all__ = [
@@ -62,4 +71,12 @@ __all__ = [
     "execute_bash_command",
     "read_host_file",
     "write_host_file",
+    "add_to_watchlist",
+    "get_movie_details",
+    "get_similar_movies",
+    "get_watched",
+    "get_watchlist",
+    "log_watched",
+    "search_movies",
+    "screening_tools",
 ]
