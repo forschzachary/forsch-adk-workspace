@@ -35,10 +35,13 @@ from .screening_tools import (
     log_watched,
     search_movies,
 )
+from .reference_tools import read_reference, search_reference
 
 __all__ = [
     "AuthsomeHTTPClient",
     "AuthsomeHTTPError",
+    "read_reference",
+    "search_reference",
     "FrappeClient",
     "add_grocery_email_sender",
     "add_reminder",
