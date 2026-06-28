@@ -9,7 +9,10 @@ Security:
   - Cloudflare Access (Zero Trust) gates the edge — Google OAuth identity.
   - serve.py verifies the Cf-Access-Jwt-Assertion header (RS256 JWT) against
     Cloudflare's public JWKS to extract a verified email as the principal.
-  - All endpoints require a valid Access JWT (no anonymous reads).
+  - Cloudflare Access (Zero Trust) is the only auth gate; once a request
+    reaches serve.py the principal has already cleared Google OAuth at the
+    edge. Mutating endpoints re-verify the JWT as defense-in-depth; read
+    endpoints trust the edge and skip the re-check.
   - /chat enforces session ownership, rate-limits per principal, and logs every invocation.
   - CORS is pinned to the graph origin.
 """
@@ -177,6 +180,11 @@ FACTORY_OVERVIEW_SOURCES = [
     "home.html",
     "chat.html",
 ]
+
+# Cluster names are interpolated into filesystem paths downstream. Restrict
+# to a safe alphabet so a malicious cluster.yaml can't escape via ../etc.
+import re as _re
+_SAFE_CLUSTER_NAME_RE = _re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 # ── Rate limiting ──
 _rate_state: dict[str, tuple[int, float]] = {}  # principal → (count, window_start)
@@ -882,8 +890,14 @@ def _load_cluster_specs() -> list[dict]:
             else:
                 project_summary = text.strip()
 
+        cluster_name = cluster_data.get("name", cluster_dir.name)
+        # Cluster names are interpolated into filesystem paths downstream
+        # (source_files list, served hrefs). Reject anything outside the
+        # safe alphabet to prevent path traversal via a malicious cluster.yaml.
+        if not _SAFE_CLUSTER_NAME_RE.match(cluster_name):
+            continue
         cluster_specs.append({
-            "name": cluster_data.get("name", cluster_dir.name),
+            "name": cluster_name,
             "description": cluster_data.get("description", ""),
             "members": cluster_data.get("members", []) or [],
             "config": cluster_data.get("config", {}) or {},
@@ -906,12 +920,18 @@ def _build_building_blocks_index() -> dict:
     service's process. Operators get an honest "library unreachable" message
     rather than a misleading empty card.
     """
+    # Probe paths for the patterns library. Override the root with the
+    # ADK_COMPONENTS_DIR env var so Mac dev / alternate installs work.
+    components_root = Path(os.environ.get(
+        "ADK_COMPONENTS_DIR",
+        "/root/.hermes/workspace/adk/components/src/forsch/adk_components",
+    ))
     candidates = [
-        ("patterns", "/root/.hermes/workspace/adk/components/src/forsch/adk_components/patterns/inventory.yaml"),
-        ("agents",   "/root/.hermes/workspace/adk/components/src/forsch/adk_components/agents/inventory.yaml"),
-        ("uis",      "/root/.hermes/workspace/adk/components/src/forsch/adk_components/uis/inventory.yaml"),
-        ("routers",  "/root/.hermes/workspace/adk/components/src/forsch/adk_components/routers/inventory.yaml"),
-        ("datasources", "/root/.hermes/workspace/adk/components/src/forsch/adk_components/datasources/inventory.yaml"),
+        ("patterns",    components_root / "patterns" / "inventory.yaml"),
+        ("agents",      components_root / "agents" / "inventory.yaml"),
+        ("uis",         components_root / "uis" / "inventory.yaml"),
+        ("routers",     components_root / "routers" / "inventory.yaml"),
+        ("datasources", components_root / "datasources" / "inventory.yaml"),
     ]
     blocks: list[dict] = []
     reachable = False
@@ -936,7 +956,6 @@ def _build_building_blocks_index() -> dict:
             })
     return {
         "reachable": reachable,
-        "location": "/root/.hermes/workspace/adk/components/src/forsch/adk_components/",
         "count": len(blocks),
         "blocks": sorted(blocks, key=lambda b: (b["kind"], b["id"])),
     }

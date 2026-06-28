@@ -614,7 +614,7 @@
           ${(item.members || []).map((member) => chip(member)).join('')}
           ${(item.config.tool_families || []).map((family) => chip(`family:${family}`, 'muted')).join('')}
         </div>
-        <div class="progress"><span style="width:${Math.max(0, Math.min(100, Number(item.handoff_pct || 0)))}%"></span></div>
+        <div class="progress"><span style="width:${Math.max(0, Math.min(100, Number.parseFloat(item.handoff_pct) || 0))}%"></span></div>
       </article>
     `).join('');
   }
@@ -762,7 +762,7 @@
     }
     if (statusEl) {
       if (!blocksData || !blocksData.reachable) {
-        statusEl.innerHTML = `<div class="status warn">Patterns library not reachable from this server's filesystem. Expected at <code>${escapeHtml((blocksData && blocksData.location) || '')}</code> — if this is a Mac dev box, run the library setup. The rest of the inventory still works.</div>`;
+        statusEl.innerHTML = `<div class="status warn">Patterns library not reachable from this server's filesystem. Set <code>ADK_COMPONENTS_DIR</code> env var or place the library next to serve.py. The rest of the inventory still works.</div>`;
       } else {
         statusEl.innerHTML = '';
       }
