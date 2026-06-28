@@ -834,8 +834,9 @@ function renderTabs() {
     const btn = document.createElement('button');
     btn.className = 'tab' + (c.name === currentCluster ? ' active' : '');
     btn.dataset.cluster = c.name;
-    const pct = c.handoff_pct ? `<span class="pct">${c.handoff_pct}%</span>` : '';
-    btn.innerHTML = `${c.name}${pct}`;
+    const pct = c.handoff_pct ? `<span class="pct">${esc(c.handoff_pct)}%</span>` : '';
+    btn.textContent = c.name;
+    if (pct) btn.innerHTML += pct;
     btn.title = c.goal || c.name;
     btn.addEventListener('click', () => selectCluster(c.name));
     bar.insertBefore(btn, document.getElementById('new-tab-btn'));
@@ -2498,10 +2499,12 @@ function renderFocusSection(agentId, section) {
     if (toolSet.size === 0) {
       toolList.innerHTML = '<div class="ro">No tools loaded. Click Tools tab to load.</div>';
     } else {
+      let html = '';
       toolSet.forEach(t => {
         const checked = selectedTools.includes(t) ? 'checked' : '';
-        toolList.innerHTML += `<label class="tool-check"><input type="checkbox" class="focus-tool-check" value="${esc(t)}" ${checked}> ${esc(t)}</label>`;
+        html += `<label class="tool-check"><input type="checkbox" class="focus-tool-check" value="${esc(t)}" ${checked}> ${esc(t)}</label>`;
       });
+      toolList.innerHTML = html;
     }
     attachFocusConfigHandlers(agentId);
   } else if (section === 'tools') {
