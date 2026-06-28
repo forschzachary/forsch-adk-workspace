@@ -10,11 +10,6 @@ __pycache__/
 *.sqlite
 *.sqlite3
 
-# Nested package repos tracked separately
-components/
-bridge/
-agents/*
-!agents/DIRECTORY.md
 
 # Household runtime data (personal — grocery log + reminders; never track)
 data/household/
