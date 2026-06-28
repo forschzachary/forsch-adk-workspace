@@ -1200,6 +1200,54 @@ def new_cluster(name: str) -> dict:
     return {"ok": True, "name": name, "git": checkpoint}
 
 
+def _yaml_inline(value: str) -> str:
+    import yaml
+    dumped = yaml.safe_dump(value or "", default_flow_style=True, width=1000).strip()
+    return dumped.replace("\n...", "")
+
+
+def create_graph_agent(agent_id: str, model: str = "gpt-5.5", description: str = "") -> dict:
+    """Create a graph-local agent draft in registry/agents/agents.yaml."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", agent_id or ""):
+        return {"ok": False, "error": "invalid agent id (a-z, 0-9, _, starts with a letter)"}
+
+    registry_yaml = LAG_HOME / "registry" / "agents" / "agents.yaml"
+    if not registry_yaml.exists():
+        return {"ok": False, "error": "agent registry missing"}
+
+    import yaml
+    registry_doc = yaml.safe_load(registry_yaml.read_text()) or {}
+    agents = registry_doc.get("agents", {}) or {}
+    if agent_id in agents:
+        return {"ok": True, "agent_id": agent_id, "already_exists": True}
+
+    clean_description = (description or f"{agent_id} agent").strip()
+    entry = (
+        f"\n"
+        f"  {agent_id}:\n"
+        f"    description: {_yaml_inline(clean_description)}\n"
+        f"    discord_channels: []\n"
+        f"    safety_level: read_only\n"
+        f"    purpose: {_yaml_inline(clean_description)}\n"
+        f"    tools: []\n"
+        f"    model: {_yaml_inline(model or 'gpt-5.5')}\n"
+    )
+    text = registry_yaml.read_text()
+    if not text.endswith("\n"):
+        text += "\n"
+    registry_yaml.write_text(text + entry)
+
+    checkpoint = _git_checkpoint([registry_yaml], f"Create graph agent {agent_id}")
+    if not checkpoint.get("ok"):
+        return {
+            "ok": False,
+            "agent_id": agent_id,
+            "error": "agent created but git checkpoint failed",
+            "git": checkpoint,
+        }
+    return {"ok": True, "agent_id": agent_id, "git": checkpoint}
+
+
 def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
     """Append an agent id to a cluster's membership list (reference, not copy)."""
     cluster_yaml = LAG_HOME / "clusters" / cluster_name / "cluster.yaml"
@@ -1904,30 +1952,21 @@ class Handler(SimpleHTTPRequestHandler):
             agent_id = params.get("id", [None])[0]
             model = params.get("model", ["gpt-5.5"])[0]
             description = params.get("description", [f"{agent_id} agent"])[0] if agent_id else ""
+            cluster = params.get("cluster", [None])[0]
 
             if not agent_id:
                 self._json_response(400, {"error": "missing id"})
                 return
 
-            py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
-            result = subprocess.run(
-                [py, str(LAG_HOME / "spawn_agent.py"), agent_id,
-                 "--model", model, "--description", description],
-                capture_output=True, text=True, cwd=str(WS),
-            )
-            if result.returncode == 0:
-                # Extract workspace path from spawn output
-                workspace_path = None
-                for line in result.stdout.splitlines():
-                    if line.strip().startswith("profile:"):
-                        workspace_path = line.split("profile:")[-1].strip().split()[0]
-                        break
-                resp = {"ok": True, "agent_id": agent_id, "output": result.stdout}
-                if workspace_path:
-                    resp["workspace"] = workspace_path
-                self._json_response(200, resp)
-            else:
-                self._json_response(500, {"ok": False, "error": result.stderr[:500]})
+            result = create_graph_agent(agent_id, model, description)
+            if result.get("ok") and cluster:
+                cluster_result = add_agent_to_cluster(cluster, agent_id)
+                result["cluster"] = cluster_result
+                if not cluster_result.get("ok"):
+                    result["ok"] = False
+                    result["error"] = cluster_result.get("error", "agent created but could not be added to cluster")
+
+            self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/wire":
             if not self._check_auth():

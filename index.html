@@ -1024,7 +1024,7 @@ function buildPadiControlNodes() {
       padiWidth: padiControlWidth('spawn', sp.blankLabel || ('New ' + sk)),
       padiHeight: 24,
     });
-    if (sp.library) {
+    if (sp.library && !sp.hideCanvasLibrary) {
       sp.library().forEach((agent, order) => {
         nodes.push({
           id: `padi:library:${sk}:${agent.id}`,
@@ -2090,19 +2090,18 @@ async function spawnBlankAgent(id, desc, msgEl) {
   if (!/^[a-z][a-z0-9_]*$/.test(id)) { setLaneMsg(msgEl, 'err', 'Invalid id (a-z, 0-9, _)'); return; }
   if (!(await ensureGraphSecret())) { setLaneMsg(msgEl, 'err', 'Edits locked'); return; }
   setLaneMsg(msgEl, '', 'Spawning…');
-  const body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent((desc || '').trim() || id + ' agent')}`;
+  let body = `id=${encodeURIComponent(id)}&model=gpt-5.5&description=${encodeURIComponent((desc || '').trim() || id + ' agent')}`;
+  if (currentCluster) body += `&cluster=${encodeURIComponent(currentCluster)}`;
   fetch(apiUrl('/spawn'), { method: 'POST', headers: mutationHeaders(), body })
     .then(r => r.json())
     .then(data => {
       if (!data.ok) { setLaneMsg(msgEl, 'err', data.error || 'Spawn failed'); return; }
-      setLaneMsg(msgEl, 'ok', `✓ Spawned ${data.agent_id}`);
-      if (currentCluster) {
-        const addBody = `cluster=${encodeURIComponent(currentCluster)}&agent_id=${encodeURIComponent(data.agent_id)}`;
-        fetch(apiUrl('/add-agent'), { method: 'POST', headers: mutationHeaders(), body: addBody })
-          .finally(() => setTimeout(() => loadGraph(currentCluster), 500));
-      } else {
-        setTimeout(() => loadGraph(currentCluster), 500);
-      }
+      const suffix = data.already_exists ? 'already exists' : 'created';
+      setLaneMsg(msgEl, 'ok', `✓ ${data.agent_id} ${suffix}`);
+      setTimeout(() => {
+        loadRegistryAgents();
+        loadGraph(currentCluster);
+      }, 500);
     })
     .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
 }
@@ -2128,6 +2127,7 @@ const LANE_SPAWNERS = {
     blankLabel: 'New agent',
     formFields: [{ ph: 'agent_id' }, { ph: 'description (optional)' }],
     spawnBlank(vals, msg) { spawnBlankAgent(vals[0], vals[1], msg); },
+    hideCanvasLibrary: true,
     library() { return registryAgentIds.map(id => ({ id, name: id, inCluster: clusterHasAgent(id) })); },
     onDrop(item, msg) { addAgentToCluster(item.id, msg); },
   },

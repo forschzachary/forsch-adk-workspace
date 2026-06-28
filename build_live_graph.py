@@ -44,7 +44,7 @@ class ClusterConfig(BaseModel):
     """Schema for clusters/<name>/cluster.yaml"""
     name: str
     description: str = ""
-    members: list[str] = Field(default_factory=list, min_length=1)
+    members: list[str] = Field(default_factory=list)
     config: dict = Field(default_factory=dict)
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
 
