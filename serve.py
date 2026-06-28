@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import threading
+from collections import deque
 import time
 import urllib.request
 import yaml
@@ -190,7 +191,7 @@ FACTORY_OVERVIEW_SOURCES = [
 _SAFE_CLUSTER_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 # ── Rate limiting ──
-_rate_state: dict[str, tuple[int, float]] = {}  # principal → (count, window_start)
+_rate_state: dict[str, deque] = {}  # principal → deque of request timestamps (sliding window)
 _rate_lock = threading.Lock()
 RATE_LIMIT = 30       # max requests
 RATE_WINDOW = 60.0    # per 60 seconds
@@ -226,8 +227,8 @@ def _evict_stale():
             for sid in stale:
                 del _session_owners[sid]
         with _rate_lock:
-            stale_keys = [p for p, (c, ws) in _rate_state.items()
-                         if now - ws > RATE_WINDOW * 2]
+            stale_keys = [p for p, window in _rate_state.items()
+                         if not window or window[-1] < now - RATE_WINDOW * 2]
             for k in stale_keys:
                 del _rate_state[k]
 
@@ -252,16 +253,26 @@ def _audit(principal: str, message: str, session_id: str | None, outcome: str):
         sys.stderr.write(f"audit log write failed: {exc}\n")
 
 def _check_rate(principal: str) -> bool:
-    """Return True if within rate limit, False if exceeded."""
+    """Return True if within rate limit (sliding window of RATE_WINDOW seconds), False if exceeded.
+
+    Sliding window: a request is allowed if fewer than RATE_LIMIT timestamps
+    fall within the last RATE_WINDOW seconds. More fair than a fixed-window
+    counter, which would let a burst at the edge of one window lock the user
+    out for the next full window.
+    """
     with _rate_lock:
         now = time.time()
-        count, window_start = _rate_state.get(principal, (0, now))
-        if now - window_start > RATE_WINDOW:
-            count = 0
-            window_start = now
-        if count >= RATE_LIMIT:
+        window = _rate_state.get(principal)
+        if window is None:
+            window = deque()
+            _rate_state[principal] = window
+        # Drop timestamps older than the window.
+        cutoff = now - RATE_WINDOW
+        while window and window[0] < cutoff:
+            window.popleft()
+        if len(window) >= RATE_LIMIT:
             return False
-        _rate_state[principal] = (count + 1, window_start)
+        window.append(now)
         return True
 
 def _crm_post(endpoint: str, data: dict) -> dict:
