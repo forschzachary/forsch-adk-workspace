@@ -1,0 +1,74 @@
+# Verify — main CI for all PRs and pushes to main.
+#
+# Runs the basic invariant suite on every change.  Routine PRs merge on this
+# check alone (once the ruleset is armed).  Control-plane PRs additionally
+# require the `control-plane-approved` check from control-plane-review.yml.
+#
+# See docs/strategy/2026-06-28-repository-and-git-discipline.md §7.x
+
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: uv lock --check (builder)
+        run: uv lock --check
+        working-directory: builder
+
+      - name: Structure check
+        run: uv run --no-project python scripts/check_structure.py
+
+      - name: Bijection check
+        run: uv run --no-project python scripts/check_bijection.py
+
+      - name: Build all packages
+        run: |
+          for pkg in builder chat factory; do
+            if [ -f "$pkg/pyproject.toml" ]; then
+              echo "::group::Building $pkg"
+              cd "$pkg"
+              uv build 2>&1 || { echo "::error::uv build failed in $pkg"; exit 1; }
+              cd "$GITHUB_WORKSPACE"
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Pytest (all packages)
+        run: |
+          EXIT=0
+          for pkg in builder chat factory; do
+            if [ -d "$pkg/tests" ] && [ -f "$pkg/pyproject.toml" ]; then
+              echo "::group::Testing $pkg"
+              cd "$pkg"
+              uv run --extra dev python -m pytest -q 2>&1 || {
+                echo "::error::pytest failed in $pkg"
+                EXIT=1
+              }
+              cd "$GITHUB_WORKSPACE"
+              echo "::endgroup::"
+            fi
+          done
+          exit $EXIT

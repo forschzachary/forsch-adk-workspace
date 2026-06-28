@@ -1,0 +1,55 @@
+[project]
+name = "live-agent-graph"
+version = "0.1.0"  # x-release-please-version
+description = "Live Agent Graph control-surface app (graph builder, serve.py, registry)"
+requires-python = ">=3.10"
+dependencies = [
+    "forsch-adk-components==0.1.0",  # R-STRUCT-11: explicit == intra-dep pin
+    "google-adk>=2.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.uv.sources]
+forsch-adk-components = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Flat application layout (no src/ package): top-level modules are shipped
+# explicitly. This is the control surface *app*, not a redistributable library.
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "build_live_graph.py",
+    "serve.py",
+    "workspace_resolver.py",
+    "promote_agent.py",
+    "spawn_agent.py",
+    "roundtrip_check.py",
+    "contract_check.py",
+]
+sources = ["."]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "*.py",
+    "registry/**",
+    "clusters/**",
+    "shared/**",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

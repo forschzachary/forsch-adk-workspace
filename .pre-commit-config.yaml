@@ -1,0 +1,23 @@
+# Fast local feedback only — NOT the gate. `git commit --no-verify` skips these;
+# the server-side ruleset (required `verify` + `control-plane-approved` checks)
+# is the un-bypassable layer. These hooks re-run the identical scripts locally.
+#
+# uv is NOT on the box's non-interactive PATH, so invoke it by absolute path.
+repos:
+  - repo: local
+    hooks:
+      - id: check-bijection
+        name: filesystem<->graph bijection (R-STRUCT-9)
+        entry: /root/.local/bin/uv run --no-project python scripts/check_bijection.py
+        language: system
+        pass_filenames: false
+      - id: check-structure
+        name: structural invariants (R-STRUCT 1,7,11,12)
+        entry: /root/.local/bin/uv run --no-project python scripts/check_structure.py
+        language: system
+        pass_filenames: false
+      - id: uv-lock-check
+        name: uv.lock fresh
+        entry: /root/.local/bin/uv lock --check
+        language: system
+        pass_filenames: false

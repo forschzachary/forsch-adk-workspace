@@ -1,0 +1,31 @@
+# repo_manifest.yaml — closed allowlist of non-node infrastructure (R-STRUCT-9, §9).
+#
+# The no-fluff bijection (scripts/check_bijection.py) requires every top-level
+# entry in the live tree to be EITHER a graph-backed node (an agents/<x> dir, a
+# cluster, the shared lib, a UI surface) OR listed here. Anything that is neither
+# is fluff and must be archived (annotated archive/* tag + git rm).
+#
+# `factory/` is explicitly allowlisted: it is load-bearing infra (the only
+# sanctioned topology writer), NOT fluff — the no-fluff sweep must never archive
+# it.
+allowlist:
+  - packages/
+  - agents/
+  - clusters/
+  - components/
+  - bridge/
+  - builder/
+  - live-agent-graph/
+  - factory/
+  - scripts/
+  - .github/
+  - repo_manifest.yaml
+  - Makefile
+  - README.md
+  - CLAUDE.md
+  - .gitignore
+  - .pre-commit-config.yaml
+  - release-please-config.json
+  - .release-please-manifest.json
+  - uv.lock
+  - pyproject.toml

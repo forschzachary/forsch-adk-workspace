@@ -3,19 +3,20 @@
   "cluster": "ops",
   "nodes": [
     {
-      "id": "tool:log_groceries",
-      "name": "log_groceries",
+      "id": "tool:list_grocery_email_senders",
+      "name": "list_grocery_email_senders",
       "kind": "tool",
       "shared": true,
+      "family": "household",
       "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def log_groceries)",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def list_grocery_email_senders)",
       "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
+        "L0": false,
+        "L1": false,
+        "L2": false,
         "L3": false
       },
-      "state": "built",
+      "state": "blank",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -28,37 +29,13 @@
       "role": "plain"
     },
     {
-      "id": "tool:get_git_state",
-      "name": "get_git_state",
+      "id": "tool:list_recent_crm_leads",
+      "name": "list_recent_crm_leads",
       "kind": "tool",
       "shared": true,
+      "family": "crm",
       "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_git_state)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_crm_health_snapshot",
-      "name": "get_crm_health_snapshot",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_crm_health_snapshot)",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def list_recent_crm_leads)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -82,15 +59,16 @@
       "name": "get_workspace_inventory",
       "kind": "tool",
       "shared": true,
+      "family": "terminal",
       "type": "tool",
       "artifact": "components/src/forsch/adk_components/tools/*.py (def get_workspace_inventory)",
       "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
+        "L0": false,
+        "L1": false,
+        "L2": false,
         "L3": false
       },
-      "state": "built",
+      "state": "blank",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -103,12 +81,325 @@
       "role": "plain"
     },
     {
-      "id": "tool:list_recent_crm_leads",
-      "name": "list_recent_crm_leads",
+      "id": "tool:validate_agent_imports",
+      "name": "validate_agent_imports",
       "kind": "tool",
       "shared": true,
+      "family": "terminal",
       "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def list_recent_crm_leads)",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def validate_agent_imports)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:add_grocery_email_sender",
+      "name": "add_grocery_email_sender",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def add_grocery_email_sender)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:log_grocery_email_receipt",
+      "name": "log_grocery_email_receipt",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def log_grocery_email_receipt)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:is_grocery_email_sender_allowed",
+      "name": "is_grocery_email_sender_allowed",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def is_grocery_email_sender_allowed)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:write_host_file",
+      "name": "write_host_file",
+      "kind": "tool",
+      "shared": true,
+      "family": "terminal",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def write_host_file)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:log_groceries",
+      "name": "log_groceries",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def log_groceries)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:remove_grocery_email_sender",
+      "name": "remove_grocery_email_sender",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def remove_grocery_email_sender)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_crm_health_snapshot",
+      "name": "get_crm_health_snapshot",
+      "kind": "tool",
+      "shared": true,
+      "family": "crm",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_crm_health_snapshot)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_grocery_log",
+      "name": "get_grocery_log",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_grocery_log)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:check_service_health",
+      "name": "check_service_health",
+      "kind": "tool",
+      "shared": true,
+      "family": "terminal",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def check_service_health)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:add_reminder",
+      "name": "add_reminder",
+      "kind": "tool",
+      "shared": true,
+      "family": "household",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def add_reminder)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:execute_bash_command",
+      "name": "execute_bash_command",
+      "kind": "tool",
+      "shared": true,
+      "family": "terminal",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def execute_bash_command)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_git_state",
+      "name": "get_git_state",
+      "kind": "tool",
+      "shared": true,
+      "family": "terminal",
+      "type": "tool",
+      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_git_state)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -132,184 +423,10 @@
       "name": "read_host_file",
       "kind": "tool",
       "shared": true,
+      "family": "terminal",
       "type": "tool",
       "artifact": "components/src/forsch/adk_components/tools/*.py (def read_host_file)",
       "gates": {
-        "L0": true,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:write_host_file",
-      "name": "write_host_file",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def write_host_file)",
-      "gates": {
-        "L0": true,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:execute_bash_command",
-      "name": "execute_bash_command",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def execute_bash_command)",
-      "gates": {
-        "L0": true,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:add_reminder",
-      "name": "add_reminder",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def add_reminder)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_grocery_log",
-      "name": "get_grocery_log",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def get_grocery_log)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:validate_agent_imports",
-      "name": "validate_agent_imports",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def validate_agent_imports)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:check_service_health",
-      "name": "check_service_health",
-      "kind": "tool",
-      "shared": true,
-      "type": "tool",
-      "artifact": "components/src/forsch/adk_components/tools/*.py (def check_service_health)",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "model:nvidia-deepseek-v4-flash",
-      "name": "nvidia-deepseek-v4-flash",
-      "kind": "logic",
-      "shared": true,
-      "type": "logic",
-      "artifact": "LiteLLM config",
-      "gates": {
         "L0": false,
         "L1": false,
         "L2": false,
@@ -318,50 +435,12 @@
       "state": "blank",
       "reachable": false,
       "contract": {
-        "accepts": [],
-        "emits": []
-      },
-      "role": "plain"
-    },
-    {
-      "id": "model:gpt-5.5",
-      "name": "gpt-5.5",
-      "kind": "logic",
-      "shared": true,
-      "type": "logic",
-      "artifact": "LiteLLM config",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [],
-        "emits": []
-      },
-      "role": "plain"
-    },
-    {
-      "id": "model:glm-5.2",
-      "name": "glm-5.2",
-      "kind": "logic",
-      "shared": true,
-      "type": "logic",
-      "artifact": "LiteLLM config",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [],
-        "emits": []
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
       },
       "role": "plain"
     },
@@ -903,10 +982,10 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": false,
+        "L2": true,
         "L3": true
       },
-      "state": "building",
+      "state": "built",
       "reachable": true,
       "contract": {
         "accepts": [
@@ -917,7 +996,12 @@
           "tool_call",
           "tool:log_groceries",
           "tool:get_grocery_log",
-          "tool:add_reminder"
+          "tool:add_reminder",
+          "tool:add_grocery_email_sender",
+          "tool:remove_grocery_email_sender",
+          "tool:list_grocery_email_senders",
+          "tool:is_grocery_email_sender_allowed",
+          "tool:log_grocery_email_receipt"
         ]
       },
       "role": "plain"
@@ -1185,6 +1269,31 @@
       "kind": "uses"
     },
     {
+      "source": "agent:shelby",
+      "target": "tool:add_grocery_email_sender",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:remove_grocery_email_sender",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:list_grocery_email_senders",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:is_grocery_email_sender_allowed",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:shelby",
+      "target": "tool:log_grocery_email_receipt",
+      "kind": "uses"
+    },
+    {
       "source": "tool:execute_bash_command",
       "target": "cap:local-mac-access",
       "kind": "requires"
@@ -1200,10 +1309,10 @@
       "kind": "requires"
     }
   ],
-  "node_count": 41,
-  "link_count": 29,
+  "node_count": 43,
+  "link_count": 34,
   "meta": {
-    "generated_at": "2026-06-23T15:26:00.471359+00:00",
+    "generated_at": "2026-06-28T19:30:10.487800+00:00",
     "source": "registry/agents/agents.yaml + shared/components.yaml + clusters/ops/cluster.yaml"
   }
 }

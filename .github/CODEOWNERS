@@ -1,0 +1,21 @@
+# CODEOWNERS — guards the control-plane files (R-GATE-1, §7.x).
+#
+# Owner = the control-plane reviewer. The hardened design is the GitHub App
+# that re-runs the full invariant suite from a clean checkout and approves on
+# green (NOT a rubber-stamp bot). On a personal-account repo an App bot user
+# cannot be a CODEOWNER, so the IMPLEMENTED gate is Path 2 — the second required
+# status check `control-plane-approved` (.github/workflows/control-plane-review.yml).
+# This CODEOWNERS file is retained as the declarative record of which paths are
+# control-plane; @forschzachary stands in as owner until the App identity that
+# can be a code owner is provisioned.
+#
+# Control-plane paths (must match control-plane-review.yml's detector):
+/.github/                       @forschzachary
+.pre-commit-config.yaml         @forschzachary
+/scripts/check_bijection.py     @forschzachary
+/scripts/check_structure.py     @forschzachary
+/agent_specs/agents.yaml        @forschzachary
+release-please-config.json      @forschzachary
+.release-please-manifest.json   @forschzachary
+repo_manifest.yaml              @forschzachary
+/factory/                       @forschzachary

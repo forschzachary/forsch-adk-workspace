@@ -1,0 +1,25 @@
+[project]
+name = "forsch-adk-workspace"
+version = "0.0.0"
+# ONE Python floor for ALL members (uv takes the workspace intersection).
+# REAL intersection across every member's pyproject is >=3.10 — adk-components
+# and all agent members declare requires-python = ">=3.10". The migration-plan
+# template showed ">=3.11" as a placeholder; the discipline doc (§3.1, §7
+# R-STRUCT-12, residual risk #2) requires the actual measured floor. >=3.10 it is.
+requires-python = ">=3.10"
+
+[tool.uv.workspace]
+members = ["packages/*", "agents/*", "clusters/*"]
+# `agents/*` matches every dir under agents/, including fluff dirs that carry no
+# pyproject.toml (uv hard-errors on a glob-matched member missing a manifest, it
+# does NOT silently skip). agent_logic_specialist + testbot are graph-less fluff
+# slated for archival (strategy §9) — exclude them rather than make fluff into
+# workspace members. spikes/* was archived in Task 4 but the exclude is harmless.
+exclude = [
+    "spikes/*",
+    "agents/agent_logic_specialist",
+    "agents/testbot",
+]
+
+[tool.uv.sources]
+forsch-adk-components = { workspace = true }

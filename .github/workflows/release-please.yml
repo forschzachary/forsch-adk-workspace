@@ -1,0 +1,29 @@
+# release-please — derives semver bumps from Conventional Commits and opens
+# per-package release PRs; on merge of a release PR it creates the
+# <component>-vX.Y.Z tag + GitHub Release server-side (§5, §7.y).
+#
+# uv and release-please are complementary: uv = workspace/build/lock;
+# release-please = bump/changelog/tag/release.
+#
+# NOTE: the default GITHUB_TOKEN creates tags/releases but does NOT re-trigger
+# downstream `on: push tag` workflows — a future publish-to-index job needs a
+# PAT or GitHub App token (residual risk #5).
+
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
