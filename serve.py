@@ -195,6 +195,19 @@ _rate_lock = threading.Lock()
 RATE_LIMIT = 30       # max requests
 RATE_WINDOW = 60.0    # per 60 seconds
 
+# HTTP request body cap. 1 MiB is generous for JSON POSTs to /chat, /spawn,
+# /wire, /agent-config; anything larger is either a misuse or an attack.
+MAX_REQUEST_BYTES = 1 << 20
+
+# MiMo subprocess input cap. 64 KiB of user message is plenty for chat
+# messages; longer inputs almost certainly indicate a misuse.
+MAX_MIMO_MESSAGE_BYTES = 64 * 1024
+
+# Audit log entry limits — keep the log bounded and the on-disk format
+# consistent across callers.
+MAX_AUDIT_MESSAGE_LEN = 200
+AUDIT_LOG_MAX_BYTES = 50_000_000  # ~50 MB; rollover is operator's job
+
 # ── Audit log ──
 AUDIT_LOG = LAG_HOME / "chat_audit.log"
 
@@ -228,15 +241,15 @@ def _audit(principal: str, message: str, session_id: str | None, outcome: str):
     entry = json.dumps({
         "ts": ts,
         "principal": principal,
-        "message": message[:200],
+        "message": message[:MAX_AUDIT_MESSAGE_LEN],
         "session_id": session_id,
         "outcome": outcome,
     })
     try:
         with open(AUDIT_LOG, "a") as f:
             f.write(entry + "\n")
-    except Exception:
-        pass
+    except OSError as exc:
+        sys.stderr.write(f"audit log write failed: {exc}\n")
 
 def _check_rate(principal: str) -> bool:
     """Return True if within rate limit, False if exceeded."""
@@ -523,6 +536,27 @@ def _load_yaml(path: Path) -> dict:
     except (yaml.YAMLError, OSError) as exc:
         sys.stderr.write(f"_load_yaml failed for {path}: {exc}\n")
         return {}
+
+
+def _write_atomic(path: Path, content: str) -> None:
+    """Write `content` to `path` atomically via temp file + os.replace.
+
+    Prevents partial writes from corrupting files that concurrent
+    processes (or crashes) might read mid-write.
+    """
+    import tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(content)
+        os.replace(tmp_path, str(path))
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
@@ -955,7 +989,30 @@ def _build_building_blocks_index() -> dict:
     }
 
 
+# TTL cache for _build_factory_overview — building the overview reads
+# several YAML files via _load_yaml and walks 5 inventories. Hot endpoint
+# (rendered on every /home and /factory-overview hit). 5s TTL is short
+# enough that operators see fresh state during a session but cuts 95%+
+# of the read load under page-refresh.
+_FACTORY_OVERVIEW_TTL_S = 5.0
+_factory_overview_cache: dict = {"ts": 0.0, "data": None}
+
+
 def _build_factory_overview() -> dict:
+    """Build the factory overview payload, cached for _FACTORY_OVERVIEW_TTL_S."""
+    now = time.time()
+    if (
+        _factory_overview_cache["data"] is not None
+        and now - _factory_overview_cache["ts"] < _FACTORY_OVERVIEW_TTL_S
+    ):
+        return _factory_overview_cache["data"]
+    data = _build_factory_overview_uncached()
+    _factory_overview_cache["ts"] = now
+    _factory_overview_cache["data"] = data
+    return data
+
+
+def _build_factory_overview_uncached() -> dict:
     registry = _load_agent_registry()
     components = _load_yaml(LAG_HOME / "shared" / "components.yaml")
     infra = _load_yaml(LAG_HOME / "shared" / "infra.yaml")
@@ -1170,16 +1227,16 @@ def _git_checkpoint(paths: list[Path], message: str) -> dict:
 
 def new_cluster(name: str) -> dict:
     """Scaffold a new cluster directory with cluster.yaml + project.md."""
-    if not name or not name.replace("-", "").replace("_", "").isalnum():
-        return {"ok": False, "error": "invalid cluster name (a-z, 0-9, -, _)"}
+    if not _SAFE_CLUSTER_NAME_RE.match(name or ""):
+        return {"ok": False, "error": f"invalid cluster name {name!r} (a-z, 0-9, -, _)"}
     cluster_dir = LAG_HOME / "clusters" / name
     if cluster_dir.exists():
         return {"ok": False, "error": f"cluster '{name}' already exists"}
     cluster_yaml = cluster_dir / "cluster.yaml"
     project_md = cluster_dir / "project.md"
     cluster_dir.mkdir(parents=True, exist_ok=True)
-    cluster_yaml.write_text(f"# {name} cluster\nname: {name}\ndescription: ''\nmembers: []\nconfig:\n  default_model: gpt-5.5\n")
-    project_md.write_text(f"---\ngoal: ''\nstatus: blank\nhandoff_pct: 0\ndata_connectors: []\n---\n# {name}\n\nNew cluster.\n")
+    _write_atomic(cluster_yaml, f"# {name} cluster\nname: {name}\ndescription: ''\nmembers: []\nconfig:\n  default_model: gpt-5.5\n")
+    _write_atomic(project_md, f"---\ngoal: ''\nstatus: blank\nhandoff_pct: 0\ndata_connectors: []\n---\n# {name}\n\nNew cluster.\n")
     checkpoint = _git_checkpoint([cluster_yaml, project_md], f"Add graph cluster {name}")
     if not checkpoint.get("ok"):
         return {
@@ -1224,7 +1281,7 @@ def create_graph_agent(agent_id: str, model: str = "gpt-5.5", description: str =
     text = registry_yaml.read_text()
     if not text.endswith("\n"):
         text += "\n"
-    registry_yaml.write_text(text + entry)
+    _write_atomic(registry_yaml, text + entry)
 
     checkpoint = _git_checkpoint([registry_yaml], f"Create graph agent {agent_id}")
     if not checkpoint.get("ok"):
@@ -1239,6 +1296,10 @@ def create_graph_agent(agent_id: str, model: str = "gpt-5.5", description: str =
 
 def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
     """Append an agent id to a cluster's membership list (reference, not copy)."""
+    if not _SAFE_CLUSTER_NAME_RE.match(cluster_name or ""):
+        return {"ok": False, "error": f"invalid cluster_name {cluster_name!r}"}
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", agent_id or ""):
+        return {"ok": False, "error": f"invalid agent_id {agent_id!r}"}
     cluster_yaml = LAG_HOME / "clusters" / cluster_name / "cluster.yaml"
     if not cluster_yaml.exists():
         return {"ok": False, "error": f"cluster '{cluster_name}' not found"}
@@ -1252,7 +1313,7 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
         return {"ok": True, "name": cluster_name, "agent_id": agent_id, "already_member": True}
     if "members: []" in text:
         new_text = text.replace("members: []", f"members:\n  - {agent_id}")
-        cluster_yaml.write_text(new_text)
+        _write_atomic(cluster_yaml, new_text)
         checkpoint = _git_checkpoint([cluster_yaml], f"Add {agent_id} to {cluster_name} cluster")
         if not checkpoint.get("ok"):
             return {
@@ -1282,7 +1343,7 @@ def add_agent_to_cluster(cluster_name: str, agent_id: str) -> dict:
         new_lines.append(line)
     if in_members and not appended:
         new_lines.append(f"  - {agent_id}")
-    cluster_yaml.write_text("\n".join(new_lines) + "\n")
+    _write_atomic(cluster_yaml, "\n".join(new_lines) + "\n")
     checkpoint = _git_checkpoint([cluster_yaml], f"Add {agent_id} to {cluster_name} cluster")
     if not checkpoint.get("ok"):
         return {
@@ -1336,7 +1397,6 @@ LEGACY_CHAT_MODEL_ALIASES = {
     "gemini-3-flash-preview": "google/gemini-3-flash-preview",
     "qwen3-coder:480b": "ollama-cloud/qwen3-coder:480b",
 }
-SAFE_CHAT_MODELS = set(CHAT_MODEL_FALLBACKS)
 
 
 def _normalise_chat_model(model: str | None) -> str | None:
@@ -1381,6 +1441,8 @@ def chat_with_mimo(message: str, session_id: str | None = None,
     the ADK workspace. Session-aware: pass session_id to continue a conversation.
     Model can be overridden per-request via the -m flag.
     """
+    if isinstance(message, str) and len(message.encode("utf-8")) > MAX_MIMO_MESSAGE_BYTES:
+        return {"ok": False, "error": f"message too large (max {MAX_MIMO_MESSAGE_BYTES} bytes)"}
     model = _normalise_chat_model(model)
     cmd = [MIMO_BIN, "run", "--format", "json", "--dir", MIMO_WORKDIR]
     if model:
@@ -1780,10 +1842,13 @@ def _verify_agent(agent_id: str) -> dict:
     }
 
 
+_VALID_AGENT_ID = re.compile(r"[a-z][a-z0-9_]{0,63}")
+
+
 def _safe_agent_id(agent_id: str) -> str:
-    """Validate agent_id contains only safe characters."""
-    if not agent_id or not agent_id.replace("_", "").replace("-", "").isalnum():
-        raise ValueError(f"invalid agent_id: {agent_id!r}")
+    """Validate agent_id is a strict identifier (a-z, 0-9, _, starts with letter, max 64 chars)."""
+    if not _VALID_AGENT_ID.fullmatch(agent_id or ""):
+        raise ValueError(f"invalid agent_id {agent_id!r}")
     return agent_id
 
 
@@ -1906,6 +1971,9 @@ class Handler(SimpleHTTPRequestHandler):
             if not cluster:
                 self._json_response(400, {"error": "missing ?cluster=name"})
                 return
+            if not _SAFE_CLUSTER_NAME_RE.match(cluster):
+                self._json_response(400, {"error": f"invalid cluster name {cluster!r}"})
+                return
             manifest = build_manifest(cluster)
             if manifest is None:
                 self._json_response(404, {"error": f"cluster '{cluster}' not found or build failed"})
@@ -1954,7 +2022,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self._json_response(400, {"ok": False, "error": "invalid Content-Length"})
+            return
+        if content_length < 0 or content_length > MAX_REQUEST_BYTES:
+            self._json_response(413, {"ok": False, "error": f"body too large (max {MAX_REQUEST_BYTES} bytes)"})
+            return
         body = self.rfile.read(content_length).decode() if content_length else ""
         content_type = self.headers.get("Content-Type", "")
         if "application/json" in content_type:
@@ -2200,13 +2275,20 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def _json_response(self, code, data):
+        try:
+            body = json.dumps(data).encode()
+        except (TypeError, ValueError):
+            # Non-serializable payload — return a generic error rather than
+            # corrupting the HTTP stream mid-headers.
+            body = json.dumps({"ok": False, "error": "internal: non-serializable response"}).encode()
+            code = 500
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         # CORS: read-only endpoints get pinned origin; mutating endpoints get none
         if not self._is_mutating(self.path.rstrip("/") or "/"):
             self.send_header("Access-Control-Allow-Origin", CRM_ORIGIN)
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        self.wfile.write(body)
 
     def log_message(self, format, *args):
         pass  # quiet
