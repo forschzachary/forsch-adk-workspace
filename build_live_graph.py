@@ -26,6 +26,14 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from workspace_resolver import workspace_root
 
+
+def _lid(x):
+    """Return the link-endpoint id whether stored as a bare string or as a
+    single-key dict like {"id": "..."}. Used everywhere a link source or
+    target might be either shape."""
+    return x if isinstance(x, str) else x.get("id", "")
+
+
 SPIKE_DIR = Path(__file__).resolve().parent
 ADK_WS = workspace_root() / "adk"  # real ADK workspace for filesystem gate checks
 
@@ -633,8 +641,8 @@ all_links = links + extra_links
 # Find tools that have a direct link to/from an agent node
 agent_linked_tools = set()
 for l in all_links:
-    s = l["source"] if isinstance(l["source"], str) else l["source"].get("id", "")
-    t = l["target"] if isinstance(l["target"], str) else l["target"].get("id", "")
+    s = _lid(l["source"])
+    t = _lid(l["target"])
     if s.startswith("agent:") and t.startswith("tool:"):
         agent_linked_tools.add(t)
     if t.startswith("agent:") and s.startswith("tool:"):
@@ -643,22 +651,23 @@ for l in all_links:
 # Remove shared tool nodes that no cluster agent uses
 # Also remove their non-agent links (tool -> cred/cap links become orphans)
 pruned_tool_ids = set()
-all_nodes = [n for n in all_nodes if not (
-    n.get("shared") and n.get("type") == "tool" and n["id"] not in agent_linked_tools
-) or (pruned_tool_ids.add(n["id"]) and False)]
+for _n in all_nodes:
+    if _n.get("shared") and _n.get("type") == "tool" and _n["id"] not in agent_linked_tools:
+        pruned_tool_ids.add(_n["id"])
+all_nodes = [n for n in all_nodes if n["id"] not in pruned_tool_ids]
 
 # Clean up links that referenced pruned tools (including capability links)
 all_links = [l for l in all_links
-    if (l["source"] if isinstance(l["source"], str) else l["source"].get("id","")) not in pruned_tool_ids
-    and (l["target"] if isinstance(l["target"], str) else l["target"].get("id","")) not in pruned_tool_ids
+    if _lid(l["source"]) not in pruned_tool_ids
+    and _lid(l["target"]) not in pruned_tool_ids
 ]
 
 # Also remove links that reference tool nodes that don't exist at all
 # (e.g. capability links to tools not in this cluster's families)
 existing_node_ids = {n["id"] for n in all_nodes}
 all_links = [l for l in all_links
-    if (l["source"] if isinstance(l["source"], str) else l["source"].get("id","")) in existing_node_ids
-    and (l["target"] if isinstance(l["target"], str) else l["target"].get("id","")) in existing_node_ids
+    if _lid(l["source"]) in existing_node_ids
+    and _lid(l["target"]) in existing_node_ids
 ]
 
 # Recount
