@@ -3,5 +3,7 @@ name: test-cluster
 description: ''
 members:
   - ops
+  - codex_agent_smoke
 config:
   default_model: gpt-5.5
+
