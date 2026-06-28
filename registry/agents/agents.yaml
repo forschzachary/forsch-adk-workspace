@@ -125,10 +125,3 @@ agents:
     tools: []
     model: gpt-5.5
 
-  codex_agent_smoke:
-    description: temporary graph agent smoke
-    discord_channels: []
-    safety_level: read_only
-    purpose: temporary graph agent smoke
-    tools: []
-    model: gpt-5.5
