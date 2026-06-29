@@ -175,6 +175,17 @@ def eval_cmd(ws, agent: str, scaffold: bool, threshold: float) -> None:
     raise SystemExit(0 if run_eval(ws, agent, set_file, threshold=threshold) else 1)
 
 
+@cli.command(name="goal")
+@click.argument("text")
+@click.option("--max-iters", default=12, show_default=True, help="hard cap on loop iterations")
+@click.pass_obj
+def goal_cmd(ws, text: str, max_iters: int) -> None:
+    """Pursue a goal autonomously (headless) — plan, execute safe steps, judge, park gated ones."""
+    from forsch.cli.goal import run_goal
+
+    run_goal(ws, text, max_iterations=max_iters)
+
+
 @cli.command()
 @click.argument("suite", type=click.Choice(["unit", "agents", "bridge", "chat"]), default="unit")
 @click.pass_obj

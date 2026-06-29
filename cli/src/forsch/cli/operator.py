@@ -181,7 +181,8 @@ async def _ordered_sessions(svc) -> list:
 def _print_help(console) -> None:
     console.print(
         "\n  [bold]commands[/]\n"
-        "  [#b8a0ff]/goal <text>[/]   pursue a goal end-to-end — plan, consult specialists, execute, verify\n"
+        "  [#b8a0ff]/goal <text>[/]   pursue a goal end-to-end — plan, execute safe steps, judge, checkpoint\n"
+        "  [#b8a0ff]/goal[/] [dim]list · status <id> · resume <id>[/]   manage goal runs\n"
         "  [#b8a0ff]/skills[/]        list the skills the operator can load\n"
         "  [#b8a0ff]/sessions[/]      list your saved sessions\n"
         "  [#b8a0ff]/new[/]           start a fresh session\n"
@@ -196,7 +197,7 @@ async def _loop(ws: Path, agent) -> None:
     from google.genai import types
     from rich.markdown import Markdown
 
-    from forsch.cli.goal import goal_preamble
+    from forsch.cli.goal import handle_goal_command
     from forsch.cli.skills import list_skill_names
     from forsch.cli.ui import COSMIC, banner, console, tool_call_line
 
@@ -265,10 +266,7 @@ async def _loop(ws: Path, agent) -> None:
                 else:
                     console.print(f"  [red]no session matching '{arg}'[/]\n")
             elif cmd == "goal":
-                if arg:
-                    await run_turn(goal_preamble(arg))
-                else:
-                    console.print("  [dim]usage: /goal <what you want to achieve>[/]\n")
+                await handle_goal_command(ws, arg)
             else:
                 console.print(f"  [dim]unknown command /{cmd} — try /help[/]\n")
             continue

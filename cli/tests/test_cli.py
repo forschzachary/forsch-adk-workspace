@@ -115,3 +115,49 @@ def test_goal_plan_settled_logic():
     step.status = "passed"
     assert plan.is_settled()
     assert plan.next_actionable() is None
+
+
+def test_judge_deterministic_verdicts():
+    from forsch.cli.goal_engine.judge import deterministic_verdict
+    from forsch.cli.goal_engine.schema import GoalStep
+
+    check = GoalStep(id="s1", intent="c", actuator="check_agent", success_check="green")
+    assert deterministic_verdict(check, ["all good, red: 0"]).verdict == "pass"
+    assert deterministic_verdict(check, ["found 2 red tools"]).verdict == "fail"
+    manual = GoalStep(id="s2", intent="m", actuator="manual", args={"command": "git push"}, success_check="x")
+    v = deterministic_verdict(manual, ["(manual)"])
+    assert v.verdict == "blocked" and "git push" in (v.next_directive or "")
+    add = GoalStep(id="s3", intent="a", actuator="add_tool", success_check="x")
+    assert deterministic_verdict(add, ["added foo to bar"]) is None
+    assert deterministic_verdict(add, ["ERROR: boom"]).verdict == "fail"
+
+
+def test_goal_engine_loop_with_stubs(tmp_path):
+    import asyncio
+
+    from forsch.cli.goal_engine import ledger
+    from forsch.cli.goal_engine.engine import run_goal
+    from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, Verdict, new_id
+
+    async def plan_fn(ws, goal):
+        return GoalPlan(id=new_id(), goal=goal, status="executing", steps=[
+            GoalStep(id="s1", intent="check shelby", actuator="check_agent",
+                     args={"agent_id": "shelby"}, success_check="0 red"),
+            GoalStep(id="s2", intent="deploy", actuator="manual",
+                     args={"command": "git push"}, success_check="zach runs it"),
+        ])
+
+    def actuate_fn(ws, actuator, args):
+        return "red: 0; all green" if actuator == "check_agent" else "(manual)"
+
+    async def judge_fn(ws, step, evidence):
+        if step.actuator == "manual":
+            return Verdict(step_id=step.id, reasoning="manual", verdict="blocked", next_directive="git push")
+        return Verdict(step_id=step.id, reasoning="ok", verdict="pass")
+
+    plan = asyncio.run(run_goal(tmp_path, "smoke", max_iterations=10,
+                                plan_fn=plan_fn, judge_fn=judge_fn, actuate_fn=actuate_fn))
+    assert plan.steps[0].status == "passed"
+    assert plan.steps[1].status == "blocked"
+    assert plan.status == "blocked"
+    assert ledger.load(tmp_path, plan.id).steps[0].status == "passed"
