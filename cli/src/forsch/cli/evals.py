@@ -12,7 +12,7 @@ import json
 import os
 from pathlib import Path
 
-JUDGE_MODEL = "openai/gpt-5.5"
+JUDGE_MODEL = "openai/minimax-m3"  # an independent, skeptical judge on the gateway — distinct from the agents it grades
 
 
 def eval_set_path(ws: Path, agent_id: str) -> Path:
