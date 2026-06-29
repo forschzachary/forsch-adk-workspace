@@ -20,33 +20,80 @@ APP = "forsch"
 USER = "zach"
 
 _INSTRUCTION = """\
-You are the Forsch Factory operator — you help Zach build and wire ADK agents in his
+You are the Forsch Factory operator - you help Zach build and wire ADK agents in his
 self-hosted factory. agent_specs/agents.yaml is the single source of truth; your tools
-edit it and regenerate the agent's files.
+read and EDIT it and regenerate the agent's files.
 
-Your verbs:
-- list_agents / list_tools — see what exists.
-- add_tool(agent_id, tool_name) — add a Forsch tool to an agent and rebuild it.
-- build_agent(agent_id) — regenerate an agent from the manifest (runs the deploy gate; also
-  syncs the agent into the live graph).
-- promote_edits(agent_id) — fold an agent's web-builder edits back into the manifest.
-- check_agent(agent_id) — validate an agent's tools.
+== HOW YOU THINK: define DONE before you DO ==
+You work BACKWARD from the desired end state. You do not jump to verbs on a vague request.
+For any goal that is open-ended, ambiguous, or larger than a single obvious action, you run
+INTAKE FIRST and you are allowed - expected - to end a turn with questions and ZERO actions.
 
-Your experts (consult them for layer-specific work — they're advisors, you act):
-- agent_logic_specialist — agent config, model selection, evals, ADK patterns.
-- tools_data_specialist — the shared tool/component library.
-- interfaces_specialist — Discord channels, the bridge, ADK Web.
-- router_specialist — cluster membership and message routing.
+Intake protocol (do this before touching anything):
+1. READ CURRENT STATE. Call get_agent_config / describe_graph / check_agent so you reason
+   from real manifest state, never assumptions.
+2. STATE THE TARGET. Reflect back, concretely, what "finished/done" means - the end state,
+   not the steps. Write it as a short target-state spec.
+3. SHOW THE GAP. Diff current -> target. Name exactly what must change.
+4. PROBE - but lazily. Ask a question ONLY when two or more materially different target
+   states are still alive and the answer changes the plan. If only one reading is plausible,
+   STATE YOUR ASSUMPTION out loud and proceed. Never interrogate for sport; never ask what
+   you can read yourself.
+5. CONFIRM the target + the change set, THEN act.
 
-Your knowledge:
-- list_skills / load_skill — named how-to you can pull on demand before related work.
-- the ADK documentation MCP — consult it for any ADK API question before answering or building.
+Bias: a wrong guess about what Zach wants is far more expensive than a question. When the end
+state is unclear, you ASK. When the path to a clear end state is obvious, you ACT.
 
-Rules: say what you're about to change before you change it. Consult the right specialist or
-skill before non-trivial work. You cannot deploy to production or delete anything — that's
-gated and manual; tell Zach the exact command to run. Be warm, concise, concrete; cite real
-paths and real results, never assumptions.
+== YOUR VERBS ==
+Read:  list_agents / list_tools / get_agent_config(agent_id) / describe_graph(agent_id) /
+       open_graph() - inspect what exists and how it's wired.
+Write: add_tool(agent_id, tool_name) - add a Forsch tool and rebuild.
+       set_config(agent_id, field, value) - edit any manifest field (model, group,
+         discord_channels, web_entrypoint, instruction, description) then rebuild + re-gate.
+       build_agent(agent_id) - regenerate from the manifest (runs the deploy gate; syncs the graph).
+       promote_edits(agent_id) - fold web-builder edits back into the manifest.
+       check_agent(agent_id) - validate an agent's tools (the deploy gate).
+
+== YOUR EXPERTS (advisors - you act) ==
+- agent_logic_specialist - agent config, model selection, evals, ADK patterns.
+- tools_data_specialist - the shared tool/component library.
+- interfaces_specialist - Discord channels, the bridge, ADK Web.
+- router_specialist - cluster membership and message routing.
+
+== YOUR KNOWLEDGE ==
+- list_skills / load_skill - named how-to you pull on demand before related work.
+- the ADK documentation MCP - consult it for any ADK API question before building.
+
+== HARD RULES ==
+- Say what you're about to change before you change it; cite real paths and real results.
+- safety_level is a PRIVILEGE change (it widens an agent's blast radius). Never flip it
+  silently: state the current level, the requested level, and why, and get an explicit yes
+  first (then set_config with confirm_privilege=True).
+- You cannot deploy to production or delete anything - that's gated and manual. Produce the
+  change and tell Zach the exact command to run.
+- Be warm, concise, concrete. Reason from evidence, never from assumption.
 """
+
+# Fields the operator may edit freely via set_config. safety_level is intentionally NOT here —
+# it's a privilege change, guarded by confirm_privilege.
+_EDITABLE = {"model", "group", "discord_channels", "web_entrypoint", "instruction", "description"}
+
+
+def _set_config_gate(field: str, confirm_privilege: bool):
+    """Return a block dict if a set_config edit is disallowed/needs confirmation, else None.
+
+    Pure and module-level so the privilege guard is unit-testable without a workspace.
+    """
+    if field == "safety_level":
+        if not confirm_privilege:
+            return {"ok": False, "blocked": "privilege_change", "field": field,
+                    "note": "safety_level widens an agent's blast radius — state the change, get "
+                            "Zach's explicit yes, then call again with confirm_privilege=True"}
+        return None
+    if field not in _EDITABLE:
+        return {"ok": False, "error": f"'{field}' is not an editable field; "
+                                      f"editable: {sorted(_EDITABLE)} (+ safety_level with confirm_privilege)"}
+    return None
 
 
 def _load_env(path: Path) -> None:
@@ -115,7 +162,57 @@ def _make_tools(ws: Path) -> list:
         spec = load_manifest(ws / "agent_specs" / "agents.yaml").agents[agent_id]
         return format_report_text(validate_agent_tools(spec))
 
-    return [list_agents, list_tools, add_tool, build_agent, promote_edits, check_agent]
+    def get_agent_config(agent_id: str) -> dict:
+        """Read an agent's full manifest entry (model, tools, safety_level, group, channels, ...)."""
+        from forsch.adk_factory.loader import load_manifest
+
+        manifest = load_manifest(ws / "agent_specs" / "agents.yaml")
+        if agent_id not in manifest.agents:
+            return {"error": f"no agent '{agent_id}'"}
+        return manifest.agents[agent_id].model_dump()
+
+    def describe_graph(agent_id: str | None = None) -> dict:
+        """Read-only live-graph wiring (model, tools, channels, web entrypoint, cluster). Diff this."""
+        from forsch.cli.graph import describe_graph as _describe
+
+        return _describe(ws, agent_id)
+
+    def open_graph() -> dict:
+        """Start the local live-graph server and return its URL (open it to watch the map live)."""
+        from forsch.cli.graph import serve_graph
+
+        try:
+            return {"ok": True, "url": serve_graph(ws),
+                    "note": "open this in a browser to watch the map update live"}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def set_config(agent_id: str, field: str, value, confirm_privilege: bool = False) -> dict:
+        """Edit one manifest field on an agent, then rebuild + re-run the deploy gate.
+
+        safety_level is a privilege change: it requires confirm_privilege=True (state the change
+        and get Zach's yes first). Any other non-editable field is refused.
+        """
+        from forsch.adk_builder.editor import update_agent
+        from forsch.adk_factory.loader import load_manifest
+        from forsch.adk_factory.validation import format_report_text, validate_agent_tools
+
+        block = _set_config_gate(field, confirm_privilege)
+        if block is not None:
+            if block.get("blocked") == "privilege_change":
+                try:
+                    spec = load_manifest(ws / "agent_specs" / "agents.yaml").agents[agent_id]
+                    block["current"], block["requested"] = getattr(spec, "safety_level", None), value
+                except Exception:
+                    pass
+            return block
+        update_agent(str(ws), agent_id, {field: value})
+        spec = load_manifest(ws / "agent_specs" / "agents.yaml").agents[agent_id]
+        return {"ok": True, "agent": agent_id, "set": {field: value},
+                "gate": format_report_text(validate_agent_tools(spec))}
+
+    return [list_agents, list_tools, get_agent_config, describe_graph, open_graph,
+            add_tool, set_config, build_agent, promote_edits, check_agent]
 
 
 def _adk_docs_toolset():

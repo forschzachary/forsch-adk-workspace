@@ -161,6 +161,21 @@ def test_goal_engine_fail_parks_immediately(tmp_path):
     assert any("fix it" in e for e in plan.steps[0].evidence)      # directive surfaced, not buried
 
 
+def test_set_config_gate_privilege():
+    from forsch.cli.operator import _set_config_gate
+
+    # safety_level without confirm -> blocked privilege change
+    blocked = _set_config_gate("safety_level", False)
+    assert blocked and blocked.get("blocked") == "privilege_change"
+    # safety_level WITH confirm -> allowed through
+    assert _set_config_gate("safety_level", True) is None
+    # ordinary editable fields -> allowed
+    assert _set_config_gate("model", False) is None
+    assert _set_config_gate("discord_channels", False) is None
+    # a non-editable field -> refused, not silently written
+    assert "error" in _set_config_gate("package", False)
+
+
 def test_goal_engine_loop_with_stubs(tmp_path):
     import asyncio
 
