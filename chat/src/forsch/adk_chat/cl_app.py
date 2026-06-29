@@ -6,14 +6,9 @@ from forsch.adk_chat.claudewrap import map_block
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 
 _TOKEN = os.environ.get("CHAT_TOKEN", "")
-_LITE = os.environ.get("LITELLM_BASE", "http://127.0.0.1:4000")
-_KEY = os.environ.get("LITELLM_HERMES_KEY", "")
 _WS = os.environ.get("FORSCH_ADK_WORKSPACE", "/root/.hermes/workspace/adk")
 _HUBERT_MODEL = os.environ.get("HUBERT_MODEL", "ollama-cloud/glm-5.2")
 _HUBERT_TIMEOUT = float(os.environ.get("HUBERT_TIMEOUT", "240"))
-_SOUL = open(os.environ["HUBERT_SOUL_PATH"]).read() if os.environ.get("HUBERT_SOUL_PATH") else "You are Hubert."
-_VOICE = ("\n\nChat voice: real texting cadence, mostly lowercase, ASCII punctuation only "
-          "(no em dashes or curly quotes), at most one emoji.")
 
 # AskActionMessage timeout (seconds). On timeout the user can still type a reply.
 _ASK_TIMEOUT = 600
