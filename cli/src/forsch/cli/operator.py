@@ -280,6 +280,8 @@ def run_repl(ws: Path) -> None:
     import logging
     import warnings
 
+    from forsch.cli.ui import black_terminal
+
     warnings.filterwarnings("ignore")
     logging.disable(logging.WARNING)
     _load_env(ws / ".adk-local.env")
@@ -287,4 +289,5 @@ def run_repl(ws: Path) -> None:
         raise SystemExit(
             "no gateway configured — add LITELLM_BASE_URL + a key to .adk-local.env to chat."
         )
-    asyncio.run(_loop(ws, create_operator(ws)))
+    with black_terminal():
+        asyncio.run(_loop(ws, create_operator(ws)))

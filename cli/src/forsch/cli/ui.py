@@ -5,6 +5,9 @@ accent matches the Forsch cockpit theme.
 """
 from __future__ import annotations
 
+import sys
+from contextlib import contextmanager
+
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
@@ -61,3 +64,25 @@ def check(label: str, ok: bool, detail: str = "") -> Text:
         + Text(f"  {label:<30}", style="" if ok else "dim")
         + Text(detail, style="dim")
     )
+
+
+@contextmanager
+def black_terminal():
+    """Paint the WHOLE terminal window true-black for the duration, then restore.
+
+    Uses OSC 11 to set the terminal's default background (so margins and empty rows go black
+    too, not just the text), and OSC 111 to reset on exit. No-op on terminals that ignore
+    OSC 11; the Console's `on #000000` style still blacks out the rendered area there.
+    """
+    def _emit(seq: str) -> None:
+        try:
+            sys.stdout.write(seq)
+            sys.stdout.flush()
+        except Exception:
+            pass
+
+    _emit("\033]11;#000000\a")
+    try:
+        yield
+    finally:
+        _emit("\033]111\a")
