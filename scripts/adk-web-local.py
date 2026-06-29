@@ -98,6 +98,10 @@ def main() -> None:
     _load_env(ROOT / ".adk-local.env")
     os.environ.setdefault("FORSCH_ADK_WORKSPACE", str(ROOT))
 
+    # scripts/ on the path so the launcher can import the palette module.
+    scripts_dir = str(ROOT / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
     # Every agent package on the path so web_agents/<id>/root_agent.yaml code refs resolve.
     for src in sorted(glob.glob(str(ROOT / "agents" / "*" / "src"))):
         if src not in sys.path:
@@ -105,10 +109,25 @@ def main() -> None:
 
     _repoint_builder_assistant()
 
-    from google.adk.cli import main as adk_main
+    # Build ADK's own FastAPI app so we can mount the Forsch Tool Palette beside the
+    # builder, instead of handing off to the opaque `adk web` CLI.
+    import uvicorn
+    from google.adk.cli.fast_api import get_fast_api_app
 
-    sys.argv = ["adk", "web", str(ROOT / "web_agents"), "--host", "127.0.0.1", "--port", "8000"]
-    adk_main()
+    app = get_fast_api_app(
+        agents_dir=str(ROOT / "web_agents"),
+        web=True,
+        host="127.0.0.1",
+        port=8000,
+        reload_agents=False,
+    )
+
+    from forsch_palette import mount_palette
+
+    mount_palette(app, ROOT)
+
+    print("ADK Web + Forsch Tool Palette -> http://127.0.0.1:8000  (palette at /forsch)")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":
