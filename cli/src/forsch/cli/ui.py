@@ -11,7 +11,8 @@ from rich.text import Text
 
 ACCENT = "#f5a623"  # Forsch amber
 COSMIC = "#9d8be0"  # twinkle violet (the spacey chat theme)
-console = Console()
+# true-black background so the starfield reads "spacey" on any terminal theme
+console = Console(style="on #000000")
 
 
 def banner() -> None:
