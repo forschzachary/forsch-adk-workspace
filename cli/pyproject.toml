@@ -1,0 +1,32 @@
+[project]
+name = "forsch-cli"
+version = "0.1.0"
+description = "Forsch Factory — the unified CLI (forsch)"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1",
+    "ruamel.yaml>=0.18",
+    "google-adk[extensions]>=2.3.0",
+    "jinja2>=3.1",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "httpx>=0.27",
+    "mcp>=1.0",
+]
+
+[project.scripts]
+forsch = "forsch.cli.main:cli"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forsch"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -28,3 +28,6 @@ chat/hubert_soul.md
 # Cockpit theme + CSS are source, keep them tracked
 !chat/public/
 !chat/public/**
+
+# local ADK web gateway creds (never commit)
+.adk-local.env

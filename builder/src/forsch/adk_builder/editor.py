@@ -45,6 +45,8 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
 
     if patch.get("instruction") is not None:
         agent["instruction"] = LiteralScalarString(str(patch["instruction"]).rstrip("\n") + "\n")
+    if patch.get("description") is not None:
+        agent["description"] = str(patch["description"])
     if patch.get("tools") is not None:
         agent["tools"] = [
             t if t.startswith(_TOOL_PREFIX) else _TOOL_PREFIX + t for t in patch["tools"]
