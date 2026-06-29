@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 Actuator = Literal["build_agent", "add_tool", "promote_edits", "check_agent", "run_eval", "consult", "manual"]
 StepStatus = Literal["pending", "running", "passed", "failed", "blocked"]
-PlanStatus = Literal["planning", "executing", "blocked", "done", "abandoned"]
+PlanStatus = Literal["planning", "executing", "blocked", "done", "abandoned", "plan_failed"]
 VerdictValue = Literal["pass", "fail", "blocked"]
 
 

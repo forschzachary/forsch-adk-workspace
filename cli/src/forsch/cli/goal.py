@@ -51,6 +51,10 @@ def _renderer():
 
     def render(kind, payload):
         if kind == "plan":
+            if payload.status == "plan_failed":
+                console.print("\n  [red]✗ planning failed[/] — the planner returned no usable steps (parse error)")
+                console.print(f"  [dim]ledger: goals/{payload.id}.yaml[/]\n")
+                return
             n = len(payload.steps)
             console.print(f"\n  [{COSMIC}]✦[/] [bold]plan[/] [dim]·[/] {n} step{'s' if n != 1 else ''}  [dim]goals/{payload.id}.yaml[/]")
             for step in payload.steps:
@@ -66,6 +70,8 @@ def _renderer():
         elif kind == "stall":
             console.print("  [yellow]stalled — no progress; parking the goal[/]")
         elif kind == "finish":
+            if payload.status == "plan_failed":
+                return
             passed = sum(s.status == "passed" for s in payload.steps)
             total = len(payload.steps)
             console.print(f"\n  [bold]{passed}/{total}[/] passed · status [bold]{payload.status}[/]")

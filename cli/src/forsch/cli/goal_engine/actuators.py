@@ -58,7 +58,12 @@ def _check_agent(ws: Path, args: dict) -> str:
     from forsch.adk_factory.validation import format_report_text, validate_agent_tools
 
     spec = load_manifest(ws / "agent_specs" / "agents.yaml").agents[args["agent_id"]]
-    return format_report_text(validate_agent_tools(spec))
+    report = validate_agent_tools(spec)
+    summary = getattr(report, "summary", {}) or {}
+    red = summary.get("red", 0) if isinstance(summary, dict) else 0
+    red = len(red) if isinstance(red, (list, tuple, set)) else int(red or 0)
+    # Prepend an unambiguous, machine-readable signal so the Judge matches the count, not the prose.
+    return f"gate-red-count={red}\n{format_report_text(report)}"
 
 
 def _run_eval(ws: Path, args: dict) -> str:

@@ -192,8 +192,14 @@ def goal_cmd(ws, text: str, max_iters: int) -> None:
 def test(ws, suite: str) -> None:
     """Run a test suite in its correct venv/lane."""
     if suite == "unit":
-        py = _adk_python(ws)
-        raise SystemExit(subprocess.call([str(py), "-m", "pytest", "tests", "-q"], cwd=str(py.parents[2])))
+        import shutil
+
+        if shutil.which("uv") is None:
+            raise click.ClickException("uv not found — the unit gate needs it to resolve pytest. A missing tool is a hard red, never a silent pass.")
+        # `uv run` resolves the cli project + its dev group (pytest) reliably; if pytest can't be
+        # found the run exits non-zero (no masked exit code), so a missing tool can't pass green.
+        raise SystemExit(subprocess.call(
+            ["uv", "run", "--project", str(ws / "cli"), "pytest", "-q", "tests"], cwd=str(ws / "cli")))
     raise SystemExit(subprocess.call(["make", f"test-{suite}"], cwd=str(ws)))
 
 

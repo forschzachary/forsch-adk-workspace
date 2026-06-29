@@ -80,4 +80,7 @@ async def run_planner(ws: Path, goal: str, specialists: list) -> GoalPlan:
             steps.append(GoalStep.model_validate(item))
         except Exception:
             continue
-    return GoalPlan(id=new_id(), goal=goal, status="executing", steps=steps)
+    # Empty steps from a real goal almost always means the planner output didn't parse — mark it
+    # 'plan_failed' so it's distinguishable from a goal that genuinely needed no work.
+    status = "executing" if steps else "plan_failed"
+    return GoalPlan(id=new_id(), goal=goal, status=status, steps=steps)

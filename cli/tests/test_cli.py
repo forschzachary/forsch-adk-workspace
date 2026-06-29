@@ -122,14 +122,43 @@ def test_judge_deterministic_verdicts():
     from forsch.cli.goal_engine.schema import GoalStep
 
     check = GoalStep(id="s1", intent="c", actuator="check_agent", success_check="green")
-    assert deterministic_verdict(check, ["all good, red: 0"]).verdict == "pass"
-    assert deterministic_verdict(check, ["found 2 red tools"]).verdict == "fail"
+    assert deterministic_verdict(check, ["gate-red-count=0\nall tools validated"]).verdict == "pass"
+    assert deterministic_verdict(check, ["gate-red-count=2\nissues found"]).verdict == "fail"
+    # regression: a green report containing 'required'/'credentials' must NOT false-fail
+    assert deterministic_verdict(check, ["gate-red-count=0\ncredentials required"]).verdict == "pass"
+    # no machine-readable count -> defer to the LLM judge
+    assert deterministic_verdict(check, ["some prose with no marker"]) is None
+    # the crash marker fails ANY actuator, before its specific branch
+    assert deterministic_verdict(check, ["[ACTUATION-ERROR] KeyError: x"]).verdict == "fail"
     manual = GoalStep(id="s2", intent="m", actuator="manual", args={"command": "git push"}, success_check="x")
     v = deterministic_verdict(manual, ["(manual)"])
     assert v.verdict == "blocked" and "git push" in (v.next_directive or "")
     add = GoalStep(id="s3", intent="a", actuator="add_tool", success_check="x")
     assert deterministic_verdict(add, ["added foo to bar"]) is None
-    assert deterministic_verdict(add, ["ERROR: boom"]).verdict == "fail"
+    assert deterministic_verdict(add, ["[ACTUATION-ERROR] boom"]).verdict == "fail"
+
+
+def test_goal_engine_fail_parks_immediately(tmp_path):
+    import asyncio
+
+    from forsch.cli.goal_engine.engine import run_goal
+    from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, Verdict, new_id
+
+    async def plan_fn(ws, goal):
+        return GoalPlan(id=new_id(), goal=goal, status="executing",
+                        steps=[GoalStep(id="s1", intent="x", actuator="add_tool", args={}, success_check="x")])
+
+    calls = {"n": 0}
+
+    async def judge_fn(ws, step, evidence):
+        calls["n"] += 1
+        return Verdict(step_id=step.id, reasoning="no", verdict="fail", next_directive="fix it")
+
+    plan = asyncio.run(run_goal(tmp_path, "g", plan_fn=plan_fn, judge_fn=judge_fn,
+                                actuate_fn=lambda ws, a, args: "did a thing"))
+    assert plan.steps[0].status == "blocked"                       # failed -> parked at once (MAX_ATTEMPTS=1)
+    assert calls["n"] == 1                                          # judged once, not 3x
+    assert any("fix it" in e for e in plan.steps[0].evidence)      # directive surfaced, not buried
 
 
 def test_goal_engine_loop_with_stubs(tmp_path):

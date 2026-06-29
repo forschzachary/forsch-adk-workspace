@@ -14,7 +14,11 @@ from pathlib import Path
 
 from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, Verdict
 
-MAX_ATTEMPTS = 3
+# Deterministic actuators re-run byte-identically, so a retry cannot change the outcome until the
+# engine can RE-PLAN on failure (route the judge's next_directive back to the Planner to amend args
+# or insert a fix step) — that is the v2.1 corrective-agency increment. Until then: 1 attempt, then
+# park with the directive surfaced. Raising this without re-planning only burns cost.
+MAX_ATTEMPTS = 1
 STALL_LIMIT = 4
 
 
@@ -75,7 +79,7 @@ async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=No
 
         if step.actuator == "consult":
             step.status = "passed"
-            step.evidence.append("(advisory consult — specialist input folded in at plan time)")
+            step.evidence.append("(consult step — advisory only; nothing actuated)")
             stall = 0
             ledger.checkpoint(ws, plan)
             emit("step_done", step)
@@ -84,7 +88,7 @@ async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=No
         try:
             evidence = actuate_fn(ws, step.actuator, step.args)
         except Exception as exc:  # actuation must never crash the loop
-            evidence = f"ERROR: {type(exc).__name__}: {exc}"
+            evidence = f"[ACTUATION-ERROR] {type(exc).__name__}: {exc}"
         step.evidence.append(evidence)
 
         verdict = await judge_fn(ws, step, step.evidence)
@@ -102,7 +106,8 @@ async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=No
             stall += 1
             if step.attempts >= MAX_ATTEMPTS:
                 step.status = "blocked"
-                step.evidence.append(f"gave up after {step.attempts} attempts")
+                step.evidence.append(f"needs a fix: {verdict.next_directive}" if verdict.next_directive
+                                     else "failed — no corrective directive given")
             else:
                 step.status = "failed"
                 if verdict.next_directive:
@@ -115,14 +120,15 @@ async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=No
             emit("stall", plan)
             break
 
-    if not plan.steps:
-        plan.status = "abandoned"
-    elif plan.is_settled() and all(s.status == "passed" for s in plan.steps):
-        plan.status = "done"
-    elif any(s.status == "blocked" for s in plan.steps):
-        plan.status = "blocked"
-    else:
-        plan.status = "executing"
+    if plan.status != "plan_failed":  # preserve a planner parse-failure; don't relabel it
+        if not plan.steps:
+            plan.status = "abandoned"
+        elif plan.is_settled() and all(s.status == "passed" for s in plan.steps):
+            plan.status = "done"
+        elif any(s.status == "blocked" for s in plan.steps):
+            plan.status = "blocked"
+        else:
+            plan.status = "executing"
     ledger.checkpoint(ws, plan)
     emit("finish", plan)
     return plan
