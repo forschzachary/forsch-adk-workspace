@@ -10,17 +10,16 @@ from rich.table import Table
 from rich.text import Text
 
 ACCENT = "#f5a623"  # Forsch amber
+COSMIC = "#9d8be0"  # twinkle violet (the spacey chat theme)
 console = Console()
 
 
 def banner() -> None:
     console.print()
-    console.print(Text("  Forsch Factory ", style=f"bold {ACCENT}") + Text("operator", style="bold"))
-    console.print(
-        Text("  build · wire · ask about ADK   ", style="dim")
-        + Text("exit", style="dim italic")
-        + Text(" to quit", style="dim")
-    )
+    console.print("   [#6b5fc7]✦[/]    [#3a4a63]·[/]      [#3a6f8a]⋆[/]         [#9d8be0]✧[/]       [#3a4a63]·[/]       [#5dd6ff]✦[/]     [#3a4a63]⋆[/]")
+    console.print("     [#3a4a63]·[/]      [bold #b8a0ff]Forsch Factory[/] [bold #5dd6ff]operator[/]       [#6b5fc7]✦[/]      [#3a4a63]·[/]")
+    console.print("   [#9d8be0]✧[/]    [dim]build · wire · ask about ADK[/]   [dim italic]· exit to quit[/]    [#3a6f8a]⋆[/]   [#f5a623]✦[/]")
+    console.print("     [#3a4a63]·[/]       [#5dd6ff]⋆[/]        [#6b5fc7]✦[/]        [#3a4a63]·[/]       [#9d8be0]✧[/]      [#3a4a63]·[/]")
     console.print()
 
 
@@ -33,8 +32,8 @@ def fmt_args(args: dict | None) -> str:
 
 def tool_call_line(name: str, args: dict | None) -> Text:
     return (
-        Text("  ⏺ ", style=ACCENT)
-        + Text(name, style="bold")
+        Text("  ✦ ", style=COSMIC)
+        + Text(name, style="bold #b8a0ff")
         + Text(f"({fmt_args(args)})", style="dim")
     )
 

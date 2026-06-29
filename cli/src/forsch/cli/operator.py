@@ -134,14 +134,14 @@ async def _loop(agent) -> None:
     from google.genai import types
     from rich.markdown import Markdown
 
-    from forsch.cli.ui import ACCENT, banner, console, tool_call_line
+    from forsch.cli.ui import COSMIC, banner, console, tool_call_line
 
     runner = InMemoryRunner(agent=agent, app_name="forsch")
     session = await runner.session_service.create_session(app_name="forsch", user_id="zach")
     banner()
     while True:
         try:
-            query = console.input(f"[bold {ACCENT}]forsch[/] [dim]›[/] ").strip()
+            query = console.input(f"[bold #b8a0ff]forsch[/] [{COSMIC}]✦[/] ").strip()
         except (EOFError, KeyboardInterrupt):
             console.print()
             break
@@ -151,7 +151,7 @@ async def _loop(agent) -> None:
             break
         content = types.Content(role="user", parts=[types.Part(text=query)])
         chunks: list[str] = []
-        with console.status("[dim]thinking…[/]", spinner="dots"):
+        with console.status(f"[{COSMIC}]✦ thinking…[/]", spinner="star2", spinner_style=COSMIC):
             async for event in runner.run_async(user_id="zach", session_id=session.id, new_message=content):
                 for call in event.get_function_calls() or []:
                     console.print(tool_call_line(call.name, call.args))
