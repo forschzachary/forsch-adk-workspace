@@ -1,0 +1,55 @@
+/* Hubert cockpit — precision-instrument layer.
+   Palette, radius, and fonts come from public/theme.json. This file adds the
+   build-log feel: tight monospace for the run, quiet sharp chrome, crisp focus.
+   Selectors are intentionally generic, so they degrade gracefully across
+   Chainlit versions instead of breaking on renamed classes. */
+
+/* The run is the content: tool args + output read as a build log. */
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+pre code {
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+:not(pre) > code {
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: hsl(var(--muted) / 0.6);
+}
+
+/* Quiet, sharp scrollbars instead of chunky default tracks. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 6px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.7);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Keyboard-first: a visible, on-brand focus ring. */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.7);
+  outline-offset: 1px;
+}

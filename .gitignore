@@ -24,3 +24,7 @@ chat/hubert_soul.md
 .chainlit/
 .claude/settings.local.json
 *.pyc
+
+# Cockpit theme + CSS are source, keep them tracked
+!chat/public/
+!chat/public/**
