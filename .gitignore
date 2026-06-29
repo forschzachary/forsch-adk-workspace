@@ -31,3 +31,6 @@ chat/hubert_soul.md
 
 # local ADK web gateway creds (never commit)
 .adk-local.env
+
+# forsch chat persistent sessions
+.forsch/

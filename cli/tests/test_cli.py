@@ -51,3 +51,29 @@ def test_scaffold_eval_set_shape(tmp_path):
     assert case["conversation"][0]["user_content"]["role"] == "user"
     assert case["conversation"][0]["final_response"]["role"] == "model"
     assert eval_set_path(tmp_path, "shelby").name == "shelby.evalset.json"
+
+
+def test_graph_bare_strips_tool_prefix():
+    from forsch.cli.graph import _bare
+
+    assert _bare("forsch.adk_components.tools.search_movies") == "search_movies"
+    assert _bare("search_movies") == "search_movies"
+
+
+def test_goal_preamble_includes_goal():
+    from forsch.cli.goal import goal_preamble
+
+    out = goal_preamble("  wire shelby's grocery tool  ")
+    assert "wire shelby's grocery tool" in out
+    assert "GOAL MODE" in out
+
+
+def test_skills_lists_and_resolves_dir(tmp_path):
+    from forsch.cli.skills import list_skill_names, skills_dir
+
+    d = tmp_path / "skills"
+    d.mkdir()
+    (d / "alpha.md").write_text("# Alpha\nfirst line\n")
+    (d / "beta.md").write_text("# Beta\nsecond line\n")
+    assert list_skill_names(tmp_path) == ["alpha", "beta"]
+    assert skills_dir(tmp_path) == d

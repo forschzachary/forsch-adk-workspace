@@ -137,6 +137,18 @@ def web(ws) -> None:
 
 
 @cli.command()
+@click.option("--port", default=8080, show_default=True, help="port to serve on")
+@click.pass_obj
+def graph(ws, port: int) -> None:
+    """Serve the live-agent-graph locally — watch agents appear/update as you build."""
+    serve = ws / "packages" / "live-agent-graph" / "serve.py"
+    if not serve.exists():
+        raise click.ClickException("live-agent-graph is not in this workspace")
+    click.secho(f"live graph → http://127.0.0.1:{port}  (build agents to watch them update)", fg="green")
+    raise SystemExit(subprocess.call(["python3", str(serve), str(port)], cwd=str(serve.parent)))
+
+
+@cli.command()
 @click.pass_obj
 def chat(ws) -> None:
     """Talk to the Forsch Factory operator — an AI that drives the factory and knows ADK docs."""
@@ -216,11 +228,17 @@ def _agent_ids(ws, agent: str | None, all_: bool) -> list[str]:
 
 def _apply(ws, agent_id: str, force: bool = False) -> None:
     from forsch.adk_factory.cli import apply
+    from forsch.adk_factory.loader import load_manifest
     from forsch.adk_factory.validation import DeployGateBlocked, format_report_text
+
+    from forsch.cli.graph import sync_agent_to_graph_registry
 
     try:
         res = apply(ws / "agent_specs" / "agents.yaml", agent_id, ws, force=force)
         click.secho(f"built {agent_id}: {len(res['written'])} file(s)", fg="green")
+        spec = load_manifest(ws / "agent_specs" / "agents.yaml").agents[agent_id]
+        if sync_agent_to_graph_registry(ws, agent_id, spec.model_dump()):
+            click.secho(f"  ↺ synced {agent_id} into the live graph", fg="cyan")
     except DeployGateBlocked as exc:
         click.secho(f"build BLOCKED for {agent_id} — {exc.report.summary['red']} red tool(s)", fg="red")
         click.echo(format_report_text(exc.report))
