@@ -1,0 +1,30 @@
+{
+  "eval_set_id": "shelby-evals",
+  "name": "shelby evals",
+  "eval_cases": [
+    {
+      "eval_id": "example-1",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Introduce yourself in one sentence."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "I help Shelby track groceries and reminders, warmly and simply."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

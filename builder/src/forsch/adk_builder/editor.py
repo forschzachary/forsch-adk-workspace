@@ -30,10 +30,12 @@ _yaml.indent(mapping=2, sequence=4, offset=2)
 
 
 def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
-    """Apply ``patch`` (instruction, tools, model and/or group) to one agent, then
-    regenerate its wrapper and runtime package. ``model`` pins the LiteLLM model
-    (blank = unpin → shared default); ``group`` selects a preamble jacket (blank =
-    none). Returns {ok, agent, tools, model, group, written, rendered_yaml}."""
+    """Apply ``patch`` to one agent, then regenerate its wrapper and runtime package.
+    Handles: instruction, description, tools, model, group, and the flat fields
+    discord_channels / web_entrypoint / safety_level. ``model`` pins the LiteLLM model
+    (blank = unpin → shared default); ``group`` selects a preamble jacket (blank = none);
+    a blank/empty flat field removes the key. Returns
+    {ok, agent, tools, model, group, written, rendered_yaml}."""
     ws = Path(workspace_root)
     mpath = ws / "agent_specs" / "agents.yaml"
     data = _yaml.load(mpath.read_text())
@@ -45,6 +47,8 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
 
     if patch.get("instruction") is not None:
         agent["instruction"] = LiteralScalarString(str(patch["instruction"]).rstrip("\n") + "\n")
+    if patch.get("description") is not None:
+        agent["description"] = str(patch["description"])
     if patch.get("tools") is not None:
         agent["tools"] = [
             t if t.startswith(_TOOL_PREFIX) else _TOOL_PREFIX + t for t in patch["tools"]
@@ -62,6 +66,14 @@ def update_agent(workspace_root: str, agent_id: str, patch: dict) -> dict:
             agent["group"] = g
         else:
             agent.pop("group", None)
+    # Additional flat manifest fields. set_config gates WHICH ones may be set; here we just
+    # write them as data — a value sets the key, blank/empty removes it.
+    for key in ("discord_channels", "web_entrypoint", "safety_level"):
+        if key in patch:
+            if patch[key] in (None, "", []):
+                agent.pop(key, None)
+            else:
+                agent[key] = patch[key]
 
     buf = StringIO()
     _yaml.dump(data, buf)

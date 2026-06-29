@@ -1,0 +1,1 @@
+"""Forsch Factory CLI (`forsch`)."""
