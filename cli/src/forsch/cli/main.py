@@ -145,6 +145,24 @@ def chat(ws) -> None:
     run_repl(ws)
 
 
+@cli.command(name="eval")
+@click.argument("agent")
+@click.option("--new", "scaffold", is_flag=True, help="write a starter eval set and exit")
+@click.option("--threshold", type=float, default=0.7, show_default=True, help="pass threshold (0-1)")
+@click.pass_obj
+def eval_cmd(ws, agent: str, scaffold: bool, threshold: float) -> None:
+    """Grade an agent against its eval set with an LLM judge on your gateway (no Vertex)."""
+    from forsch.cli.evals import eval_set_path, run_eval, scaffold_eval_set
+
+    set_file = eval_set_path(ws, agent)
+    if scaffold or not set_file.exists():
+        scaffold_eval_set(set_file, agent)
+        click.secho(f"  scaffolded {set_file.relative_to(ws)}", fg="green")
+        click.echo(f"  fill in each case's expected response, then: forsch eval {agent}")
+        return
+    raise SystemExit(0 if run_eval(ws, agent, set_file, threshold=threshold) else 1)
+
+
 @cli.command()
 @click.argument("suite", type=click.Choice(["unit", "agents", "bridge", "chat"]), default="unit")
 @click.pass_obj

@@ -36,3 +36,18 @@ def test_find_workspace_walks_up_to_manifest(tmp_path, monkeypatch):
 def test_find_workspace_none_when_absent(tmp_path, monkeypatch):
     monkeypatch.delenv("FORSCH_ADK_WORKSPACE", raising=False)
     assert find_workspace(tmp_path) is None
+
+
+def test_scaffold_eval_set_shape(tmp_path):
+    import json
+
+    from forsch.cli.evals import eval_set_path, scaffold_eval_set
+
+    p = tmp_path / "shelby.evalset.json"
+    scaffold_eval_set(p, "shelby")
+    d = json.loads(p.read_text())
+    assert d["eval_set_id"] == "shelby-evals"
+    case = d["eval_cases"][0]
+    assert case["conversation"][0]["user_content"]["role"] == "user"
+    assert case["conversation"][0]["final_response"]["role"] == "model"
+    assert eval_set_path(tmp_path, "shelby").name == "shelby.evalset.json"
