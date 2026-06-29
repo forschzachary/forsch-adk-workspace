@@ -27,9 +27,7 @@ from forsch.adk_components.shelby.tools import (
 def _fresh_db():
     store_mod.DB_PATH = _tmp_db
     _tmp_db.unlink(missing_ok=True)
-    schema = Path("/root/.hermes/workspace/adk/data/shelby_schema.sql")
-    if schema.exists():
-        store_mod.SCHEMA_PATH = schema
+    # init_db() falls back to inline DDL when no schema file is present.
     store_mod.init_db()
     yield
     _tmp_db.unlink(missing_ok=True)
