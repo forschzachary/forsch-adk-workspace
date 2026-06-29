@@ -120,15 +120,9 @@ def tools(ws, family: str | None) -> None:
     """List the Forsch tool catalog (what the palette shows)."""
     from forsch_palette import build_catalog
 
-    by_family: dict[str, list] = {}
-    for t in build_catalog():
-        by_family.setdefault(t["family"], []).append(t)
-    for fam, items in by_family.items():
-        if family and family.lower() not in fam.lower():
-            continue
-        click.secho(f"\n{fam}", fg="yellow", bold=True)
-        for t in items:
-            click.echo(f"  {t['name']:<30} {t['kind']:<6} {t['desc']}")
+    from forsch.cli.ui import console, tool_table
+
+    console.print(tool_table(build_catalog(), family))
 
 
 # ------------------------------------------------------------------------- run surfaces
@@ -177,16 +171,17 @@ def bridge(ws, action: str) -> None:
 @click.pass_obj
 def doctor(ws) -> None:
     """Check workspace + lane health."""
-    click.echo(f"workspace   {ws}")
-    _line("manifest", (ws / "agent_specs" / "agents.yaml").is_file(), "agent_specs/agents.yaml")
+    from forsch.cli.ui import check, console
+
+    console.print(f"[dim]workspace[/]  {ws}")
+    console.print(check("manifest", (ws / "agent_specs" / "agents.yaml").is_file(), "agent_specs/agents.yaml"))
     adk_pkg = "packages/adk-components" if (ws / "packages" / "adk-components").exists() else "components"
     for venv in (f"{adk_pkg}/.venv", "factory/.venv", "builder/.venv"):
-        _line(venv, (ws / venv).exists(), "host py3.x lane")
-    _line("LITELLM_BASE_URL", bool(os.environ.get("LITELLM_BASE_URL")),
-          os.environ.get("LITELLM_BASE_URL", "unset (web/run need it)"))
-    _line(".adk-local.env", (ws / ".adk-local.env").exists(), "local gateway creds")
-    have_docker = _silent(["docker", "info"])
-    _line("docker", have_docker, "container lane (bridge)")
+        console.print(check(venv, (ws / venv).exists(), "host py3.x lane"))
+    console.print(check("LITELLM_BASE_URL", bool(os.environ.get("LITELLM_BASE_URL")),
+                        os.environ.get("LITELLM_BASE_URL", "unset (web/run need it)")))
+    console.print(check(".adk-local.env", (ws / ".adk-local.env").exists(), "local gateway creds"))
+    console.print(check("docker", _silent(["docker", "info"]), "container lane (bridge)"))
 
 
 # ------------------------------------------------------------------------------ helpers

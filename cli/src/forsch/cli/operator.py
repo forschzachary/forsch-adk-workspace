@@ -129,35 +129,39 @@ def create_operator(ws: Path, with_docs: bool = True):
     return Agent(name="forsch_operator", model=model, instruction=_INSTRUCTION, tools=tools)
 
 
-def _render(event) -> None:
-    for call in event.get_function_calls() or []:
-        print(f"  \033[2m· {call.name}({', '.join(f'{k}={v!r}' for k, v in (call.args or {}).items())})\033[0m")
-    if event.is_final_response() and event.content:
-        for part in event.content.parts or []:
-            if getattr(part, "text", None):
-                print(part.text)
-
-
 async def _loop(agent) -> None:
     from google.adk.runners import InMemoryRunner
     from google.genai import types
+    from rich.markdown import Markdown
+
+    from forsch.cli.ui import ACCENT, banner, console, tool_call_line
 
     runner = InMemoryRunner(agent=agent, app_name="forsch")
     session = await runner.session_service.create_session(app_name="forsch", user_id="zach")
-    print("Forsch Factory operator — ask me to build/wire agents, or about ADK. 'exit' to quit.\n")
+    banner()
     while True:
         try:
-            query = input("forsch> ").strip()
-        except EOFError:
+            query = console.input(f"[bold {ACCENT}]forsch[/] [dim]›[/] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
             break
         if not query:
             continue
         if query in ("exit", "quit"):
             break
         content = types.Content(role="user", parts=[types.Part(text=query)])
-        async for event in runner.run_async(user_id="zach", session_id=session.id, new_message=content):
-            _render(event)
-        print()
+        chunks: list[str] = []
+        with console.status("[dim]thinking…[/]", spinner="dots"):
+            async for event in runner.run_async(user_id="zach", session_id=session.id, new_message=content):
+                for call in event.get_function_calls() or []:
+                    console.print(tool_call_line(call.name, call.args))
+                if event.is_final_response() and event.content:
+                    for part in event.content.parts or []:
+                        if getattr(part, "text", None):
+                            chunks.append(part.text)
+        if chunks:
+            console.print(Markdown("".join(chunks)))
+        console.print()
 
 
 def run_repl(ws: Path) -> None:
