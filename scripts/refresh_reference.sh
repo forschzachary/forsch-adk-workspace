@@ -104,7 +104,11 @@ fetch_simple litellm "https://docs.litellm.ai/llms-full.txt" "litellm-llms-full.
 
 fetch_simple gradio "https://www.gradio.app/llms.txt" "gradio-llms.md" llms-inline \
   "Gradio" \
-  "The chat/UI framework behind the bridge surface — Interface, Blocks, layout, streaming inputs/outputs."
+  "The chat/UI framework behind the bridge surface (Interface, Blocks, layout, streaming)."
+
+fetch_simple chainlit "https://docs.chainlit.io/llms-full.txt" "chainlit-llms-full.md" llms-full \
+  "Chainlit" \
+  "The chat/agent UI framework the primary cockpit is built on: Steps (tool-call/run inspection), Elements, chat profiles, streaming, auth, persistence."
 
 # --- uv: crawl the llms.txt index --------------------------------------------
 echo ">> uv (crawl index)"
@@ -169,6 +173,7 @@ write_index "$d" "MiMo CLI (orchestrator)" \
   echo "| Model Context Protocol | tool/server protocol | \`mcp/\` |"
   echo "| LiteLLM | the model gateway | \`litellm/\` |"
   echo "| Gradio | the chat/UI framework | \`gradio/\` |"
+  echo "| Chainlit | the primary cockpit's chat/agent framework | \`chainlit/\` |"
   echo "| uv | workspaces & packaging | \`uv/\` |"
   echo "| MiMo CLI | the orchestrator CLI | \`mimo/\` |"
   echo

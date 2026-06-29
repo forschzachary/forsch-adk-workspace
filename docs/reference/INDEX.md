@@ -2,7 +2,7 @@
 
 Local, version-controlled copies of the docs the factory orchestrator reads. Search them with the `search_reference` tool; regenerate with `scripts/refresh_reference.sh`.
 
-Last refreshed: 2026-06-28T23:00:37Z
+Last refreshed: 2026-06-29T02:46:19Z
 
 | Source | Covers | Dir |
 |---|---|---|
@@ -10,6 +10,7 @@ Last refreshed: 2026-06-28T23:00:37Z
 | Model Context Protocol | tool/server protocol | `mcp/` |
 | LiteLLM | the model gateway | `litellm/` |
 | Gradio | the chat/UI framework | `gradio/` |
+| Chainlit | the primary cockpit's chat/agent framework | `chainlit/` |
 | uv | workspaces & packaging | `uv/` |
 | MiMo CLI | the orchestrator CLI | `mimo/` |
 

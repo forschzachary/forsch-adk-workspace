@@ -2,7 +2,7 @@
 
 Astral uv — every agent the factory builds is a uv package. Workspaces, locking, building, dependencies, the pip interface.
 
-Refreshed: 2026-06-28T23:00:37Z · source + sizes in ../MANIFEST.yaml · regenerate with scripts/refresh_reference.sh
+Refreshed: 2026-06-29T02:46:19Z · source + sizes in ../MANIFEST.yaml · regenerate with scripts/refresh_reference.sh
 
 ## Files
 - `uv-concepts-authentication.md` (11 lines)
