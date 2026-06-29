@@ -1,15 +1,16 @@
 import os
 import chainlit as cl
-import httpx
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
-from forsch.adk_chat.hubert import stream_hubert
+from forsch.adk_chat.mimo_harness import run_hubert
 from forsch.adk_chat.claudewrap import map_block
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 
 _TOKEN = os.environ.get("CHAT_TOKEN", "")
 _LITE = os.environ.get("LITELLM_BASE", "http://127.0.0.1:4000")
 _KEY = os.environ.get("LITELLM_HERMES_KEY", "")
-_WS = "/root/.hermes/workspace/adk"
+_WS = os.environ.get("FORSCH_ADK_WORKSPACE", "/root/.hermes/workspace/adk")
+_HUBERT_MODEL = os.environ.get("HUBERT_MODEL", "ollama-cloud/glm-5.2")
+_HUBERT_TIMEOUT = float(os.environ.get("HUBERT_TIMEOUT", "240"))
 _SOUL = open(os.environ["HUBERT_SOUL_PATH"]).read() if os.environ.get("HUBERT_SOUL_PATH") else "You are Hubert."
 _VOICE = ("\n\nChat voice: real texting cadence, mostly lowercase, ASCII punctuation only "
           "(no em dashes or curly quotes), at most one emoji.")
@@ -52,7 +53,7 @@ def auth(headers) -> cl.User | None:
 @cl.set_chat_profiles
 async def profiles(user):
     return [cl.ChatProfile(name="claude", markdown_description="**Claude** - tool-using coder (full bypass, in the workspace)."),
-            cl.ChatProfile(name="hubert", markdown_description="**Hubert** - his persona on gpt-5.5 (SOUL-faithful; not his full runtime).")]
+            cl.ChatProfile(name="hubert", markdown_description="**Hubert** - the real mimocode harness on GLM 5.2 (Ollama Cloud); builds agents with tool calls inline.")]
 
 
 @cl.on_chat_start
@@ -183,15 +184,16 @@ async def on_message(message: cl.Message):
     who = cl.user_session.get("who")
     if who == "hubert":
         out = cl.Message(content="")
-        hist = cl.user_session.get("history")
-        hist.append({"role": "user", "content": message.content})
-        async with httpx.AsyncClient(timeout=120) as client:
-            acc = ""
-            async for tok in stream_hubert(client, _LITE, _KEY, "gpt-5.5", hist, system=_SOUL + _VOICE):
-                acc += tok
-                await out.stream_token(tok)
-        hist.append({"role": "assistant", "content": acc})
-        await out.update()
+        await out.send()
+        session_id = cl.user_session.get("mimo_session")
+        new_session, error = await run_hubert(
+            message.content, out, workdir=_WS,
+            session_id=session_id, model=_HUBERT_MODEL, timeout=_HUBERT_TIMEOUT,
+        )
+        if new_session:
+            cl.user_session.set("mimo_session", new_session)
+        if error:
+            await cl.Message(content=f"Hubert error: {error}").send()
     else:  # claude
         client = cl.user_session.get("claude")
         if client is None:
