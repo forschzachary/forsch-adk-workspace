@@ -94,3 +94,29 @@ fan-out across specialists, no checkpoints, no resumable `/goal status`. That's 
 - Verify-by-eval: [`cli/src/forsch/cli/evals.py`](../../cli/src/forsch/cli/evals.py)
 - ADK planners: `google/adk/planners/`; orchestration: `google/adk/agents/{sequential,loop,parallel}_agent.py`
 - Original specialist design (Hubert factory-bot): `packages/live-agent-graph/docs/compose/specs/2026-06-27-hubert-factory-bot-design.md`
+
+---
+
+## v2 build status + v2.1 backlog (post-review)
+
+**v2 is built, tested, and reviewed** — PR #33: `66258c6` (foundation), `a75dae0` (engine), `ed5c57b`
+(minimax-m3 judge), `726a09c` (review fixes). Zach reviewed `goal_engine/` as judge; all findings
+fixed. Skeleton, persistence, independent judge, and gate-by-absence are solid and shippable.
+
+**v2.1 — corrective agency (the #1 next thing).** Today a failed step parks immediately
+(`MAX_ATTEMPTS=1`) with the judge's `next_directive` surfaced — honest, but the execute phase
+can't yet *act on* the directive. That's the gap between "run all night" and "fail once, then
+stop." The fix (pick one):
+- **Re-plan on fail** — route `next_directive` back to the Planner to emit a delta (amend the
+  step's args, or insert a fix step before it), then continue. Cleanest; keeps execution
+  deterministic.
+- **Operator actuator** — a step type that hands the directive to an LLM operator with the verbs,
+  so it can adjust and retry. Same muscle as the deferred PlanReAct planner + the reuse-gate.
+
+**Also deferred (seams in place):**
+- **$-cost ceiling** — a `before_model_callback` tracking cumulative cost, ending the run cleanly
+  at a budget. `cost_usd` is the (inert) field for it. `max_iterations` is the bound until then.
+- **`LongRunningFunctionTool`** — true overnight pause-at-approval / resume-on-signal, vs today's
+  park-and-report.
+- **Reuse gate** — the X-line `before_tool_callback` that promotes oversized inline glue into a
+  shared tool (relevant once an Operator actuator can write code).
