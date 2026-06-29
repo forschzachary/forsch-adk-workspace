@@ -77,3 +77,41 @@ def test_skills_lists_and_resolves_dir(tmp_path):
     (d / "beta.md").write_text("# Beta\nsecond line\n")
     assert list_skill_names(tmp_path) == ["alpha", "beta"]
     assert skills_dir(tmp_path) == d
+
+
+def test_goal_ledger_roundtrip(tmp_path):
+    from forsch.cli.goal_engine import ledger
+    from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, new_id
+
+    plan = GoalPlan(id=new_id(), goal="wire shelby's grocery tool", steps=[
+        GoalStep(id="s1", intent="add log_groceries", actuator="add_tool",
+                 args={"agent_id": "shelby", "tool_name": "log_groceries"},
+                 success_check="check passes"),
+        GoalStep(id="s2", intent="validate", actuator="check_agent",
+                 args={"agent_id": "shelby"}, success_check="0 red tools"),
+    ])
+    ledger.checkpoint(tmp_path, plan)
+    back = ledger.load(tmp_path, plan.id)
+    assert back.goal == plan.goal
+    assert back.steps[0].actuator == "add_tool"
+    assert back.next_actionable().id == "s1"
+    assert plan.id in [p.id for p in ledger.list_goals(tmp_path)]
+
+
+def test_goal_actuators_exclude_gate_crossing_verbs():
+    from forsch.cli.goal_engine.actuators import SAFE_ACTUATORS
+
+    assert "deploy" not in SAFE_ACTUATORS
+    assert "delete" not in SAFE_ACTUATORS
+    assert "build_agent" in SAFE_ACTUATORS and "check_agent" in SAFE_ACTUATORS
+
+
+def test_goal_plan_settled_logic():
+    from forsch.cli.goal_engine.schema import GoalPlan, GoalStep
+
+    step = GoalStep(id="s1", intent="x", actuator="check_agent", success_check="ok")
+    plan = GoalPlan(id="g", goal="g", steps=[step])
+    assert not plan.is_settled()
+    step.status = "passed"
+    assert plan.is_settled()
+    assert plan.next_actionable() is None
