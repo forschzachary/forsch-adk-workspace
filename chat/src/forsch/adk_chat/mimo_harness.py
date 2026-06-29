@@ -180,29 +180,35 @@ async def run_hubert(
                 error_text = error_text or _error_text(evt)
                 continue
 
-            tname = _tool_name(evt, part)
-            if "tool" in etype.lower() or tname:
-                key = _step_key(evt, part, tname, etype)
-                finished = any(w in etype.lower() for w in ("finish", "end", "result", "complete"))
-                detail = _preview(_detail(evt, part))
-                _log("tool", etype, "name=", tname, "key=", key, "fin=", finished)
+            # Tool call: mimo emits a `tool_use` event whose `part` carries
+            # tool (name), callID, and state{status,input,output,metadata,title}.
+            # Events usually arrive already completed; light callID-keying also
+            # handles a running-then-completed sequence without duplicate Steps.
+            if etype == "tool_use" or part.get("type") == "tool":
+                state = part.get("state") if isinstance(part.get("state"), dict) else {}
+                tname = part.get("tool") or _tool_name(evt, part) or "tool"
+                key = str(part.get("callID") or part.get("id") or tname)
+                status = str(state.get("status") or "").lower()
+                meta = state.get("metadata") if isinstance(state.get("metadata"), dict) else {}
+                failed = status in ("error", "failed") or (meta.get("exit") not in (None, 0))
+                _log("tool", tname, "status=", status, "failed=", failed)
                 step = open_steps.get(key)
                 if step is None:
-                    step = cl.Step(name=tname or etype.replace("_", " "), type="tool")
-                    if detail:
-                        step.input = detail
+                    step = cl.Step(name=tname, type="tool")
+                    args = state.get("input")
+                    if args is not None:
+                        step.input = _preview(args, 800)
                     await step.send()
-                    if finished:
-                        await _close(step, detail)
-                    else:
-                        open_steps[key] = step
-                else:
-                    if finished:
-                        open_steps.pop(key, None)
-                        await _close(step, detail)
-                    elif detail:
-                        step.output = detail
-                        await step.update()
+                    open_steps[key] = step
+                out_val = state.get("output")
+                if out_val is not None:
+                    step.output = _preview(out_val, 1400)
+                if failed:
+                    step.output = "FAILED: " + (step.output or status or "tool error")
+                terminal = status in ("completed", "error", "failed", "done") or out_val is not None
+                await step.update()
+                if terminal:
+                    open_steps.pop(key, None)
                 continue
 
             if etype not in ("step_start", "step_finish"):
