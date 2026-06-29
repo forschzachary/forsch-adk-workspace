@@ -29,3 +29,6 @@ chat/hubert_soul.md
 .chainlit/
 .claude/settings.local.json
 *.pyc
+
+# local ADK web gateway creds (never commit)
+.adk-local.env
