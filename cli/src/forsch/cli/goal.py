@@ -67,6 +67,11 @@ def _renderer():
             color = _status_color({"pass": "passed", "fail": "failed", "blocked": "blocked"}.get(verdict.verdict, ""))
             tail = "" if verdict.minimal_change else " [yellow](not minimal)[/]"
             console.print(f"    [{color}]{verdict.verdict}[/]{tail}  [dim]{verdict.reasoning[:90]}[/]")
+        elif kind == "replan":
+            from forsch.cli.goal_engine.engine import _delta_summary
+
+            _step, delta = payload
+            console.print(f"    [{COSMIC}]↻ re-plan[/]  [dim]{_delta_summary(delta)}[/]")
         elif kind == "stall":
             console.print("  [yellow]stalled — no progress; parking the goal[/]")
         elif kind == "finish":

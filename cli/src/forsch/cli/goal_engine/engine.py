@@ -14,11 +14,11 @@ from pathlib import Path
 
 from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, Verdict
 
-# Deterministic actuators re-run byte-identically, so a retry cannot change the outcome until the
-# engine can RE-PLAN on failure (route the judge's next_directive back to the Planner to amend args
-# or insert a fix step) — that is the v2.1 corrective-agency increment. Until then: 1 attempt, then
-# park with the directive surfaced. Raising this without re-planning only burns cost.
-MAX_ATTEMPTS = 1
+# On failure the engine RE-PLANS — routes the judge's next_directive back to the Planner to amend
+# the step's args or insert a fix step — so each retry is a DIFFERENT, corrective attempt, not a
+# byte-identical re-run. MAX_ATTEMPTS bounds corrective retries per step; max_iterations bounds the
+# whole run; the stall detector parks a goal making no net progress.
+MAX_ATTEMPTS = 3
 STALL_LIMIT = 4
 
 
@@ -46,8 +46,43 @@ def _default_actuate(ws: Path, actuator: str, args: dict) -> str:
     return actuate(ws, actuator, args)
 
 
+async def _default_replan(ws: Path, plan: GoalPlan, failed_step: GoalStep, directive: str) -> dict:
+    from forsch.cli.goal_engine.planner import replan
+
+    return await replan(ws, plan, failed_step, directive)
+
+
+def _apply_delta(plan: GoalPlan, failed_step: GoalStep, delta: dict) -> bool:
+    """Apply a corrective delta: insert fix steps before the failed step, amend its args.
+
+    Returns True if anything was applied (-> retry the step), False if the delta was empty (-> park).
+    """
+    applied = False
+    fix_steps = delta.get("fix_steps") or []
+    if fix_steps:
+        idx = plan.steps.index(failed_step)
+        plan.steps[idx:idx] = fix_steps  # fixes run before the failed step retries
+        applied = True
+    amended = delta.get("amended_args")
+    if isinstance(amended, dict) and amended:
+        failed_step.args = {**failed_step.args, **amended}
+        applied = True
+    return applied
+
+
+def _delta_summary(delta: dict) -> str:
+    parts = []
+    if delta.get("amended_args"):
+        parts.append(f"amended args {delta['amended_args']}")
+    fixes = len(delta.get("fix_steps") or [])
+    if fixes:
+        parts.append(f"inserted {fixes} fix step(s)")
+    return "; ".join(parts) or "no change"
+
+
 async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=None,
-                   plan_fn=None, judge_fn=None, actuate_fn=None, resume_plan: GoalPlan = None) -> GoalPlan:
+                   plan_fn=None, judge_fn=None, actuate_fn=None, replan_fn=None,
+                   resume_plan: GoalPlan = None) -> GoalPlan:
     """Plan the goal, then loop execute->verify->arbitrate until settled or a guardrail trips.
 
     Pass resume_plan to continue an existing ledger plan (skips planning; next_actionable() picks
@@ -58,6 +93,7 @@ async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=No
     plan_fn = plan_fn or _default_plan
     judge_fn = judge_fn or _default_judge
     actuate_fn = actuate_fn or _default_actuate
+    replan_fn = replan_fn or _default_replan
 
     def emit(kind, payload):
         if on_event:
@@ -102,16 +138,22 @@ async def run_goal(ws: Path, goal: str, *, max_iterations: int = 12, on_event=No
             if verdict.next_directive:
                 step.evidence.append(f"blocked: {verdict.next_directive}")
             stall = 0
-        else:  # fail
-            stall += 1
+        else:  # fail -> re-plan a corrective delta, else park
             if step.attempts >= MAX_ATTEMPTS:
                 step.status = "blocked"
-                step.evidence.append(f"needs a fix: {verdict.next_directive}" if verdict.next_directive
-                                     else "failed — no corrective directive given")
+                step.evidence.append(f"gave up after {step.attempts} corrective attempts: {verdict.next_directive or ''}")
+                stall += 1
             else:
-                step.status = "failed"
-                if verdict.next_directive:
-                    step.evidence.append(f"retry: {verdict.next_directive}")
+                delta = await replan_fn(ws, plan, step, verdict.next_directive or "")
+                if _apply_delta(plan, step, delta):
+                    step.status = "pending"  # retry after the corrective delta (fixes run first)
+                    step.evidence.append(f"re-planned: {_delta_summary(delta)}")
+                    emit("replan", (step, delta))
+                    stall = 0  # a corrective change is progress
+                else:
+                    step.status = "blocked"
+                    step.evidence.append(f"no fix found: {verdict.next_directive or ''}")
+                    stall += 1
 
         ledger.checkpoint(ws, plan)
         emit("step_done", step)

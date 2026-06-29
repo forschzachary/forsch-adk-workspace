@@ -138,7 +138,7 @@ def test_judge_deterministic_verdicts():
     assert deterministic_verdict(add, ["[ACTUATION-ERROR] boom"]).verdict == "fail"
 
 
-def test_goal_engine_fail_parks_immediately(tmp_path):
+def test_goal_engine_parks_when_no_fix(tmp_path):
     import asyncio
 
     from forsch.cli.goal_engine.engine import run_goal
@@ -148,17 +148,79 @@ def test_goal_engine_fail_parks_immediately(tmp_path):
         return GoalPlan(id=new_id(), goal=goal, status="executing",
                         steps=[GoalStep(id="s1", intent="x", actuator="add_tool", args={}, success_check="x")])
 
-    calls = {"n": 0}
+    calls = {"judged": 0}
 
     async def judge_fn(ws, step, evidence):
-        calls["n"] += 1
+        calls["judged"] += 1
         return Verdict(step_id=step.id, reasoning="no", verdict="fail", next_directive="fix it")
 
-    plan = asyncio.run(run_goal(tmp_path, "g", plan_fn=plan_fn, judge_fn=judge_fn,
+    async def replan_fn(ws, plan, step, directive):
+        return {"amended_args": None, "fix_steps": []}   # no safe fix available
+
+    plan = asyncio.run(run_goal(tmp_path, "g", plan_fn=plan_fn, judge_fn=judge_fn, replan_fn=replan_fn,
                                 actuate_fn=lambda ws, a, args: "did a thing"))
-    assert plan.steps[0].status == "blocked"                       # failed -> parked at once (MAX_ATTEMPTS=1)
-    assert calls["n"] == 1                                          # judged once, not 3x
-    assert any("fix it" in e for e in plan.steps[0].evidence)      # directive surfaced, not buried
+    assert plan.steps[0].status == "blocked"                         # no fix -> parked
+    assert calls["judged"] == 1                                       # not looped
+    assert any("no fix found" in e for e in plan.steps[0].evidence)
+
+
+def test_goal_engine_replan_amends_args(tmp_path):
+    import asyncio
+
+    from forsch.cli.goal_engine.engine import run_goal
+    from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, Verdict, new_id
+
+    async def plan_fn(ws, goal):
+        return GoalPlan(id=new_id(), goal=goal, status="executing",
+                        steps=[GoalStep(id="s1", intent="x", actuator="add_tool",
+                                        args={"agent_id": "a", "tool_name": "bad"}, success_check="x")])
+
+    async def judge_fn(ws, step, evidence):
+        if step.args.get("tool_name") == "good":
+            return Verdict(step_id=step.id, reasoning="ok", verdict="pass")
+        return Verdict(step_id=step.id, reasoning="bad tool", verdict="fail", next_directive="use 'good'")
+
+    async def replan_fn(ws, plan, step, directive):
+        return {"amended_args": {"tool_name": "good"}, "fix_steps": []}
+
+    plan = asyncio.run(run_goal(tmp_path, "g", plan_fn=plan_fn, judge_fn=judge_fn, replan_fn=replan_fn,
+                                actuate_fn=lambda ws, a, args: "did"))
+    assert plan.steps[0].status == "passed"               # amended -> retried -> passed
+    assert plan.steps[0].args["tool_name"] == "good"      # the amendment stuck
+
+
+def test_goal_engine_replan_inserts_fix_step(tmp_path):
+    import asyncio
+
+    from forsch.cli.goal_engine.engine import run_goal
+    from forsch.cli.goal_engine.schema import GoalPlan, GoalStep, Verdict, new_id
+
+    async def plan_fn(ws, goal):
+        return GoalPlan(id=new_id(), goal=goal, status="executing",
+                        steps=[GoalStep(id="s1", intent="main", actuator="build_agent",
+                                        args={"agent_id": "a"}, success_check="x")])
+
+    state = {"fix_ran": False}
+
+    async def judge_fn(ws, step, evidence):
+        if step.id == "fix1":
+            state["fix_ran"] = True
+            return Verdict(step_id=step.id, reasoning="fixed", verdict="pass")
+        if state["fix_ran"]:
+            return Verdict(step_id=step.id, reasoning="ok now", verdict="pass")
+        return Verdict(step_id=step.id, reasoning="needs fix", verdict="fail", next_directive="add the tool")
+
+    async def replan_fn(ws, plan, step, directive):
+        return {"amended_args": None,
+                "fix_steps": [GoalStep(id="fix1", intent="add tool", actuator="add_tool",
+                                       args={}, success_check="x")]}
+
+    plan = asyncio.run(run_goal(tmp_path, "g", plan_fn=plan_fn, judge_fn=judge_fn, replan_fn=replan_fn,
+                                actuate_fn=lambda ws, a, args: "did"))
+    ids = [s.id for s in plan.steps]
+    assert "fix1" in ids and ids.index("fix1") < ids.index("s1")    # fix inserted BEFORE the failed step
+    assert state["fix_ran"]
+    assert all(s.status == "passed" for s in plan.steps)            # fix + main both passed
 
 
 def test_set_config_gate_privilege():
