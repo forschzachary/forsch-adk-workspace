@@ -1,6 +1,6 @@
 # MiMo CLI (mimocode) — local reference
 
-The orchestrator CLI the chat surface shells out to. Captured from `mimo --help` + subcommand help on 2026-06-28T23:00:37Z.
+The orchestrator CLI the chat surface shells out to. Captured from `mimo --help` + subcommand help on 2026-06-29T02:46:19Z.
 
 ## mimo --help
 ```
