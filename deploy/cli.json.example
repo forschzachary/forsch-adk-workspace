@@ -1,0 +1,19 @@
+{
+  "_comment": "sr CLI creds template. Copy to secrets/cli.json on the box (gitignored), fill REAL values. The sr CLI reads these (or the same-named env vars) — see screening-room/scripts/sr loadConfig(). NEVER commit the filled file. Heads-up: the altHUB indexer VIP was expired — renew or drop that indexer in Prowlarr before relying on it.",
+
+  "SR_URL": "",
+  "SR_ADMIN_TOKEN": "",
+
+  "JELLYFIN_URL": "",
+  "JELLYFIN_API_KEY": "",
+
+  "JELLYSEERR_URL": "",
+  "JELLYSEERR_API_KEY": "",
+
+  "PROWLARR_URL": "",
+  "PROWLARR_API_KEY": "",
+
+  "NZBGET_URL": "",
+  "NZBGET_USER": "",
+  "NZBGET_PASS": ""
+}

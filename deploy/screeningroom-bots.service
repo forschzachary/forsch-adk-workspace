@@ -1,0 +1,66 @@
+# systemd unit ALTERNATIVE to docker-compose (pick one, not both).
+#
+# This wraps the SAME compose stack so Docker still owns the container lifecycle but
+# systemd brings it up on boot and restarts it. It does NOT run the bots in a bare
+# venv — the supported runtime is the container (clean dep isolation; Node + Python
+# in one image). If you truly want no Docker, see the [bare-venv variant] note below.
+#
+# Install:
+#   sudo cp deploy/screeningroom-bots.service /etc/systemd/system/
+#   # edit WorkingDirectory below to the real clone path, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now screeningroom-bots
+#   sudo systemctl status screeningroom-bots
+#   journalctl -u screeningroom-bots -f
+#
+# Stop:    sudo systemctl stop screeningroom-bots
+# Update:  git -C <forsch repo> pull && sudo systemctl restart screeningroom-bots   (code-only)
+#          add `build` to ExecStartPre-equivalent / run a manual build for dep changes.
+
+[Unit]
+Description=ScreeningRoom native ADK Discord bots (Huberto + ops + optional curator)
+Documentation=file:///opt/screeningroom/forsch-adk-workspace/deploy/DEPLOY-RUNBOOK.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Point this at the forsch workspace clone on the box.
+WorkingDirectory=/opt/screeningroom/forsch-adk-workspace
+
+# Bring the stack up / take it down via compose. --env-file keeps secrets out of the unit.
+ExecStartPre=/usr/bin/docker compose -f deploy/docker-compose.yml --env-file deploy/screeningroom.env pull --ignore-pull-failures
+ExecStart=/usr/bin/docker compose -f deploy/docker-compose.yml --env-file deploy/screeningroom.env up -d
+ExecStop=/usr/bin/docker compose -f deploy/docker-compose.yml --env-file deploy/screeningroom.env down
+
+# Let Docker's own `restart: unless-stopped` handle crash recovery; systemd only
+# (re)launches the compose invocation.
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+
+# ── [bare-venv variant] — only if Docker is undesirable ─────────────────────────
+# Replace the [Service] block above with a direct python launch. You then own the
+# Python venv AND a Node install on the host, and the volume/SR_CLI wiring becomes
+# plain env. Sketch:
+#
+#   [Service]
+#   Type=simple
+#   User=screeningroom
+#   WorkingDirectory=/opt/screeningroom/forsch-adk-workspace
+#   EnvironmentFile=/opt/screeningroom/forsch-adk-workspace/deploy/screeningroom.env
+#   Environment=FORSCH_ADK_WORKSPACE=/opt/screeningroom/forsch-adk-workspace
+#   Environment=PYTHONPATH=/opt/screeningroom/forsch-adk-workspace/bridge/src:/opt/screeningroom/forsch-adk-workspace/packages/adk-components/src
+#   Environment=SR_CLI=/opt/screeningroom/screening-room/scripts/sr
+#   ExecStart=/opt/screeningroom/venv/bin/python -m forsch.adk_bridge.discord_main
+#   Restart=always
+#   RestartSec=10
+#
+# (cli.json must be at the service User's ~/.config/screening-room/cli.json, and a
+# `node` >= 20 must be on PATH for the sr CLI.)

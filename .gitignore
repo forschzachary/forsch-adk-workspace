@@ -40,3 +40,9 @@ goals/
 
 # Huberto per-friend memory (local)
 data/friends/
+
+# Deploy secrets — only the *.example templates are tracked (never the filled files)
+deploy/screeningroom.env
+deploy/secrets/
+deploy/cli.json
+data/audit.jsonl
