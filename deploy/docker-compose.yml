@@ -1,0 +1,77 @@
+# ScreeningRoom native ADK Discord bots — Hetzner deploy.
+#
+# Runs Huberto + screening_ops (+ optional curator) as ONE long-lived service.
+# The forsch.* code is mounted (not installed) so `git pull` + `docker compose restart`
+# ships new code with no rebuild; rebuild only when a Python/Node dependency changes.
+#
+# Prereqs on the box (see DEPLOY-RUNBOOK.md):
+#   - both repos cloned under ${REPOS_ROOT} (forsch-adk-workspace + screening-room)
+#   - deploy/screeningroom.env filled from screeningroom.env.example  (NEVER committed)
+#   - screening-room/scripts/sr config present:  ${REPOS_ROOT}/secrets/cli.json  (NEVER committed)
+#
+# Usage:
+#   cd ${REPOS_ROOT}/forsch-adk-workspace
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/screeningroom.env build
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/screeningroom.env up -d
+#   docker compose -f deploy/docker-compose.yml logs -f screeningroom-bots
+
+services:
+  screeningroom-bots:
+    build:
+      # Build context is the forsch workspace root so the Dockerfile path resolves;
+      # the image bakes deps only, code is mounted below.
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: screeningroom-bots:native
+    container_name: screeningroom-bots
+    restart: unless-stopped
+    working_dir: /workspace
+
+    # All bot secrets + ids come from this env file (gitignored). Every NAME is
+    # documented in deploy/screeningroom.env.example.
+    env_file:
+      - screeningroom.env
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+      FORSCH_ADK_WORKSPACE: /workspace
+      HOME: /root
+      # forsch.* namespace resolves across the bridge + agent package src dirs.
+      # (Mirror of bridge/compose.yaml's PYTHONPATH; trims to what discord_main imports.)
+      PYTHONPATH: /workspace/bridge/src:/workspace/packages/adk-components/src
+      # The bots shell out to the zero-dep `sr` CLI, mounted read-only from the
+      # screening-room repo. SR_CLI overrides the default ~/Dev/... path.
+      SR_CLI: /screening-room/scripts/sr
+
+    volumes:
+      # forsch workspace — code + bridge_config + knowledge. Mounted rw because the
+      # bots persist data/ and .forsch/ under the workspace root (see below); the
+      # code subtree is effectively read-only in practice (git-owned).
+      - ${FORSCH_WORKSPACE:-..}:/workspace
+      # screening-room repo (holds scripts/sr). Read-only — bots only execute the CLI.
+      - ${SCREENING_ROOM_REPO:-../../screening-room}:/screening-room:ro
+      # sr CLI creds (Jellyfin/Jellyseerr/Prowlarr/NZBGet/SR app). Read-only.
+      # homedir() inside the container is /root (HOME=/root), so this is where the CLI looks.
+      - ${SR_CLI_CONFIG:-./secrets/cli.json}:/root/.config/screening-room/cli.json:ro
+
+    # --- Persistence (survives `docker compose down/up`) -----------------------
+    # All anchored on FORSCH_ADK_WORKSPACE=/workspace, so these live INSIDE the
+    # mounted workspace tree:
+    #   /workspace/data/friends/        friend records       (friend_memory.py)
+    #   /workspace/data/audit.jsonl     audit log            (audit_log.py, Phase 7)
+    #   /workspace/.forsch/discord_sessions.db   ADK SQLite sessions
+    # They persist because the workspace itself is a host bind mount (the volume above),
+    # NOT an ephemeral container layer. No separate named volumes needed.
+    # (rate_limit.py is in-memory by design — resets on restart, acceptable for v1.)
+
+    # --- Logging --------------------------------------------------------------
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    # The LiteLLM gateway is the likeliest blocker from Hetzner. If it is reachable
+    # only on the box's localhost (private), uncomment to share the host network
+    # instead of the default bridge network, and point LITELLM_BASE_URL at 127.0.0.1.
+    # network_mode: host

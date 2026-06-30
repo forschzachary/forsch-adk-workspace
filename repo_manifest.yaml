@@ -18,13 +18,18 @@ allowlist:
   - factory/
   - scripts/
   - docs/
+  - eval_sets/
+  - skills/
   - preambles/
   - agent_specs/
+  - cli/
+  - deploy/
   - .github/
   - repo_manifest.yaml
   - Makefile
   - README.md
   - CLAUDE.md
+  - AGENTS.md
   - .gitignore
   - .pre-commit-config.yaml
   - release-please-config.json

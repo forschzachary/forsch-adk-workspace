@@ -28,3 +28,21 @@ chat/hubert_soul.md
 # Cockpit theme + CSS are source, keep them tracked
 !chat/public/
 !chat/public/**
+
+# local ADK web gateway creds (never commit)
+.adk-local.env
+
+# forsch chat persistent sessions
+.forsch/
+
+# forsch /goal run-state ledgers
+goals/
+
+# Huberto per-friend memory (local)
+data/friends/
+
+# Deploy secrets — only the *.example templates are tracked (never the filled files)
+deploy/screeningroom.env
+deploy/secrets/
+deploy/cli.json
+data/audit.jsonl

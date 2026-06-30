@@ -70,10 +70,14 @@ def agent_dirs() -> set[str]:
 
 
 def graph_agent_nodes(g: dict) -> set[str]:
+    # Native (non-Factory) bots are deliberately NOT generated into agents/<x>/ and are
+    # NOT in the Factory registry — they live in capabilities.json + bridge/ and carry
+    # "native": true. They are exempt from the agents-dir/registry bijection triple; their
+    # artifacts are still validated by artifact_paths_missing().
     return {
         n["id"].split(":", 1)[1]
         for n in g.get("nodes", [])
-        if str(n.get("id", "")).startswith("agent:")
+        if str(n.get("id", "")).startswith("agent:") and not n.get("native")
     }
 
 

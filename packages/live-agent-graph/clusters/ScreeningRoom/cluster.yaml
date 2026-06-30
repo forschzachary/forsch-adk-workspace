@@ -1,7 +1,11 @@
 # ScreeningRoom cluster
+#
+# Agents here are NATIVE hand-coded ADK Discord bots (Huberto + screening_ops),
+# NOT Factory-generated. They are modeled as persistent nodes in
+# capabilities.json (preserved across `forsch build`), so this cluster has no
+# Factory member agents. Do NOT re-add the retired `screening` agent.
 name: ScreeningRoom
-description: 'Movie discovery, tracking, and recommendations'
-members:
-  - screening
+description: 'Movie club — native Huberto + screening_ops Discord bots (see capabilities.json)'
+members: []
 config:
   default_model: gpt-5.5

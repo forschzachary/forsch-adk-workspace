@@ -69,13 +69,3 @@ agents:
     - is_grocery_email_sender_allowed
     - log_grocery_email_receipt
     model: gpt-5.5
-  screening:
-    tools:
-    - search_movies
-    - get_movie_details
-    - get_similar_movies
-    - add_to_watchlist
-    - get_watchlist
-    - log_watched
-    - get_watched
-    model: gpt-5.5
