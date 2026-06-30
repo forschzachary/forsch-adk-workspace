@@ -46,53 +46,38 @@ def _workspace() -> Path:
 
 
 def build_specs():
-    from forsch.adk_bridge.cat_persona import make_cat_agent
+    """Build a BotSpec for every native bot whose token is set.
+
+    Single source of truth: iterates ``native_bots.NATIVE_BOTS`` (the SAME registry the live graph
+    reads via graph_manifest), filtering by which Discord tokens are present. So adding/removing a bot
+    in NATIVE_BOTS changes BOTH the running fleet and the map — they cannot diverge.
+    """
     from forsch.adk_bridge.discord_bot import BotSpec
-    from forsch.adk_bridge.friend_memory import friend_context
+    from forsch.adk_bridge.native_bots import NATIVE_BOTS
 
     specs = []
-    cat_token = os.environ.get("HUBERTO_DISCORD_BOT_TOKEN")
-    if cat_token:
-        specs.append(BotSpec(
-            name="huberto_cat", token=cat_token,
-            expected_bot_id=os.environ.get("HUBERTO_EXPECTED_BOT_ID", HUBERTO_DEFAULT_ID),
-            agent=make_cat_agent(), dm=True, context_provider=friend_context,
-        ))
-    lead_token = os.environ.get("COMPANION_LEAD_DISCORD_BOT_TOKEN")
-    if lead_token:
-        from forsch.adk_bridge.ops_persona import make_ops_agent
-
-        # internal ops lead on companion-lead: channel-only (no DMs), in the team-social channel, and
-        # mention-only so it answers only when @-ed rather than on every line of team chatter.
-        specs.append(BotSpec(
-            name="screening_ops", token=lead_token,
-            expected_bot_id=os.environ.get("COMPANION_LEAD_EXPECTED_BOT_ID", COMPANION_LEAD_DEFAULT_ID),
-            agent=make_ops_agent(), dm=False, mention_only=True,
-            channels=[os.environ.get("OPS_CHANNEL_ID", "1511377396668825662")],
-            loader="📋 *checking the board…*",
-        ))
-
-    # OPTIONAL third bot — the SR-1 curator. Only runs if CURATOR_DISCORD_BOT_TOKEN is set; with the
-    # token unset the system runs unchanged on the two bots above. Needs CURATOR_EXPECTED_BOT_ID too
-    # (the identity guard fails closed without it); fail loudly rather than booting as the wrong bot.
-    curator_token = os.environ.get("CURATOR_DISCORD_BOT_TOKEN")
-    if curator_token:
-        from forsch.adk_bridge.curator_persona import make_curator_agent
-
-        curator_id = os.environ.get("CURATOR_EXPECTED_BOT_ID", CURATOR_DEFAULT_ID)
-        if not curator_id:
+    for bot in NATIVE_BOTS:
+        token = os.environ.get(bot.token_env)
+        if not token:
+            continue
+        # Identity guard fails closed: a bot whose expected id can't be resolved must not boot.
+        expected_id = os.environ.get(bot.expected_id_env, bot.expected_id_default)
+        if not expected_id:
             raise SystemExit(
-                "CURATOR_DISCORD_BOT_TOKEN is set but CURATOR_EXPECTED_BOT_ID is not — set the "
-                "curator's bot id (from the Discord dev portal) so the identity guard can verify it."
+                f"{bot.token_env} is set but {bot.expected_id_env} is not — set the bot id "
+                "(from the Discord dev portal) so the identity guard can verify it."
             )
-        # SR-1 curator on its own channel (#screening-tv via TV_CHANNEL_ID); channel-only, no DMs.
-        specs.append(BotSpec(
-            name="screening_curator", token=curator_token,
-            expected_bot_id=curator_id,
-            agent=make_curator_agent(), dm=False,
-            channels=[os.environ.get("TV_CHANNEL_ID", TV_CHANNEL_DEFAULT_ID)],
-            loader="🎬 *curating the lineup…*",
-        ))
+        kwargs = dict(name=bot.bot_name, token=token, expected_bot_id=expected_id,
+                      agent=bot.make_agent(), dm=bot.dm)
+        if bot.mention_only:
+            kwargs["mention_only"] = True
+        if bot.context_provider is not None:
+            kwargs["context_provider"] = bot.context_provider
+        if bot.loader:
+            kwargs["loader"] = bot.loader
+        if not bot.dm and bot.channel_env:
+            kwargs["channels"] = [os.environ.get(bot.channel_env, bot.channel_default)]
+        specs.append(BotSpec(**kwargs))
     return specs
 
 
