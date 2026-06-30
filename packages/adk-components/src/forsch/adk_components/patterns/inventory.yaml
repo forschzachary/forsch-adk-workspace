@@ -96,6 +96,16 @@ patterns:
     used_by: [live-agent-graph-chat]
     example: "mimo_stream_run(['mimo', 'run', '--format', 'json', 'hello'], cwd=workspace, timeout=120)"
 
+  growth_queue:
+    file: ../tools/growth_tools.py
+    class: growth_tools
+    keywords: [linkedin, brand, website, launch, draft, queue, scoring, approval, go-live, metrics, observability, autonomous]
+    intention: "Saves you from building unsafe social automation. Metrics, drafts, profile edits, and website tasks are staged locally with explicit Zach approval instead of live LinkedIn or deploy side effects."
+    function: "Non-destructive LinkedIn/profile/website brief, draft queue, scoring, launch-audit, metric dashboard, and local-only autonomy tools."
+    depends_on: [jsonl_store, tool_decorator]
+    used_by: [brand, social, website]
+    example: "run_linkedin_observability_cycle() -> local-only action receipts"
+
 external:
   apple_reminders_sync:
     location: /root/.hermes/workspace/adk/_ios-shelby-reminders/ShelbyRemindersCore/

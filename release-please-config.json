@@ -17,6 +17,9 @@
     "agents/brand": {
       "package-name": "forsch-agent-brand"
     },
+    "agents/website": {
+      "package-name": "forsch-agent-website"
+    },
     "agents/build": {
       "package-name": "forsch-agent-build"
     },

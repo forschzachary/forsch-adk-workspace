@@ -21,6 +21,7 @@ members = [
     "forsch-agent-shelby",
     "forsch-agent-social",
     "forsch-agent-stability",
+    "forsch-agent-website",
     "live-agent-graph",
 ]
 
@@ -1232,6 +1233,32 @@ dev = [
 requires-dist = [
     { name = "forsch-adk-components", editable = "packages/adk-components" },
     { name = "google-adk", extras = ["extensions"], specifier = ">=2.3.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "forsch-agent-website"
+version = "0.1.0"
+source = { editable = "agents/website" }
+dependencies = [
+    { name = "forsch-adk-components" },
+    { name = "google-adk" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "forsch-adk-components", editable = "packages/adk-components" },
+    { name = "google-adk", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },

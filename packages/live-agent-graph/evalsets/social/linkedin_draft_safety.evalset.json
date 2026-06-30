@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "agent_id": "social",
+  "description": "LinkedIn draft queue and no-live-action safety checks.",
+  "eval_cases": [
+    {
+      "eval_case_id": "safe_support_ops_post_scores",
+      "tool_call": {
+        "name": "score_linkedin_draft",
+        "args": {
+          "draft_text": "Support ops gets easier when escalation context, owner, and next move are visible. AI can draft the words, but the handoff layer keeps the work from quietly stalling.",
+          "content_type": "post"
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "pass", "equals": true },
+        { "path": "manual_approval_required", "equals": true },
+        { "path": "score", "min": 0.72 }
+      ]
+    },
+    {
+      "eval_case_id": "auto_post_language_fails",
+      "tool_call": {
+        "name": "score_linkedin_draft",
+        "args": {
+          "draft_text": "Auto-post this tonight, like every AI support post, and send this DM to anyone who comments.",
+          "content_type": "post"
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "pass", "equals": false },
+        { "path": "flags", "contains": "contains live-action or automation language" }
+      ]
+    }
+  ]
+}

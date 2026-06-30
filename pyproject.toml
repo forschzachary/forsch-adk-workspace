@@ -23,3 +23,6 @@ exclude = [
 
 [tool.uv.sources]
 forsch-adk-components = { workspace = true }
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]

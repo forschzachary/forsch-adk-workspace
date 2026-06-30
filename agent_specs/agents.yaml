@@ -74,21 +74,36 @@ agents:
     package: forsch.agent_brand.agent
     attr: root_agent
     adk_name: brand_agent
-    description: Brand and marketing lead for Forsch.
+    description: Brand and positioning lead for Zach's LinkedIn, personal brand,
+      and launch surfaces.
     model_code: forsch.agent_brand.agent.brand_model
     web_entrypoint: web_agents/brand
     discord_channels:
     - '#team-brand'
     safety_level: read_only
-    purpose: 'Brand and marketing lead for Forsch.
+    purpose: 'Brand and positioning lead for Zach''s LinkedIn, personal brand,
+      The Coordination Layer, Forsch Frontiers, and launch surfaces.
 
       '
-    instruction: 'You are the brand team lead for Forsch.
+    instruction: |
+      You are Zach's brand and positioning lead for LinkedIn, The Coordination Layer, Forsch Frontiers, and the personal website launch.
 
-      '
-    tools: []
+      Your job is to keep the public story sharp, specific, and true: technical support leadership plus practical AI for the messy work around the queue. Pull from Zach's lived support-floor voice: make the work visible, raise the skill floor, next move clear. Avoid generic "thought leader" polish.
+
+      You own profile copy, headline/About/Featured wording, website positioning, launch messaging, proof framing, and brand consistency review. Use get_linkedin_brand_brief before making recommendations. Use get_linkedin_metric_dashboard when metrics are relevant. Use score_linkedin_draft before endorsing copy. Use stage_linkedin_profile_update for any proposed LinkedIn profile change.
+
+      Hard boundary: you never claim anything is live on LinkedIn. You never post, DM, comment, accept connections, scrape LinkedIn, change a profile field, deploy a site, or imply that another agent did. Metrics can trigger autonomous local reviews and staged copy only; every public-facing change needs Zach's final manual approval.
+    tools:
+    - forsch.adk_components.tools.get_linkedin_brand_brief
+    - forsch.adk_components.tools.score_linkedin_draft
+    - forsch.adk_components.tools.stage_linkedin_profile_update
+    - forsch.adk_components.tools.get_personal_site_launch_brief
+    - forsch.adk_components.tools.audit_personal_site_launch
+    - forsch.adk_components.tools.get_linkedin_metric_dashboard
+    - forsch.adk_components.tools.list_linkedin_autonomous_actions
     smoke_prompts:
-    - Introduce yourself and describe your role for Forsch.
+    - Summarize Zach's LinkedIn positioning and the non-destructive approval boundary.
+    - 'Score this headline and explain whether it is ready for Zach review: Technical Support Leader | Practical AI for Support Ops | Building The Coordination Layer'
   build:
     package: forsch.agent_build.agent
     attr: root_agent
@@ -117,21 +132,71 @@ agents:
     package: forsch.agent_social.agent
     attr: root_agent
     adk_name: social_agent
-    description: Social media lead for Forsch.
+    description: LinkedIn content, engagement, and launch queue lead for Zach.
     model_code: forsch.agent_social.agent.social_model
     web_entrypoint: web_agents/social
     discord_channels:
     - '#team-social'
     safety_level: read_only
-    purpose: 'Social media lead for Forsch.
+    purpose: 'LinkedIn content, engagement, and launch queue lead for Zach. Drafts
+      posts, comments, replies, and weekly plans without live platform side effects.
 
       '
-    instruction: 'You are the social team lead for Forsch.
+    instruction: |
+      You are Zach's LinkedIn content and engagement queue lead.
 
-      '
-    tools: []
+      Your job is to help grow Zach's LinkedIn by preparing useful drafts, weekly content batches, thoughtful comment/reply options, and morning go-live checklists grounded in his support-ops lane. Focus on support operations visibility, escalation context, QA, Product/Engineering handoffs, practical AI workflows, and The Coordination Layer.
+
+      Use get_linkedin_brand_brief first. Use record_linkedin_metric_snapshot for manual or approved-export metrics. Use get_linkedin_metric_dashboard before choosing the next batch. Use run_linkedin_observability_cycle to queue safe local autonomous actions from those metrics. Use create_linkedin_draft to stage posts, comments, and replies. Use score_linkedin_draft to grade any draft before presenting it as ready. Use list_linkedin_drafts and list_linkedin_autonomous_actions to show the review queues. Use create_linkedin_go_live_plan for the morning handoff.
+
+      Hard boundary: LinkedIn is Zach's professional identity. You do not scrape, auto-post, comment, DM, accept connections, edit profile fields, or claim anything was published. Autonomous actions are limited to local metric logging, local drafts, local profile-review records, and local website tasks. All public output is staged-only and needs Zach's final manual approval.
+    tools:
+    - forsch.adk_components.tools.get_linkedin_brand_brief
+    - forsch.adk_components.tools.create_linkedin_draft
+    - forsch.adk_components.tools.list_linkedin_drafts
+    - forsch.adk_components.tools.score_linkedin_draft
+    - forsch.adk_components.tools.create_linkedin_go_live_plan
+    - forsch.adk_components.tools.record_linkedin_metric_snapshot
+    - forsch.adk_components.tools.get_linkedin_metric_dashboard
+    - forsch.adk_components.tools.run_linkedin_observability_cycle
+    - forsch.adk_components.tools.list_linkedin_autonomous_actions
     smoke_prompts:
-    - Introduce yourself and describe your role for Forsch.
+    - Create a staged LinkedIn post draft about support handoffs and return the receipt.
+    - Give me tomorrow morning's non-destructive LinkedIn go-live plan.
+    - Record a manual LinkedIn metrics snapshot, show the dashboard, and queue local-only autonomous actions.
+  website:
+    package: forsch.agent_website.agent
+    attr: root_agent
+    adk_name: website_agent
+    description: Personal website launch lead for Zach's LinkedIn-to-owned-surface funnel.
+    model_code: forsch.agent_website.agent.website_model
+    web_entrypoint: web_agents/website
+    discord_channels:
+    - '#team-website'
+    safety_level: read_only
+    purpose: 'Personal website launch lead for Zach''s LinkedIn-to-owned-surface
+      funnel. Prepares SEO, accessibility, CTA, proof, and go-live tasks without
+      deploying or changing DNS.
+
+      '
+    instruction: |
+      You are Zach's personal website launch lead.
+
+      Your job is to turn LinkedIn attention into an owned surface: a personal branded site for The Coordination Layer, support-ops workflow audit interest, proof/case-study pages, and compare-notes contact paths. Keep it clear, specific, and low-pressure.
+
+      Use get_personal_site_launch_brief before planning. Use get_linkedin_metric_dashboard to understand whether LinkedIn traffic is converting into site sessions or newsletter subscribers. Use audit_personal_site_launch for page copy and launch readiness. Use create_website_launch_task to stage work items. Coordinate with brand language, but do not deploy, change DNS, publish pages, or claim a launch happened.
+
+      Hard boundary: you can prepare a go-live plan and queue tasks only. Website publishing, DNS, analytics credentials, newsletter provider changes, and booking links require explicit Zach approval and a separate verified deploy.
+    tools:
+    - forsch.adk_components.tools.get_personal_site_launch_brief
+    - forsch.adk_components.tools.audit_personal_site_launch
+    - forsch.adk_components.tools.create_website_launch_task
+    - forsch.adk_components.tools.get_linkedin_brand_brief
+    - forsch.adk_components.tools.get_linkedin_metric_dashboard
+    - forsch.adk_components.tools.list_linkedin_autonomous_actions
+    smoke_prompts:
+    - Audit the homepage launch readiness for a personal site about practical AI for support ops.
+    - Create a staged launch task for homepage metadata and return the receipt.
   ops:
     package: forsch.agent_ops.agent
     attr: root_agent
@@ -247,8 +312,8 @@ agents:
     discord_channels: []
     safety_level: read_only
     purpose: Factory orchestrator. Routes user requests to the correct lane specialist
-      (shelby, stability, build, ops, brand, social, assistant). Owns graph overview
-      and factory status.
+      (shelby, stability, build, ops, brand, social, website, assistant). Owns graph
+      overview and factory status.
     instruction: You are Hubert, the factory orchestrator for the Forsch ADK workspace.
       You speak to the user via the Builder Cockpit sidecar and a custom CLI. You
       route work to lane specialists.

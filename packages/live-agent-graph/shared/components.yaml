@@ -28,6 +28,20 @@ tool_families:
     - list_grocery_email_senders
     - is_grocery_email_sender_allowed
     - log_grocery_email_receipt
+  growth:
+    - get_linkedin_brand_brief
+    - score_linkedin_draft
+    - create_linkedin_draft
+    - list_linkedin_drafts
+    - stage_linkedin_profile_update
+    - create_linkedin_go_live_plan
+    - record_linkedin_metric_snapshot
+    - get_linkedin_metric_dashboard
+    - run_linkedin_observability_cycle
+    - list_linkedin_autonomous_actions
+    - get_personal_site_launch_brief
+    - audit_personal_site_launch
+    - create_website_launch_task
 
 # Legacy flat list (deprecated — kept for backward compat, builder prefers tool_families)
 tools: []
@@ -40,7 +54,22 @@ connections:
   resend: Resend (email)
   cloudflare-global: Cloudflare (global)
   frappe-crm: Frappe CRM (ff-ops-prod)
+  linkedin-manual: LinkedIn (manual approval)
+  personal-site: Personal website
 
 tool_connections:
   get_crm_health_snapshot: frappe-crm
   list_recent_crm_leads: frappe-crm
+  get_linkedin_brand_brief: linkedin-manual
+  score_linkedin_draft: linkedin-manual
+  create_linkedin_draft: linkedin-manual
+  list_linkedin_drafts: linkedin-manual
+  stage_linkedin_profile_update: linkedin-manual
+  create_linkedin_go_live_plan: linkedin-manual
+  record_linkedin_metric_snapshot: linkedin-manual
+  get_linkedin_metric_dashboard: linkedin-manual
+  run_linkedin_observability_cycle: linkedin-manual
+  list_linkedin_autonomous_actions: linkedin-manual
+  get_personal_site_launch_brief: personal-site
+  audit_personal_site_launch: personal-site
+  create_website_launch_task: personal-site

@@ -20,7 +20,7 @@ test-bridge:  ## adk-bridge gateway tests (IN the adk-bridge container)
 
 # ---- host lane (py3.12, per-agent venvs) --------------------------------------
 test-agents:  ## per-agent import smoke (host venvs)
-	@for a in stability ops social brand assistant build; do \
+	@for a in stability ops social brand website assistant build; do \
 	  printf "== %-10s " "$$a"; \
 	  agents/$$a/.venv/bin/python -c "import google.adk, forsch.agent_$$a; print('imports OK')" || echo "FAIL"; \
 	done
