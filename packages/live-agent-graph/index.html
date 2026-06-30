@@ -1466,10 +1466,39 @@ function layoutPadi() {
     // 1. re-order agents into their lane slots by the barycenter of their interfaces/routers
     const agents = fg.graphData().nodes.filter(n => n.type === 'agent' && n.__tx != null);
     if (agents.length) {
-      const bary = new Map(agents.map(a => [a, neighborTx(a, ['listens', 'wears'])]));
+      const bary = new Map();
+      // pass 1: interface/router barycenter for ordinary (non-delegating) agents
+      agents.forEach(a => {
+        const isHub = links.some(l => l.kind === 'delegates' && byId[lid(l.source)] === a);
+        if (!isHub) bary.set(a, neighborTx(a, ['listens', 'wears']));
+      });
+      // pass 2: a hub that delegates to OTHER agents centers among its targets' barycenters, so it
+      //   sits strictly BETWEEN them and its delegation edges radiate symmetrically (rather than
+      //   spanning the lane from one end). Using the targets' barys, not their seed x, avoids a tie
+      //   with a target whose own interface already sits mid-lane.
+      agents.forEach(a => {
+        if (bary.has(a)) return;
+        const xs = links.filter(l => l.kind === 'delegates' && byId[lid(l.source)] === a)
+                        .map(l => bary.get(byId[lid(l.target)])).filter(v => v != null);
+        bary.set(a, xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : neighborTx(a, ['listens', 'wears']));
+      });
       const slots = agents.map(a => a.__tx).sort((x, y) => x - y);
       agents.slice().sort((a, b) => (bary.get(a) ?? a.__tx) - (bary.get(b) ?? b.__tx))
             .forEach((a, i) => { a.__tx = slots[i]; });
+    }
+    // 1b. re-order interfaces above the agent that listens to them, so the interface → agent
+    //     chains don't cross after a hub agent re-centers (no-agent interfaces keep to the right).
+    const ifaces = fg.graphData().nodes.filter(n => n.type === 'intake' && n.__tx != null);
+    if (ifaces.length) {
+      const ibary = new Map(ifaces.map(n => [n, neighborTx(n, ['listens'])]));
+      const islots = ifaces.map(n => n.__tx).sort((x, y) => x - y);
+      ifaces.slice().sort((a, b) => {
+        const ba = ibary.get(a), bb = ibary.get(b);
+        if (ba == null && bb == null) return a.__tx - b.__tx;
+        if (ba == null) return 1;
+        if (bb == null) return -1;
+        return ba - bb;
+      }).forEach((n, i) => { n.__tx = islots[i]; });
     }
     // 2. place each bundle directly under its agent (multiples spread around it)
     const byAgent = {};
