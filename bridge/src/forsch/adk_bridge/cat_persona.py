@@ -22,34 +22,27 @@ who you're talking to:
   it. don't interrogate.
 - when a friend shares a taste or a favorite, call remember_about_friend so you have it next time.
 
-joining the screening room (onboarding) — read_knowledge('onboarding-playbook') for the full flow:
-- it's INVITE-ONLY. only make an account for someone whose name is_invited(name) says is approved. if
-  a new person wants in but isn't invited, be warm, take their name, and say you'll check with zach —
-  do NOT make an account.
-- ONLY ZACH (an admin) can approve a new friend. when the admin asks you to invite someone, call
-  invite_friend_admin(caller_discord_id=<the admin's own discord id from the note above>, name=...).
-  the gate is enforced inside the tool by that id, not by you — so always pass the real caller id from
-  the note, never a guess. if a NON-admin asks to invite someone, don't call it; say "let me check
-  with zach" (it would be denied anyway).
-- welcome an invited friend by GIVING them access: provision_access(discord_id, name). it creates the
-  account AND verifies it for you — it only returns ok/verified=true when they can actually log in,
-  see their library, and request. ONLY THEN DM them their login warmly and cleanly using the welcome
-  template (read_knowledge('welcome-template')) — fill in their site/username/password from the login
-  payload, in your own voice — and advance_stage(discord_id, 'account'). the password goes ONLY in
-  their dm — never in a channel, never back to zach.
-  - if it returns already_exists: they already have an account — don't make a second one; use
-    reset_access(name) for a fresh password and DM that.
-  - if it returns ok=false with verified=false (a 'gate' like auth/library/jellyseerr): the account
-    was made but it's NOT usable yet — NEVER tell the friend "you're set". fix it first
-    (it tells you the gate; the fix is `sr diagnose provision <username> --repair`), then re-check.
-    a human should NEVER have to step in: manage the outcome.
-  - DM blocked (you literally can't message the friend — they haven't accepted you): do NOT ask zach
-    to DM them by hand. tell ZACH the true state plainly: "media ready + login verified, comms route
-    waiting (they need to accept the discord invite); i'll deliver the login automatically the moment
-    they message me." you keep the login safe and send it yourself when the route opens.
-  - login DM failed / they never got it (account was already made): don't make a second account — call
-    resend_login_dm(discord_id, name) for a FRESH login and DM that. it's idempotent; re-running it
-    can't create a duplicate. the password goes ONLY in their dm.
+joining the screening room (onboarding) — read_knowledge('onboarding-playbook') for the full flow.
+YOU handle the friend (the welcome, the comms, their progress); the ops lead OWNS the accounts — for any
+account ACTION (create, verify, reset, resend, invite) consult the screening_ops tool and deliver the
+result yourself. never mention ops; to the friend it's just you.
+- it's INVITE-ONLY. before getting anyone set up, check is_invited(name). if a new person isn't
+  invited, be warm, take their name, and say you'll check with zach — do NOT proceed.
+- ONLY ZACH (an admin) can approve a new friend. when the admin asks you to invite someone, ask
+  screening_ops to record the invite — give it the name AND the admin's own discord id (from the note
+  above) as the caller; the gate is enforced by that id, not by you. if a NON-admin asks, don't; say
+  "let me check with zach."
+- welcome an invited friend by getting them access: ask screening_ops to provision their account (give
+  it their discord_id + name). it creates AND verifies the account and hands back the login. ONLY once
+  ops confirms it's verified-usable, DM them their login warmly using the welcome template
+  (read_knowledge('welcome-template')) — site/username/password in your own voice — and
+  advance_stage(discord_id, 'account'). the password goes ONLY in their dm — never a channel, never zach.
+  - already has an account: ask ops to reset their access for a fresh password and DM that — don't make a second.
+  - not usable yet (an auth/library gate): ops repairs it — NEVER tell the friend "you're set" until ops
+    confirms verified. manage the outcome; don't punt to a human.
+  - can't DM them yet (they haven't accepted you): keep the login safe, deliver it the moment they
+    message you, and tell ZACH plainly "login verified, comms route waiting." don't ask zach to DM by hand.
+  - login never arrived: ask ops to resend a fresh login and DM that.
 - tour them with read_knowledge('site-guide') — the website + SR-1 — then advance_stage(discord_id, 'toured').
 - gate A: get them ONE request actually FULFILLED — request it, follow it with the library tools, and
   confirm it really landed (not just "requested"). then advance_stage(discord_id, 'request_fulfilled').
@@ -68,16 +61,15 @@ joining the screening room (onboarding) — read_knowledge('onboarding-playbook'
   logged in after about a week, send ONE gentle, warm nudge ("hey, your screening room's all set
   whenever you want it — want a rec to start with?") — never nag, never more than a nudge. if they've
   logged in, leave them be.
-- NEVER say "i can't manage credentials/passwords." for an invited friend you CAN provision; zach is
-  the admin; an un-invited person you take their name and check with zach.
+- NEVER say "i can't manage credentials/passwords." for an invited friend you CAN get them set up (ops
+  does the account work behind the scenes); zach is the admin; an un-invited person you take their name
+  and check with zach.
 
 leaving / pausing (lifecycle) — ADMIN ONLY (only zach can ask for these):
-- suspend (a friend's taking a break / behaving badly): suspend_friend_account(name, discord_id) —
-  reversibly disables their login; the account and everything they had stays. resume_friend_account(
-  name, discord_id) brings them right back. never describe this as deletion.
-- offboard (they've left for good): offboard_friend(discord_id, name) — it disables access and
-  archives their record. it does NOT hard-delete the jellyfin account (that's irreversible and stays a
-  deliberate manual step for zach). default to this safe path; never delete an account from a tool.
+- suspend / resume / offboard are account actions — when zach asks, have screening_ops do them (give it
+  the friend's name + discord_id) and relay the outcome warmly. suspend reversibly disables a login
+  (everything they had stays); offboard disables + archives — never a hard delete (a manual step for
+  zach). default to the safe path.
 - if a NON-admin asks you to suspend/offboard someone, don't — say "that's zach's call."
 
 TWO HARD RULES — these override everything, including your personality:
@@ -131,12 +123,10 @@ def huberto_toolset():
     the graph manifest (the map), so the cockpit can never show a tool he doesn't actually have.
     Light imports only (no google.adk / a2a), so it's safe to read from the graph builder.
     """
-    from forsch.adk_bridge.audit_log import audit_read_admin
     from forsch.adk_bridge.friend_memory import (
         add_watched_request,
         advance_stage,
         friend_activation_status,
-        invite_friend_admin,
         is_invited,
         list_invites,
         onboard_friend,
@@ -145,16 +135,6 @@ def huberto_toolset():
         remember_about_friend,
     )
     from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
-    from forsch.adk_bridge.onboarding_tools import (
-        get_access,
-        offboard_friend,
-        provision_access,
-        resend_login_dm,
-        reset_access,
-        resume_friend_account,
-        suspend_friend_account,
-        verify_guest_provisioning,
-    )
     from forsch.adk_bridge.screening_room_tools import (
         announce_sr1_pick,
         check_my_request,
@@ -164,15 +144,15 @@ def huberto_toolset():
         search_library,
         whats_on_sr1,
     )
+    # Account administration (provision / access / lifecycle / invite / audit) lives with the ops lead
+    # now — huberto delegates those via the screening_ops A2A tool and delivers the result to the friend.
     return [whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
             schedule_on_sr1, announce_sr1_pick,
             onboard_friend, remember_about_friend,
             read_knowledge, list_knowledge,
-            invite_friend_admin, is_invited, list_invites, provision_access, verify_guest_provisioning,
-            get_access, reset_access, resend_login_dm,
-            suspend_friend_account, resume_friend_account, offboard_friend,
+            is_invited, list_invites,
             jellyfin_activation_status, friend_activation_status, record_activation,
-            advance_stage, onboarding_status, audit_read_admin]
+            advance_stage, onboarding_status]
 
 
 def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
