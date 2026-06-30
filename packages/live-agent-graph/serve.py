@@ -141,8 +141,6 @@ def _chat_token() -> str:
 # External URL for the Gradio bridge iframe. serve.py reverse-proxies /chat/* to
 # the ADK bridge at 127.0.0.1:8800, so the iframe loads on the same hostname.
 CHAT_BASE_URL = os.environ.get("CHAT_BASE_URL", "/chat/")
-CRM_API_KEY_FILE = _HERMES_HOME / "secrets" / "frappe-admin-api-key"
-CRM_BASE = os.environ.get("CRM_BASE_URL", "https://crm.forschfrontiers.com")
 
 # ── Session ownership ──
 _session_owners: dict[str, tuple[str, float]] = {}  # session_id → (principal, created_at)
@@ -251,61 +249,8 @@ def _check_rate(principal: str) -> bool:
         window.append(now)
         return True
 
-def _crm_post(endpoint: str, data: dict) -> dict:
-    """Call a whitelisted CRM endpoint with the admin API key."""
-    if not CRM_API_KEY_FILE.exists():
-        return {"ok": False, "error": "CRM API key not available"}
-    try:
-        import urllib.request
-        key = CRM_API_KEY_FILE.read_text().strip()
-        url = f"{CRM_BASE}/api/method/{endpoint}"
-        body = json.dumps(data).encode()
-        req = urllib.request.Request(url, data=body, headers={
-            "Authorization": f"token {key}",
-            "Content-Type": "application/json",
-        })
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-def _crm_get(endpoint: str, params: dict = None) -> dict | None:
-    """Call a CRM whitelisted GET endpoint. Returns parsed JSON or None."""
-    if not CRM_API_KEY_FILE.exists():
-        return None
-    try:
-        import urllib.request
-        import urllib.parse
-        key = CRM_API_KEY_FILE.read_text().strip()
-        url = f"{CRM_BASE}/api/method/{endpoint}"
-        if params:
-            url += "?" + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={
-            "Authorization": f"token {key}",
-        })
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read())
-    except Exception:
-        return None
-
-
-def fetch_clusters_from_crm() -> list:
-    """Fetch cluster list from CRM DocType (source of truth)."""
-    data = _crm_get("forsch_frontiers.sync.agent_graph.list_clusters")
-    if data and "message" in data:
-        return data["message"]
-    sys.stderr.write("fetch_clusters_from_crm: CRM unreachable, falling back to local\n")
-    return []
-
-
-def fetch_manifest_from_crm(cluster_id: str) -> dict | None:
-    """Fetch agent graph manifest for a cluster from CRM."""
-    data = _crm_get("forsch_frontiers.sync.agent_graph.get_agent_graph_manifest",
-                     {"cluster_id": cluster_id})
-    if data and "message" in data:
-        return data["message"]
-    sys.stderr.write(f"fetch_manifest_from_crm({cluster_id}): CRM unreachable, falling back to local\n")
-    return None
+# Frappe CRM read/write helpers removed 2026-06-30 — the repo (agents.yaml + capabilities.json,
+# rendered by build_live_graph.py) is the single source of truth. See list_clusters()/build_manifest().
 
 
 def promote_agent(agent_id: str, target_role: str) -> dict:
@@ -448,14 +393,8 @@ def get_pulse():
 def list_clusters() -> list:
     """Return all cluster folders with their project.md front-matter.
 
-    Tries CRM API first (source of truth), falls back to local YAML files.
+    Source of truth: the repo's clusters/ folders (Frappe CRM decoupled 2026-06-30).
     """
-    # Try CRM API first
-    crm_clusters = fetch_clusters_from_crm()
-    if crm_clusters:
-        return crm_clusters
-
-    # Fallback to local YAML files
     clusters_dir = LAG_HOME / "clusters"
     if not clusters_dir.exists():
         return []
@@ -491,30 +430,21 @@ def yaml_safe_load(text: str) -> dict:
 
 
 def build_manifest(cluster_name: str) -> dict | None:
-    """Build the agent graph manifest for a cluster.
+    """Build the agent graph manifest for a cluster from the repo.
 
-    Tries CRM API first (source of truth), falls back to local build_live_graph.py.
-    Always enriches the result with rail tags, infra nodes, and tool→cred links.
+    Source of truth: build_live_graph.py over agents.yaml + capabilities.json (Frappe CRM
+    decoupled 2026-06-30). Always enriches with rail tags, infra nodes, and tool→cred links.
     """
-    manifest = None
-
-    # Try CRM API first
-    crm_data = fetch_manifest_from_crm(cluster_name)
-    if crm_data:
-        manifest = _transform_crm_manifest(cluster_name, crm_data)
-
-    # Fallback to local build
-    if not manifest:
-        result = subprocess.run(
-            [BUILDER_PY, str(LAG_HOME / "build_live_graph.py"), "--cluster", cluster_name],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            return None
-        try:
-            manifest = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            return None
+    result = subprocess.run(
+        [BUILDER_PY, str(LAG_HOME / "build_live_graph.py"), "--cluster", cluster_name],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        manifest = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
 
     # Enrich with rail tags, infra nodes, tool→cred links
     return _enrich_manifest(cluster_name, manifest)
@@ -548,195 +478,6 @@ def _write_atomic(path: Path, content: str) -> None:
                 os.unlink(tmp_path)
             except OSError:
                 pass
-
-
-def _transform_crm_manifest(cluster_name: str, crm_data: dict) -> dict:
-    """Transform CRM API data into graph manifest format (nodes + links).
-
-    Handles two input shapes:
-    1. Raw data: {agents: {...}, shared: {...}, cluster_config: {...}}
-    2. Pre-built manifest: {nodes: [...], links: [...], ...}
-
-    Emits rail-tagged nodes:
-    - Core: agents, tools, channels (no rail tag — always visible)
-    - Dependency rail: cred nodes + tool→cred links
-    - Infrastructure rail: hosts, containers, services, networks, tunnels
-
-    Models are NOT emitted to the canvas (shown in inspect panel only).
-    """
-    agents = crm_data.get("agents", {})
-    shared = crm_data.get("shared", {})
-    config = crm_data.get("cluster_config", {})
-    existing_nodes = crm_data.get("nodes", [])
-    existing_links = crm_data.get("links", [])
-
-    # Load tool_connections from components.yaml
-    components_yaml = LAG_HOME / "shared" / "components.yaml"
-    tool_connections = {}
-    if components_yaml.exists():
-        comp = _load_yaml(components_yaml)
-        tool_connections = comp.get("tool_connections", {})
-
-    # Load infra topology
-    infra_yaml = LAG_HOME / "shared" / "infra.yaml"
-    infra = _load_yaml(infra_yaml) if infra_yaml.exists() else {}
-
-    # If CRM returned a pre-built manifest (nodes already exist), enrich it
-    if existing_nodes:
-        nodes = []
-        links = list(existing_links)
-
-        # Enrich existing nodes with rail tags, skip model nodes
-        for n in existing_nodes:
-            nid = n.get("id", "")
-            ntype = n.get("type", "")
-
-            # Skip model nodes — they're inspect-panel metadata, not canvas nodes
-            if nid.startswith("model:"):
-                continue
-
-            # Tag cred nodes as dependency rail
-            if nid.startswith("cred:"):
-                n["rail"] = "dependency"
-            # Remove authsome as shared database — becomes svc:authsome in infra rail
-            elif nid == "authsome":
-                continue
-            # Remove capabilities — folded into infra rail
-            elif nid.startswith("cap:"):
-                continue
-
-            nodes.append(n)
-
-        # Remove authsome→cred broker links (authsome is now infra)
-        links = [l for l in links if not (l.get("source") == "authsome" and l.get("kind") == "brokers")]
-        # Remove model links
-        links = [l for l in links if l.get("kind") != "pinned-model"]
-
-        # Add tool→cred links from tool_connections
-        cred_ids = {n["id"] for n in nodes if n["id"].startswith("cred:")}
-        for tool_name, conn_id in tool_connections.items():
-            tool_node_id = f"tool:{tool_name}"
-            cred_node_id = f"cred:{conn_id}"
-            if cred_node_id in cred_ids and any(n["id"] == tool_node_id for n in nodes):
-                if not any(l["source"] == tool_node_id and l["target"] == cred_node_id for l in links):
-                    links.append({"source": tool_node_id, "target": cred_node_id, "kind": "depends-on"})
-
-        # Add infra nodes
-        nodes, links = _append_infra_nodes(nodes, links, infra)
-
-        rail_nodes = {
-            "dependency": [n["id"] for n in nodes if n.get("rail") == "dependency"],
-            "infrastructure": [n["id"] for n in nodes if n.get("rail") == "infrastructure"],
-        }
-
-        return {
-            "version": 2,
-            "cluster": cluster_name,
-            "nodes": nodes,
-            "links": links,
-            "node_count": len(nodes),
-            "link_count": len(links),
-            "rail_nodes": rail_nodes,
-            "meta": crm_data.get("meta", {
-                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "source": "CRM API (enriched)",
-                "cluster": cluster_name,
-            }),
-        }
-
-    # Raw data path — build from scratch
-    nodes = []
-    links = []
-
-    # Shared tools (core — always visible)
-    for t in shared.get("tools", []):
-        nodes.append({"id": f"tool:{t}", "name": t, "kind": "tool", "shared": True,
-                       "type": "tool", "state": "built", "gates": {},
-                       "contract": {"accepts": ["tool_call"], "emits": ["tool_result"]},
-                       "role": "plain", "reachable": False,
-                       "artifact": "components/src/forsch/adk_components/tools/*.py"})
-
-    # Cred nodes (dependency rail)
-    connections = shared.get("connections", {})
-    cred_ids = set()
-    for cid, cname in connections.items():
-        cred_ids.add(f"cred:{cid}")
-        nodes.append({"id": f"cred:{cid}", "name": cname, "kind": "database",
-                       "type": "database", "state": "built", "gates": {},
-                       "rail": "dependency",
-                       "contract": {"accepts": ["query"], "emits": ["data"]},
-                       "role": "plain", "reachable": False, "artifact": "authsome vault"})
-
-    # Tool→cred links from tool_connections
-    for tool_name, conn_id in tool_connections.items():
-        tool_node_id = f"tool:{tool_name}"
-        cred_node_id = f"cred:{conn_id}"
-        if cred_node_id in cred_ids:
-            links.append({"source": tool_node_id, "target": cred_node_id, "kind": "depends-on"})
-
-    # Infra nodes
-    nodes, links = _append_infra_nodes(nodes, links, infra)
-
-    # Agents
-    for aid, a in agents.items():
-        nid = f"agent:{aid}"
-        model = a.get("model", "")
-        nodes.append({"id": nid, "name": aid, "kind": "agent",
-                       "type": "agent", "state": "built",
-                       "model": model,
-                       "gates": {"L0": True, "L1": True, "L2": True, "L3": True},
-                       "contract": {"accepts": ["instruction"], "emits": ["response", "tool_call"]},
-                       "role": a.get("role", "plain"), "reachable": False,
-                       "workspace": a.get("workspace") or "",
-                       "artifact": f"agents/{aid}/src/forsch/agent_{aid}/agent.py"})
-
-        # Link agent to tools
-        for t in a.get("tools", []):
-            if f"tool:{t}" in [n["id"] for n in nodes]:
-                links.append({"source": nid, "target": f"tool:{t}", "kind": "uses"})
-
-        # Agent → container link (infra rail)
-        for ctr in infra.get("containers", []):
-            if ctr.get("runs_agents"):
-                links.append({"source": nid, "target": f"docker:{ctr['id']}", "kind": "runs-in"})
-
-        # Channels
-        for c in a.get("discord_channels", []):
-            cnid = f"chan:{c}"
-            if cnid not in [n["id"] for n in nodes]:
-                nodes.append({"id": cnid, "name": c, "kind": "intake",
-                               "type": "intake", "state": "built", "gates": {},
-                               "contract": {"accepts": ["external_message"],
-                                            "emits": ["routed_message"]},
-                               "role": "plain", "reachable": False,
-                               "artifact": "Discord channel config"})
-            links.append({"source": nid, "target": cnid, "kind": "listens"})
-
-    rail_nodes = {
-        "dependency": [n["id"] for n in nodes if n.get("rail") == "dependency"],
-        "infrastructure": [n["id"] for n in nodes if n.get("rail") == "infrastructure"],
-    }
-
-    source_files = list(FACTORY_OVERVIEW_SOURCES)
-    for cluster in cluster_specs:
-        source_files.append(f"clusters/{cluster['name']}/cluster.yaml")
-        if cluster.get("goal") or cluster.get("project_summary"):
-            source_files.append(f"clusters/{cluster['name']}/project.md")
-
-    return {
-        "version": 2,
-        "cluster": cluster_name,
-        "nodes": nodes,
-        "links": links,
-        "node_count": len(nodes),
-        "link_count": len(links),
-        "rail_nodes": rail_nodes,
-        "meta": {
-            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "source": f"CRM API (forsch_frontiers.sync.agent_graph)",
-            "cluster": cluster_name,
-        },
-    }
 
 
 def _enrich_manifest(cluster_name: str, manifest: dict) -> dict:
@@ -2285,16 +2026,12 @@ class Handler(SimpleHTTPRequestHandler):
             if field not in field_map:
                 self._json_response(400, {"error": f"unknown field: {field}"})
                 return
-            # Deterministic: call CRM update_agent, no LLM in the loop
-            result = _crm_post("forsch_frontiers.sync.agent_graph.update_agent", {
-                "agent_id": agent_id,
-                field_map[field]: value or "",
+            # Frappe CRM decoupled 2026-06-30: agent fields live in agent_specs/agents.yaml and
+            # change through the gate (edit → PR → deploy), not via a live cockpit write.
+            self._json_response(501, {
+                "error": "inline agent edits are disabled — edit agent_specs/agents.yaml and open a PR",
+                "agent_id": agent_id, "field": field,
             })
-            if result and result.get("message", {}).get("ok"):
-                self._json_response(200, {"ok": True, "agent_id": agent_id, "field": field, "value": value})
-            else:
-                err = (result or {}).get("message", {}).get("error", "CRM call failed")
-                self._json_response(500, {"error": str(err)})
 
         elif parsed.path == "/models":
             self._json_response(200, _chat_model_payload())
