@@ -7,6 +7,7 @@ into the screening room. Override the binary with the SR_CLI env var.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -115,3 +116,40 @@ _CONFLICT_MARKERS = ("409", "already taken", "lost the race", "slot already", "b
 def _is_schedule_conflict(out: str) -> bool:
     low = (out or "").lower()
     return any(m in low for m in _CONFLICT_MARKERS)
+
+
+# ── activation + branding (Phase 9) ────────────────────────────────────────
+
+def jellyfin_activation_status(name: str) -> dict:
+    """Did a friend actually log in and watch anything? Read-only — shells `sr users info <name>`,
+    which reports Jellyfin's last-active date + a watched (played) count. Returns
+    {ok, has_logged_in, last_active, watched_count} (or {ok:False, error}). Use it to know whether a
+    new member ever signed in, so you can gently nudge them if they haven't — never to claim more than
+    the data shows. NOTE: last-active is last login/activity, not strictly playback, so 'logged in but
+    watched 0' is a real, normal in-between state."""
+    out = _run(["users", "info", name.strip().lower()])
+    try:
+        # `sr users info` prints a single JSON line; take the last brace-leading line.
+        last = [ln for ln in out.splitlines() if ln.strip().startswith("{")]
+        data = json.loads(last[-1]) if last else {}
+    except Exception:
+        data = {}
+    if not data:
+        return {"ok": False, "error": f"couldn't read activation for '{name}': {out[:160]}"}
+    return data
+
+
+def announce_sr1_pick(title: str, friend_name: str, year: str = "", runtime: str = "") -> str:
+    """Render the SPOILER-SAFE 'now showing on SR-1' announcement for a friend's own pick — text only.
+    Returns the filled message (mood/vibe only, never plot). `title` + `friend_name` are required;
+    `year` and `runtime` are optional and omitted cleanly when blank. Post the returned text in your
+    own warm voice. Use this rather than hand-typing the copy so the template stays consistent. See
+    read_knowledge('sr1-announcement-template') for the format + the no-spoiler rules."""
+    title = (title or "").strip()
+    friend = (friend_name or "").strip() or "a friend"
+    year_paren = f" ({year.strip()})" if (year or "").strip() else ""
+    runtime_suffix = f" · {runtime.strip()}" if (runtime or "").strip() else ""
+    return (
+        f"🎬 now showing on SR-1: **{title}**{year_paren}{runtime_suffix}\n"
+        f"{friend}'s pick — pull up a seat, everyone."
+    )

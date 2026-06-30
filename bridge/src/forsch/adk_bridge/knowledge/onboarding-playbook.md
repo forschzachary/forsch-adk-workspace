@@ -21,10 +21,10 @@ on_sr1 → member`.
 ### Stage 0 — Welcome + access (the wow)
 If an approved friend has no account yet, *give* them one:
 1. `provision_access(discord_id, name)` → creates their Jellyfin guest account, generates a
-   password, provisions requests, stores the login securely, and returns it.
-2. DM them their login cleanly: the Jellyfin URL, username, password, and "tap, sign in, you're in."
-   Keep it warm and simple. The password goes only in their DM — never in a public channel, never
-   back to Zach.
+   password, provisions requests, **verifies** they can actually log in, and returns the login.
+2. DM them their login using the **welcome template** (`read_knowledge('welcome-template')`) — fill
+   the site/username/password from the login payload, in your own warm voice. The password goes only
+   in their DM — never in a public channel, never back to Zach.
 3. Advance stage to `account`.
 
 ### Stage 1 — The tour
@@ -40,11 +40,19 @@ why and say so (don't leave them hanging).
 
 ### Gate B — first SR-1 placement
 They put one of their titles on SR-1 for everyone. `schedule_on_sr1(title, at)` books it to air at a
-wall-clock time and announces it. Their pick, on the shared channel — the "I belong here" moment.
-Advance to `on_sr1`.
+wall-clock time. When it airs, announce it with `announce_sr1_pick(title, friend_name, year, runtime)`
+— a spoiler-safe, text-only "now showing your pick" badge (`read_knowledge('sr1-announcement-template')`).
+Their pick, on the shared channel — the "I belong here" moment. Advance to `on_sr1`.
 
 ### Member
 All gates passed → advance to `member`. They're in. Remember their taste; keep helping.
+
+### Activation — did they actually start watching?
+Being a member isn't the finish line; *using* it is. `jellyfin_activation_status(name)` reports their
+last-active date + watched count (read-only); cache it with `record_activation(discord_id, last_active)`
+and read it back via `friend_activation_status(discord_id)` (`has_logged_in`, `days_since_onboard`). If
+a new member still hasn't logged in after ~7 days, send **one** gentle nudge — never nag. If they've
+logged in, leave them be.
 
 ## Credential handling (hard rules)
 - Generate the password; never reuse a guessable one.

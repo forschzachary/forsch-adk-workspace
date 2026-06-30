@@ -33,9 +33,10 @@ joining the screening room (onboarding) — read_knowledge('onboarding-playbook'
   with zach" (it would be denied anyway).
 - welcome an invited friend by GIVING them access: provision_access(discord_id, name). it creates the
   account AND verifies it for you — it only returns ok/verified=true when they can actually log in,
-  see their library, and request. ONLY THEN DM them their login (site, username, password) warmly and
-  cleanly and advance_stage(discord_id, 'account'). the password goes ONLY in their dm — never in a
-  channel, never back to zach.
+  see their library, and request. ONLY THEN DM them their login warmly and cleanly using the welcome
+  template (read_knowledge('welcome-template')) — fill in their site/username/password from the login
+  payload, in your own voice — and advance_stage(discord_id, 'account'). the password goes ONLY in
+  their dm — never in a channel, never back to zach.
   - if it returns already_exists: they already have an account — don't make a second one; use
     reset_access(name) for a fresh password and DM that.
   - if it returns ok=false with verified=false (a 'gate' like auth/library/jellyseerr): the account
@@ -56,8 +57,17 @@ joining the screening room (onboarding) — read_knowledge('onboarding-playbook'
   schedule_on_sr1(title_or_tmdb_id, at_time) for their pick (it must already be in the library — search
   / request first). if it comes back "SLOT CONFLICT", do NOT silently defer: the first requester keeps
   that slot; warmly offer this friend another open time (suggest one from what the tool says). once it
-  actually airs, advance_stage(.., 'on_sr1').
+  actually airs, announce it with announce_sr1_pick(title, friend_name, year, runtime) — a spoiler-safe,
+  text-only "now showing your pick" badge (read_knowledge('sr1-announcement-template')); post the
+  returned line in your voice. then advance_stage(.., 'on_sr1').
 - all gates done -> advance_stage(discord_id, 'member'). they're in.
+- activation (after they're a member): did they actually log in and start watching? check with
+  jellyfin_activation_status(name) — it tells you their last-active date + a watched count (read-only).
+  cache it locally with record_activation(discord_id, last_active) and read it back any time via
+  friend_activation_status(discord_id) (has_logged_in + days_since_onboard). if a new member hasn't
+  logged in after about a week, send ONE gentle, warm nudge ("hey, your screening room's all set
+  whenever you want it — want a rec to start with?") — never nag, never more than a nudge. if they've
+  logged in, leave them be.
 - NEVER say "i can't manage credentials/passwords." for an invited friend you CAN provision; zach is
   the admin; an un-invited person you take their name and check with zach.
 
@@ -116,11 +126,13 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     from forsch.adk_bridge.friend_memory import (
         add_watched_request,
         advance_stage,
+        friend_activation_status,
         invite_friend_admin,
         is_invited,
         list_invites,
         onboard_friend,
         onboarding_status,
+        record_activation,
         remember_about_friend,
     )
     from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
@@ -135,7 +147,9 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         verify_guest_provisioning,
     )
     from forsch.adk_bridge.screening_room_tools import (
+        announce_sr1_pick,
         check_my_request,
+        jellyfin_activation_status,
         request_movie,
         schedule_on_sr1,
         search_library,
@@ -150,12 +164,13 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         model=model,
         instruction=HUBERTO_INSTRUCTION,
         tools=[whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
-               schedule_on_sr1,
+               schedule_on_sr1, announce_sr1_pick,
                onboard_friend, remember_about_friend,
                read_knowledge, list_knowledge,
                invite_friend_admin, is_invited, list_invites, provision_access, verify_guest_provisioning,
                get_access, reset_access, resend_login_dm,
                suspend_friend_account, resume_friend_account, offboard_friend,
+               jellyfin_activation_status, friend_activation_status, record_activation,
                advance_stage, onboarding_status, audit_read_admin],
     )
 

@@ -215,6 +215,7 @@ def record_account(discord_id: str, name: str, jellyfin_username: str, jellyfin_
     rec["jellyfin_username"] = jellyfin_username
     rec["jellyfin_profile"] = jellyfin_profile or jellyfin_username
     rec["stage"] = "account"
+    rec.setdefault("onboarded_at", _now_iso())  # when access was first granted — for days_since_onboard
     _save(rec)
 
 
@@ -287,17 +288,52 @@ def set_stage(discord_id: str, stage: str) -> dict:
     return advance_stage(discord_id, stage)
 
 
+def record_activation(discord_id: str, last_active: str = "") -> dict:
+    """Cache the live Jellyfin last-active date on the friend's record (Phase 9). Pass the date string
+    from `sr users info` (jellyfin_activation_status); the bot reads it back via friend_activation_status
+    so it can tell, locally, whether a member ever logged in. Pure cache — the source of truth is
+    Jellyfin; refresh it whenever you re-check."""
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    rec["last_activated"] = (last_active or "").strip()
+    _save(rec)
+    return {"ok": True, "last_activated": rec["last_activated"]}
+
+
+def _days_since(iso_ts: str | None) -> int | None:
+    """Whole days between an ISO timestamp/date and now (UTC). None if unparseable/absent."""
+    if not iso_ts:
+        return None
+    from datetime import datetime, timezone
+    try:
+        then = datetime.fromisoformat(iso_ts)
+    except Exception:
+        try:  # tolerate a date-only string like '2026-06-30'
+            then = datetime.strptime(iso_ts[:10], "%Y-%m-%d")
+        except Exception:
+            return None
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - then).days
+
+
 def friend_activation_status(discord_id: str) -> dict:
     """Where a friend stands, read-only: their stage, whether an account was created, whether the
-    login DM landed, and any active suspension. Pure read — no side effects. (Jellyfin login/playback
-    activity is a separate live check in screening_room_tools; this is the local-record view.)"""
+    login DM landed, whether they've ever logged in (from the cached Jellyfin last-active —
+    record_activation / jellyfin_activation_status), how many days since onboarding, and any active
+    suspension. Pure read — no side effects. (The live Jellyfin login/playback check is
+    jellyfin_activation_status in screening_room_tools; this is the local-record view.)"""
     rec = _load(str(discord_id)) or {}
+    last_active = rec.get("last_activated") or ""
+    onboarded_at = rec.get("onboarded_at") or rec.get("requested_at")
     return {
         "discord_id": str(discord_id),
         "name": rec.get("name"),
         "stage": rec.get("stage") or ("member" if rec.get("jellyfin_username") else "new"),
         "account_created": bool(rec.get("jellyfin_username")),
         "dm_delivered": bool(rec.get("dm_delivered")),
+        "has_logged_in": bool(last_active),
+        "last_active": last_active,
+        "days_since_onboard": _days_since(onboarded_at),
         "suspended": (rec.get("stage") == "suspended"),
         "archived": False,  # an archived friend has no active record — this only sees live ones
     }
