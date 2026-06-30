@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "agent_id": "website",
+  "description": "Personal website launch readiness checks for SEO, CTA, proof, and voice.",
+  "eval_cases": [
+    {
+      "eval_case_id": "homepage_passes_basic_launch_readiness",
+      "tool_call": {
+        "name": "audit_personal_site_launch",
+        "args": {
+          "page_title": "Practical AI for Support Ops",
+          "meta_description": "Technical support leadership and practical AI workflows for support operations.",
+          "hero_copy": "Make escalation context, QA visibility, and the next move clearer for support teams.",
+          "primary_cta": "Subscribe to The Coordination Layer",
+          "newsletter_cta": "Get support-ops field notes",
+          "proof_items": "Case study page coming after Zach approval."
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "pass", "equals": true },
+        { "path": "manual_approval_required", "equals": true },
+        { "path": "score", "min": 0.76 }
+      ]
+    },
+    {
+      "eval_case_id": "unproved_300k_site_claim_fails",
+      "tool_call": {
+        "name": "audit_personal_site_launch",
+        "args": {
+          "page_title": "Find $300k With AI",
+          "meta_description": "AI support automation for every team.",
+          "hero_copy": "Find $300k in support savings with fully autonomous support.",
+          "primary_cta": "Book now"
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "pass", "equals": false },
+        { "path": "flags", "contains": "300k claim needs proof before launch" }
+      ]
+    },
+    {
+      "eval_case_id": "proved_300k_site_claim_can_pass_review",
+      "tool_call": {
+        "name": "audit_personal_site_launch",
+        "args": {
+          "page_title": "Practical AI for Support Ops",
+          "meta_description": "Technical support leadership and practical AI workflows for support operations.",
+          "hero_copy": "A proof-backed case study about finding $300k in hidden support handoff drag.",
+          "primary_cta": "Read the support-ops case study",
+          "newsletter_cta": "Get support-ops field notes",
+          "proof_items": "Approved case-study page with source notes, calculation method, and Zach review."
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "pass", "equals": true },
+        { "path": "manual_approval_required", "equals": true },
+        { "path": "score", "min": 0.76 }
+      ]
+    }
+  ]
+}

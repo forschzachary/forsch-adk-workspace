@@ -1,0 +1,14 @@
+# Growth cluster: LinkedIn, brand, and personal website go-live support.
+
+name: growth
+description: LinkedIn, personal brand, and website launch cluster for Zach
+
+members:
+  - brand
+  - social
+  - website
+
+config:
+  default_model: gpt-5.5
+  tool_families: [growth]
+  exclude_tools: []

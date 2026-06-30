@@ -11,13 +11,13 @@
       "artifact": "agents/assistant/src/forsch/agent_assistant/agent.py",
       "model": "gpt-5.5",
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": false,
-        "L2": false,
-        "L3": true
+        "L2": true,
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -38,20 +38,27 @@
       "artifact": "agents/brand/src/forsch/agent_brand/agent.py",
       "model": "gpt-5.5",
       "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": true
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
         ],
         "emits": [
           "response",
-          "tool_call"
+          "tool_call",
+          "tool:get_linkedin_brand_brief",
+          "tool:score_linkedin_draft",
+          "tool:stage_linkedin_profile_update",
+          "tool:get_personal_site_launch_brief",
+          "tool:audit_personal_site_launch",
+          "tool:get_linkedin_metric_dashboard",
+          "tool:list_linkedin_autonomous_actions"
         ]
       },
       "role": "plain"
@@ -65,13 +72,13 @@
       "artifact": "agents/build/src/forsch/agent_build/agent.py",
       "model": "glm-5.2",
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": false,
-        "L2": false,
-        "L3": true
+        "L2": true,
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -92,13 +99,13 @@
       "artifact": "agents/ops/src/forsch/agent_ops/agent.py",
       "model": "gpt-5.5",
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": true,
-        "L2": false,
+        "L2": true,
         "L3": true
       },
-      "state": "building",
-      "reachable": true,
+      "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -121,13 +128,13 @@
       "artifact": "agents/screening/src/forsch/agent_screening/agent.py",
       "model": "gpt-5.5",
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": true,
         "L2": false,
-        "L3": true
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -155,13 +162,13 @@
       "artifact": "agents/shelby/src/forsch/agent_shelby/agent.py",
       "model": "gpt-5.5",
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": true,
-        "L2": false,
-        "L3": true
+        "L2": true,
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -190,20 +197,29 @@
       "artifact": "agents/social/src/forsch/agent_social/agent.py",
       "model": "gpt-5.5",
       "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": true
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
         ],
         "emits": [
           "response",
-          "tool_call"
+          "tool_call",
+          "tool:get_linkedin_brand_brief",
+          "tool:create_linkedin_draft",
+          "tool:list_linkedin_drafts",
+          "tool:score_linkedin_draft",
+          "tool:create_linkedin_go_live_plan",
+          "tool:record_linkedin_metric_snapshot",
+          "tool:get_linkedin_metric_dashboard",
+          "tool:run_linkedin_observability_cycle",
+          "tool:list_linkedin_autonomous_actions"
         ]
       },
       "role": "plain"
@@ -217,13 +233,13 @@
       "artifact": "agents/stability/src/forsch/agent_stability/agent.py",
       "model": "glm-5.2",
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": true,
-        "L2": false,
-        "L3": true
+        "L2": true,
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -241,6 +257,39 @@
         ]
       },
       "role": "builder"
+    },
+    {
+      "id": "agent:website",
+      "name": "website",
+      "kind": "agent",
+      "shared": false,
+      "type": "agent",
+      "artifact": "agents/website/src/forsch/agent_website/agent.py",
+      "model": "gpt-5.5",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "building",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call",
+          "tool:get_personal_site_launch_brief",
+          "tool:audit_personal_site_launch",
+          "tool:create_website_launch_task",
+          "tool:get_linkedin_brand_brief",
+          "tool:get_linkedin_metric_dashboard",
+          "tool:list_linkedin_autonomous_actions"
+        ]
+      },
+      "role": "plain"
     },
     {
       "id": "authsome",
@@ -473,6 +522,56 @@
       "role": "plain"
     },
     {
+      "id": "cred:linkedin-manual",
+      "name": "LinkedIn (manual approval)",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "cred:personal-site",
+      "name": "Personal website",
+      "kind": "database",
+      "shared": true,
+      "type": "database",
+      "artifact": "authsome vault",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "cred:resend",
       "name": "Resend (email)",
       "kind": "database",
@@ -507,11 +606,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": true,
-        "L3": true
+        "L2": false,
+        "L3": false
       },
-      "state": "built",
-      "reachable": true,
+      "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "routed_message"
@@ -601,6 +700,32 @@
       "role": "plain"
     },
     {
+      "id": "tool:audit_personal_site_launch",
+      "name": "audit_personal_site_launch",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def audit_personal_site_launch)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "tool:check_service_health",
       "name": "check_service_health",
       "kind": "tool",
@@ -608,6 +733,84 @@
       "family": "terminal",
       "type": "tool",
       "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def check_service_health)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:create_linkedin_draft",
+      "name": "create_linkedin_draft",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def create_linkedin_draft)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:create_linkedin_go_live_plan",
+      "name": "create_linkedin_go_live_plan",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def create_linkedin_go_live_plan)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:create_website_launch_task",
+      "name": "create_website_launch_task",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def create_website_launch_task)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -731,6 +934,58 @@
       "role": "plain"
     },
     {
+      "id": "tool:get_linkedin_brand_brief",
+      "name": "get_linkedin_brand_brief",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_linkedin_brand_brief)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_linkedin_metric_dashboard",
+      "name": "get_linkedin_metric_dashboard",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_linkedin_metric_dashboard)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "tool:get_movie_details",
       "name": "get_movie_details",
       "kind": "tool",
@@ -738,6 +993,32 @@
       "family": "agent-specific",
       "type": "tool",
       "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_movie_details)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:get_personal_site_launch_brief",
+      "name": "get_personal_site_launch_brief",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_personal_site_launch_brief)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -913,6 +1194,58 @@
       "role": "plain"
     },
     {
+      "id": "tool:list_linkedin_autonomous_actions",
+      "name": "list_linkedin_autonomous_actions",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def list_linkedin_autonomous_actions)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:list_linkedin_drafts",
+      "name": "list_linkedin_drafts",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def list_linkedin_drafts)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "tool:list_recent_crm_leads",
       "name": "list_recent_crm_leads",
       "kind": "tool",
@@ -1043,6 +1376,32 @@
       "role": "plain"
     },
     {
+      "id": "tool:record_linkedin_metric_snapshot",
+      "name": "record_linkedin_metric_snapshot",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def record_linkedin_metric_snapshot)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "tool:remove_grocery_email_sender",
       "name": "remove_grocery_email_sender",
       "kind": "tool",
@@ -1069,6 +1428,58 @@
       "role": "plain"
     },
     {
+      "id": "tool:run_linkedin_observability_cycle",
+      "name": "run_linkedin_observability_cycle",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def run_linkedin_observability_cycle)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:score_linkedin_draft",
+      "name": "score_linkedin_draft",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def score_linkedin_draft)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "tool:search_movies",
       "name": "search_movies",
       "kind": "tool",
@@ -1076,6 +1487,32 @@
       "family": "agent-specific",
       "type": "tool",
       "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def search_movies)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:stage_linkedin_profile_update",
+      "name": "stage_linkedin_profile_update",
+      "kind": "tool",
+      "shared": true,
+      "family": "growth",
+      "type": "tool",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def stage_linkedin_profile_update)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -1156,11 +1593,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": true,
+        "L2": false,
         "L3": false
       },
-      "state": "built",
-      "reachable": true,
+      "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "user_input"
@@ -1181,11 +1618,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": true,
+        "L2": false,
         "L3": false
       },
-      "state": "built",
-      "reachable": true,
+      "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "user_input"
@@ -1202,6 +1639,41 @@
       "source": "agent:assistant",
       "target": "group:hubert-team-lead",
       "kind": "wears"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:audit_personal_site_launch",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:get_linkedin_brand_brief",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:get_linkedin_metric_dashboard",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:get_personal_site_launch_brief",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:list_linkedin_autonomous_actions",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:score_linkedin_draft",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:brand",
+      "target": "tool:stage_linkedin_profile_update",
+      "kind": "uses"
     },
     {
       "source": "agent:build",
@@ -1294,6 +1766,51 @@
       "kind": "uses"
     },
     {
+      "source": "agent:social",
+      "target": "tool:create_linkedin_draft",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:create_linkedin_go_live_plan",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:get_linkedin_brand_brief",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:get_linkedin_metric_dashboard",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:list_linkedin_autonomous_actions",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:list_linkedin_drafts",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:record_linkedin_metric_snapshot",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:run_linkedin_observability_cycle",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:social",
+      "target": "tool:score_linkedin_draft",
+      "kind": "uses"
+    },
+    {
       "source": "agent:stability",
       "target": "tool:check_service_health",
       "kind": "uses"
@@ -1329,6 +1846,36 @@
       "kind": "uses"
     },
     {
+      "source": "agent:website",
+      "target": "tool:audit_personal_site_launch",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:website",
+      "target": "tool:create_website_launch_task",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:website",
+      "target": "tool:get_linkedin_brand_brief",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:website",
+      "target": "tool:get_linkedin_metric_dashboard",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:website",
+      "target": "tool:get_personal_site_launch_brief",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:website",
+      "target": "tool:list_linkedin_autonomous_actions",
+      "kind": "uses"
+    },
+    {
       "source": "authsome",
       "target": "cred:cloudflare-global",
       "kind": "brokers"
@@ -1345,8 +1892,38 @@
     },
     {
       "source": "authsome",
+      "target": "cred:linkedin-manual",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
+      "target": "cred:personal-site",
+      "kind": "brokers"
+    },
+    {
+      "source": "authsome",
       "target": "cred:resend",
       "kind": "brokers"
+    },
+    {
+      "source": "tool:audit_personal_site_launch",
+      "target": "cred:personal-site",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:create_linkedin_draft",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:create_linkedin_go_live_plan",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:create_website_launch_task",
+      "target": "cred:personal-site",
+      "kind": "authenticates-via"
     },
     {
       "source": "tool:execute_bash_command",
@@ -1356,6 +1933,31 @@
     {
       "source": "tool:get_crm_health_snapshot",
       "target": "cred:frappe-crm",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:get_linkedin_brand_brief",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:get_linkedin_metric_dashboard",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:get_personal_site_launch_brief",
+      "target": "cred:personal-site",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:list_linkedin_autonomous_actions",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:list_linkedin_drafts",
+      "target": "cred:linkedin-manual",
       "kind": "authenticates-via"
     },
     {
@@ -1369,15 +1971,35 @@
       "kind": "requires"
     },
     {
+      "source": "tool:record_linkedin_metric_snapshot",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:run_linkedin_observability_cycle",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:score_linkedin_draft",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
+      "source": "tool:stage_linkedin_profile_update",
+      "target": "cred:linkedin-manual",
+      "kind": "authenticates-via"
+    },
+    {
       "source": "tool:write_host_file",
       "target": "cap:local-mac-access",
       "kind": "requires"
     }
   ],
-  "node_count": 45,
-  "link_count": 35,
+  "node_count": 61,
+  "link_count": 72,
   "meta": {
-    "generated_at": "2026-06-28T19:57:11.680826+00:00",
+    "generated_at": "2026-06-30T05:45:57.153528+00:00",
     "source": "registry/agents/agents.yaml + shared/components.yaml + clusters/* (all-clusters union)"
   }
 }

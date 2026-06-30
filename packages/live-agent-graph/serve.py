@@ -1995,9 +1995,49 @@ def _list_agent_evalsets(agent_id: str) -> dict:
 
 
 def _run_agent_eval(agent_id: str, evalset_id: str | None = None) -> dict:
-    """Run an eval for an agent. Honest fail if no runner is wired."""
+    """Run an eval for an agent using the deterministic growth eval runner."""
     agent_id = _safe_agent_id(agent_id)
-    # First pass: no fake green. If a real runner is not available, fail honestly.
+    out_dir = EVAL_RUNS_DIR / agent_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    script = WS / "packages" / "adk-components" / "src" / "forsch" / "adk_components" / "testing" / "growth_eval.py"
+    if not script.exists():
+        result = {
+            "ok": False,
+            "agent_id": agent_id,
+            "evalset_id": evalset_id or "default",
+            "trajectory_pass": False,
+            "final_response_pass": False,
+            "score": 0.0,
+            "error": "growth eval runner not found",
+            "ran_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        (out_dir / "last.json").write_text(json.dumps(result, indent=2))
+        return result
+    cmd = [
+        sys.executable,
+        str(script),
+        "--evalsets-root",
+        str(EVALSETS_DIR),
+        "--agent",
+        agent_id,
+        "--output",
+        str(out_dir / "last.json"),
+        "--json",
+    ]
+    if evalset_id:
+        cmd.extend(["--evalset", evalset_id])
+    env = os.environ.copy()
+    paths = [
+        str(WS / "packages" / "adk-components" / "src"),
+        env.get("PYTHONPATH", ""),
+    ]
+    env["PYTHONPATH"] = ":".join(p for p in paths if p)
+    proc = subprocess.run(cmd, cwd=WS, env=env, capture_output=True, text=True, timeout=30)
+    if proc.returncode == 0 and (out_dir / "last.json").exists():
+        try:
+            return json.loads((out_dir / "last.json").read_text())
+        except json.JSONDecodeError:
+            pass
     result = {
         "ok": False,
         "agent_id": agent_id,
@@ -2005,11 +2045,9 @@ def _run_agent_eval(agent_id: str, evalset_id: str | None = None) -> dict:
         "trajectory_pass": False,
         "final_response_pass": False,
         "score": 0.0,
-        "error": "eval runner not wired — install ADK eval or roundtrip_check",
+        "error": (proc.stderr or proc.stdout or f"eval runner exited {proc.returncode}")[:1000],
         "ran_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
-    out_dir = EVAL_RUNS_DIR / agent_id
-    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "last.json").write_text(json.dumps(result, indent=2))
     return result
 

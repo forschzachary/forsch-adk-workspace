@@ -18,14 +18,39 @@ agents:
     model: gpt-5.5
     group: hubert-team-lead
   brand:
-    tools: []
+    tools:
+    - get_linkedin_brand_brief
+    - score_linkedin_draft
+    - stage_linkedin_profile_update
+    - get_personal_site_launch_brief
+    - audit_personal_site_launch
+    - get_linkedin_metric_dashboard
+    - list_linkedin_autonomous_actions
     model: gpt-5.5
   build:
     tools: []
     model: glm-5.2
     group: hubert-team-lead
   social:
-    tools: []
+    tools:
+    - get_linkedin_brand_brief
+    - create_linkedin_draft
+    - list_linkedin_drafts
+    - score_linkedin_draft
+    - create_linkedin_go_live_plan
+    - record_linkedin_metric_snapshot
+    - get_linkedin_metric_dashboard
+    - run_linkedin_observability_cycle
+    - list_linkedin_autonomous_actions
+    model: gpt-5.5
+  website:
+    tools:
+    - get_personal_site_launch_brief
+    - audit_personal_site_launch
+    - create_website_launch_task
+    - get_linkedin_brand_brief
+    - get_linkedin_metric_dashboard
+    - list_linkedin_autonomous_actions
     model: gpt-5.5
   ops:
     tools:

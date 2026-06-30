@@ -21,16 +21,22 @@ agents:
       - "#team-ops"
   social:
     agent_package: forsch.agent_social.agent
-    agent_attr: agent
+    agent_attr: root_agent
     profile_home: /profiles/social
     channels:
       - "#team-social"
   brand:
     agent_package: forsch.agent_brand.agent
-    agent_attr: agent
+    agent_attr: root_agent
     profile_home: /profiles/brand
     channels:
       - "#team-brand"
+  website:
+    agent_package: forsch.agent_website.agent
+    agent_attr: root_agent
+    profile_home: /profiles/website
+    channels:
+      - "#team-website"
   assistant:
     agent_package: forsch.agent_assistant.agent
     agent_attr: agent
@@ -82,6 +88,7 @@ crm:
     assistant: assistant
     brand: brand
     social: social
+    website: website
     stability: stability
 
 streaming:
