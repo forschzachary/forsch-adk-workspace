@@ -99,3 +99,23 @@ Plus the **house docs** in `docs/` (`ARCHITECTURE.md`, `AGENT_FACTORY_SPEC.md`, 
 ## 8. Working style — lazy but precise (ponytail)
 
 Before building anything: *does this need to exist? does it need to be this complex?* Smallest change that actually works; stdlib before deps; one line before fifty. Verify fixes with **new evidence** (a fresh log line / test result), never by assuming an edit is live (for daemons/containers that means a restart). State assumptions; ask only when genuinely ambiguous.
+
+## 9. Cloud vibe-coding loop (this box — autosave + auto-land)
+
+You build here the same way you build locally — edit, preview, iterate — except this box
+**autosaves and lands your work for you**. Do not `git commit`/`push`/`reset` by hand and do not
+switch branches; the loop owns the workspace.
+
+- **Workspace:** `/root/.hermes/workspace/adk` on branch **`vibe/live`** (never `main`).
+- **Autosave:** the `adk-vibe` timer runs `/root/.hermes/vibe-loop.sh` every ~2 min and commits any
+  uncommitted work to `vibe/live`. Your work is never lost, even mid-build.
+- **Preview:** agent edits (`agents.yaml` → `forsch build <id>`) show on ADK Web (`:8002`) with **no
+  restart** — it reads agents off disk per request. Restarts happen only for incoming code/dep changes.
+- **Auto-land (full auto):** when you go idle (~5 min, no new edits) and the tree is clean, `vibe/live`
+  is pushed → PR → the gate (`verify` + `control-plane-approved`) → **squash-merged to `main`** →
+  deployed everywhere. A broken in-progress state simply stays on `vibe/live` until the gate is green;
+  it never blocks you and never reaches `main`.
+- **Incoming `main`** (others' merges) is **rebased** onto `vibe/live`, never a destructive reset — your
+  in-progress work survives.
+
+So the loop is just: **edit → `forsch build <id>` → check `:8002` → keep going.** Stop, and it ships.
