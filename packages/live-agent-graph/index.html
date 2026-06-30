@@ -85,6 +85,27 @@
   .lane-chip:hover { opacity: 1; background: rgba(255,255,255,0.08); }
   .lane-chip:active { cursor: grabbing; }
   .lane-chip.in-cluster { opacity: 0.3; cursor: default; border-style: dashed; }
+  /* ── Tool bundles: collapsible groups in the Tools · Data picker ── */
+  .lane-bundle-group { display: inline-flex; flex-direction: column; gap: 3px; vertical-align: top; }
+  .lane-bundle-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-family: ui-monospace, 'SF Mono', monospace; color: #d4a574;
+    background: rgba(212,165,116,0.08); border: 1px solid #d4a574;
+    border-radius: 10px; padding: 2px 9px; cursor: pointer; white-space: nowrap;
+  }
+  .lane-bundle-chip:hover { background: rgba(212,165,116,0.16); }
+  .lane-bundle-chip .chev { font-size: 8px; opacity: 0.8; transition: transform 0.12s; }
+  .lane-bundle-chip.open .chev { transform: rotate(90deg); }
+  .lane-bundle-chip .count { font-size: 8px; background: rgba(212,165,116,0.25); border-radius: 7px; padding: 0 5px; }
+  .lane-bundle-children { display: none; flex-wrap: wrap; gap: 4px; padding: 2px 0 2px 10px; }
+  .lane-bundle-children.open { display: flex; }
+  .tool-child {
+    font-size: 9px; font-family: ui-monospace, 'SF Mono', monospace; color: #9db3c0;
+    background: rgba(255,255,255,0.03); border: 1px dashed rgba(212,165,116,0.4);
+    border-radius: 8px; padding: 1px 7px; cursor: pointer; white-space: nowrap; opacity: 0.85;
+  }
+  .tool-child:hover { opacity: 1; }
+  .tool-child.inactive { opacity: 0.3; cursor: default; text-decoration: line-through; }
   .lane-msg { font-size: 10px; }
   .lane-msg.ok { color: #3fb950; }
   .lane-msg.err { color: #ff7b72; }
@@ -683,6 +704,9 @@ const COLORS = {
   intake: '#d2a8ff', router: '#ff7b72', database: '#a5d6ff',
   ui: '#f0c040', builder: '#ffa198', design: '#79c0ff',
   capability: '#56d4dd',
+  // A bundle is a container of orange tools → desaturated gold so it reads as
+  // "a group of tools" while staying in the Tools · Data lane palette.
+  bundle: '#d4a574',
   // Infra rail colors
   service: '#c8a0ff', host: '#8b949e', container: '#79c0ff',
   network: '#56d4dd', tunnel: '#ffa198',
@@ -747,7 +771,7 @@ const LANE_Y = {
   intake: -240, ui: -240,
   router: -80,
   agent: 80, logic: 80,
-  tool: 240, database: 240,
+  tool: 240, database: 240, bundle: 240,   // bundles live in the Tools · Data lane
 };
 // Swim-lane sheet rows, top → bottom. The colored sheet is drawn in graph
 // coordinates so it scales and pans with the live graph; the DOM layer above it
@@ -2176,6 +2200,36 @@ function graphNodeLibrary(nodeType) {
     }));
 }
 
+// Tool bundles: one entry per distinct bundle_key (deduped across the per-agent
+// bundle nodes), with its member tools (the `contains` links) for the picker.
+function graphBundleLibrary() {
+  const nodes = graphData?.nodes || [];
+  const links = graphData?.links || [];
+  const byKey = {};
+  nodes.filter(n => n.type === 'bundle').forEach(n => {
+    const key = n.bundle_key || n.name;
+    if (!byKey[key]) {
+      const children = links
+        .filter(l => lid(l.source) === n.id && l.kind === 'contains')
+        .map(l => lid(l.target).replace(/^tool:/, ''));
+      byKey[key] = {
+        id: key, name: key,
+        tools_count: (n.tools_count != null ? n.tools_count : children.length),
+        children,
+        inactive: n.inactive_tools || [],
+        inCluster: false,
+      };
+    }
+    if (clusterHasNode(n.id)) byKey[key].inCluster = true;
+  });
+  return Object.values(byKey);
+}
+
+function inspectBundle(bundleKey) {
+  const n = (graphData?.nodes || []).find(x => x.type === 'bundle' && (x.bundle_key === bundleKey || x.name === bundleKey));
+  if (n) openInspect(n);
+}
+
 function inspectGraphNode(spawnerKey, itemId) {
   const node = findGraphNode(NODE_PREFIX[spawnerKey] + ':' + itemId);
   if (node) openInspect(node);
@@ -2230,10 +2284,11 @@ const LANE_SPAWNERS = {
     onDrop(item, msg) { addAgentToCluster(item.id, msg); },
   },
   tool: {
-    blankLabel: 'New tool',
+    blankLabel: 'New bundle',
     disabled: true,
-    library() { return graphNodeLibrary('tool'); },
-    onDrop(item, msg) { inspectGraphNode('tool', item.id); },
+    isBundle: true,                                  // picker is restricted to bundles, not loose tools
+    library() { return graphBundleLibrary(); },
+    onDrop(item, msg) { inspectBundle(item.id); },
   },
   interface: {
     blankLabel: 'New interface',
@@ -2318,6 +2373,65 @@ function buildSwimlaneControls() {
 }
 
 // (Re)populate each lane's library strip; in-cluster items are dimmed + non-draggable.
+// Expanded-state of bundle groups in the picker (persists across re-renders).
+const bundleExpanded = new Set();
+
+function makeChip(it, laneKey, sp, msgEl) {
+  const chip = document.createElement('div');
+  chip.className = 'lane-chip' + (it.inCluster ? ' in-cluster' : '');
+  chip.textContent = it.name;
+  if (it.inCluster) {
+    chip.title = 'already in cluster';
+  } else {
+    chip.draggable = true;
+    chip.title = 'drag into lane or click to add';
+    chip.addEventListener('dragstart', e => {
+      dragItem = { laneKey, id: it.id, inCluster: false };
+      document.body.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', it.id);
+    });
+    chip.addEventListener('dragend', () => {
+      dragItem = null;
+      document.body.classList.remove('dragging');
+      document.querySelectorAll('.swimlane-ctrl-row').forEach(r => r.classList.remove('drop-ok'));
+    });
+    chip.addEventListener('click', () => sp.onDrop({ id: it.id }, msgEl));
+  }
+  return chip;
+}
+
+// A bundle renders as a collapsible group: a gold bundle chip (name + tool count +
+// chevron) over a hidden row of its member-tool chips. Click the chip to expand.
+function makeBundleGroup(b) {
+  const group = document.createElement('div');
+  group.className = 'lane-bundle-group';
+  const open0 = bundleExpanded.has(b.id);
+  const chip = document.createElement('div');
+  chip.className = 'lane-bundle-chip' + (open0 ? ' open' : '');
+  chip.title = 'click to expand its tools';
+  chip.innerHTML = `<span class="chev">▶</span><span>${b.name}</span><span class="count">${b.tools_count}</span>`;
+  const kids = document.createElement('div');
+  kids.className = 'lane-bundle-children' + (open0 ? ' open' : '');
+  (b.children || []).forEach(t => {
+    const inactive = (b.inactive || []).includes(t);
+    const tc = document.createElement('div');
+    tc.className = 'tool-child' + (inactive ? ' inactive' : '');
+    tc.textContent = t;
+    tc.title = inactive ? 'deactivated for this agent' : 'tool: ' + t + ' (click to inspect)';
+    if (!inactive) tc.addEventListener('click', () => inspectGraphNode('tool', t));
+    kids.appendChild(tc);
+  });
+  chip.addEventListener('click', () => {
+    const open = chip.classList.toggle('open');
+    kids.classList.toggle('open', open);
+    if (open) bundleExpanded.add(b.id); else bundleExpanded.delete(b.id);
+  });
+  group.appendChild(chip);
+  group.appendChild(kids);
+  return group;
+}
+
 function renderLaneLibraries() {
   const layer = document.getElementById('swimlane-controls');
   if (!layer) return;
@@ -2331,34 +2445,16 @@ function renderLaneLibraries() {
     const items = sp.library();
     if (!items.length) {
       const e = document.createElement('span');
-      e.className = 'lane-msg'; e.style.opacity = '0.5'; e.textContent = `no built ${sk}s yet`;
+      e.className = 'lane-msg'; e.style.opacity = '0.5';
+      e.textContent = sp.isBundle ? 'no bundles yet' : `no built ${sk}s yet`;
       lib.appendChild(e); return;
     }
     const msgEl = layer.querySelector(`.swimlane-ctrl-row[data-spawner="${sk}"] .lane-msg`);
-    items.forEach(it => {
-      const chip = document.createElement('div');
-      chip.className = 'lane-chip' + (it.inCluster ? ' in-cluster' : '');
-      chip.textContent = it.name;
-      if (it.inCluster) {
-        chip.title = 'already in cluster';
-      } else {
-        chip.draggable = true;
-        chip.title = 'drag into lane or click to add';
-        chip.addEventListener('dragstart', e => {
-          dragItem = { laneKey: lane.key, id: it.id, inCluster: false };
-          document.body.classList.add('dragging');
-          e.dataTransfer.effectAllowed = 'copy';
-          e.dataTransfer.setData('text/plain', it.id);
-        });
-        chip.addEventListener('dragend', () => {
-          dragItem = null;
-          document.body.classList.remove('dragging');
-          layer.querySelectorAll('.swimlane-ctrl-row').forEach(r => r.classList.remove('drop-ok'));
-        });
-        chip.addEventListener('click', () => sp.onDrop({ id: it.id }, msgEl));
-      }
-      lib.appendChild(chip);
-    });
+    if (sp.isBundle) {
+      items.forEach(b => lib.appendChild(makeBundleGroup(b)));
+    } else {
+      items.forEach(it => lib.appendChild(makeChip(it, lane.key, sp, msgEl)));
+    }
   });
 }
 

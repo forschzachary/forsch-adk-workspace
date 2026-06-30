@@ -1,6 +1,69 @@
 version: 1
 defaults:
   agent_class: LlmAgent
+tool_bundles:
+  linkedin_core:
+    description: 'LinkedIn read surface: brand brief, metric dashboard, autonomous-action
+      queue.'
+    tools:
+    - forsch.adk_components.tools.get_linkedin_brand_brief
+    - forsch.adk_components.tools.get_linkedin_metric_dashboard
+    - forsch.adk_components.tools.list_linkedin_autonomous_actions
+  linkedin_authoring:
+    description: LinkedIn authoring surface — draft, list, score, go-live plan, metric
+      snapshot, observability cycle.
+    tools:
+    - forsch.adk_components.tools.create_linkedin_draft
+    - forsch.adk_components.tools.list_linkedin_drafts
+    - forsch.adk_components.tools.score_linkedin_draft
+    - forsch.adk_components.tools.create_linkedin_go_live_plan
+    - forsch.adk_components.tools.record_linkedin_metric_snapshot
+    - forsch.adk_components.tools.run_linkedin_observability_cycle
+  brand_profile:
+    description: 'Brand-only LinkedIn surface: draft scoring + staged profile updates.'
+    tools:
+    - forsch.adk_components.tools.score_linkedin_draft
+    - forsch.adk_components.tools.stage_linkedin_profile_update
+  website_launch:
+    description: 'Personal-site launch readiness: brief, audit, staged launch tasks.'
+    tools:
+    - forsch.adk_components.tools.get_personal_site_launch_brief
+    - forsch.adk_components.tools.audit_personal_site_launch
+    - forsch.adk_components.tools.create_website_launch_task
+  stability_diagnostics:
+    description: Workspace inventory, git health, import + service checks, host bash
+      + file I/O.
+    tools:
+    - forsch.adk_components.tools.get_workspace_inventory
+    - forsch.adk_components.tools.get_git_state
+    - forsch.adk_components.tools.validate_agent_imports
+    - forsch.adk_components.tools.check_service_health
+    - forsch.adk_components.tools.execute_bash_command
+    - forsch.adk_components.tools.read_host_file
+    - forsch.adk_components.tools.write_host_file
+  household_assistant:
+    description: Grocery logging + reminders for personal assistants.
+    tools:
+    - forsch.adk_components.tools.log_groceries
+    - forsch.adk_components.tools.get_grocery_log
+    - forsch.adk_components.tools.add_reminder
+  wow_guild_knowledge:
+    description: TBC Classic items, quests, dungeons, bosses, NPCs, and per-player
+      registration.
+    tools:
+    - forsch.adk_components.tools.search_items
+    - forsch.adk_components.tools.get_item_details
+    - forsch.adk_components.tools.search_quests
+    - forsch.adk_components.tools.get_dungeon_bosses
+    - forsch.adk_components.tools.get_boss_loot
+    - forsch.adk_components.tools.search_npcs
+    - forsch.adk_components.tools.register_player
+    - forsch.adk_components.tools.get_player
+  ops_telemetry:
+    description: 'Read-only CRM/business telemetry: health snapshot + recent leads.'
+    tools:
+    - forsch.adk_components.tools.get_crm_health_snapshot
+    - forsch.adk_components.tools.list_recent_crm_leads
 agents:
   stability:
     package: forsch.agent_stability.agent
@@ -34,14 +97,8 @@ agents:
       \ data, force flags, wiping state). When a fix is risky or ambiguous, propose\
       \ it and ask rather than acting. Report findings with severity, evidence, and\
       \ the smallest safe next action.\n"
-    tools:
-    - forsch.adk_components.tools.get_workspace_inventory
-    - forsch.adk_components.tools.get_git_state
-    - forsch.adk_components.tools.validate_agent_imports
-    - forsch.adk_components.tools.check_service_health
-    - forsch.adk_components.tools.execute_bash_command
-    - forsch.adk_components.tools.read_host_file
-    - forsch.adk_components.tools.write_host_file
+    bundles:
+    - stability_diagnostics
     smoke_prompts:
     - Inventory the ADK workspace and summarize missing structural pieces.
     - Check configured service health and report only evidence-backed findings.
@@ -93,14 +150,19 @@ agents:
       You own profile copy, headline/About/Featured wording, website positioning, launch messaging, proof framing, and brand consistency review. Use get_linkedin_brand_brief before making recommendations. Use get_linkedin_metric_dashboard when metrics are relevant. Use score_linkedin_draft before endorsing copy. Use stage_linkedin_profile_update for any proposed LinkedIn profile change.
 
       Hard boundary: you never claim anything is live on LinkedIn. You never post, DM, comment, accept connections, scrape LinkedIn, change a profile field, deploy a site, or imply that another agent did. Metrics can trigger autonomous local reviews and staged copy only; every public-facing change needs Zach's final manual approval.
-    tools:
-    - forsch.adk_components.tools.get_linkedin_brand_brief
-    - forsch.adk_components.tools.score_linkedin_draft
-    - forsch.adk_components.tools.stage_linkedin_profile_update
-    - forsch.adk_components.tools.get_personal_site_launch_brief
-    - forsch.adk_components.tools.audit_personal_site_launch
-    - forsch.adk_components.tools.get_linkedin_metric_dashboard
-    - forsch.adk_components.tools.list_linkedin_autonomous_actions
+    bundles:
+    - bundle: linkedin_core
+      only:
+      - forsch.adk_components.tools.get_linkedin_brand_brief
+    - brand_profile
+    - bundle: website_launch
+      only:
+      - forsch.adk_components.tools.get_personal_site_launch_brief
+      - forsch.adk_components.tools.audit_personal_site_launch
+    - bundle: linkedin_core
+      only:
+      - forsch.adk_components.tools.get_linkedin_metric_dashboard
+      - forsch.adk_components.tools.list_linkedin_autonomous_actions
     smoke_prompts:
     - Summarize Zach's LinkedIn positioning and the non-destructive approval boundary.
     - 'Score this headline and explain whether it is ready for Zach review: Technical Support Leader | Practical AI for Support Ops | Building The Coordination Layer'
@@ -150,16 +212,22 @@ agents:
       Use get_linkedin_brand_brief first. Use record_linkedin_metric_snapshot for manual or approved-export metrics. Use get_linkedin_metric_dashboard before choosing the next batch. Use run_linkedin_observability_cycle to queue safe local autonomous actions from those metrics. Use create_linkedin_draft to stage posts, comments, and replies. Use score_linkedin_draft to grade any draft before presenting it as ready. Use list_linkedin_drafts and list_linkedin_autonomous_actions to show the review queues. Use create_linkedin_go_live_plan for the morning handoff.
 
       Hard boundary: LinkedIn is Zach's professional identity. You do not scrape, auto-post, comment, DM, accept connections, edit profile fields, or claim anything was published. Autonomous actions are limited to local metric logging, local drafts, local profile-review records, and local website tasks. All public output is staged-only and needs Zach's final manual approval.
-    tools:
-    - forsch.adk_components.tools.get_linkedin_brand_brief
-    - forsch.adk_components.tools.create_linkedin_draft
-    - forsch.adk_components.tools.list_linkedin_drafts
-    - forsch.adk_components.tools.score_linkedin_draft
-    - forsch.adk_components.tools.create_linkedin_go_live_plan
-    - forsch.adk_components.tools.record_linkedin_metric_snapshot
-    - forsch.adk_components.tools.get_linkedin_metric_dashboard
-    - forsch.adk_components.tools.run_linkedin_observability_cycle
-    - forsch.adk_components.tools.list_linkedin_autonomous_actions
+    bundles:
+    - bundle: linkedin_core
+      only:
+      - forsch.adk_components.tools.get_linkedin_brand_brief
+    - bundle: linkedin_authoring
+      exclude:
+      - forsch.adk_components.tools.run_linkedin_observability_cycle
+    - bundle: linkedin_core
+      only:
+      - forsch.adk_components.tools.get_linkedin_metric_dashboard
+    - bundle: linkedin_authoring
+      only:
+      - forsch.adk_components.tools.run_linkedin_observability_cycle
+    - bundle: linkedin_core
+      only:
+      - forsch.adk_components.tools.list_linkedin_autonomous_actions
     smoke_prompts:
     - Create a staged LinkedIn post draft about support handoffs and return the receipt.
     - Give me tomorrow morning's non-destructive LinkedIn go-live plan.
@@ -187,13 +255,9 @@ agents:
       Use get_personal_site_launch_brief before planning. Use get_linkedin_metric_dashboard to understand whether LinkedIn traffic is converting into site sessions or newsletter subscribers. Use audit_personal_site_launch for page copy and launch readiness. Use create_website_launch_task to stage work items. Coordinate with brand language, but do not deploy, change DNS, publish pages, or claim a launch happened.
 
       Hard boundary: you can prepare a go-live plan and queue tasks only. Website publishing, DNS, analytics credentials, newsletter provider changes, and booking links require explicit Zach approval and a separate verified deploy.
-    tools:
-    - forsch.adk_components.tools.get_personal_site_launch_brief
-    - forsch.adk_components.tools.audit_personal_site_launch
-    - forsch.adk_components.tools.create_website_launch_task
-    - forsch.adk_components.tools.get_linkedin_brand_brief
-    - forsch.adk_components.tools.get_linkedin_metric_dashboard
-    - forsch.adk_components.tools.list_linkedin_autonomous_actions
+    bundles:
+    - website_launch
+    - linkedin_core
     smoke_prompts:
     - Audit the homepage launch readiness for a personal site about practical AI for support ops.
     - Create a staged launch task for homepage metadata and return the receipt.
@@ -219,9 +283,8 @@ agents:
       newsletter subscriptions. Keep recommendations concise and operational.
 
       '
-    tools:
-    - forsch.adk_components.tools.get_crm_health_snapshot
-    - forsch.adk_components.tools.list_recent_crm_leads
+    bundles:
+    - ops_telemetry
     smoke_prompts:
     - Introduce yourself and describe your role for Forsch.
     role: builder
@@ -254,10 +317,8 @@ agents:
       \ the exact phrasing to retry. 'Show me the receipt' is her magic phrase.\n\n\
       Be lazy and precise: do the smallest thing that actually helps, and ask only\
       \ when genuinely ambiguous.\n"
-    tools:
-    - forsch.adk_components.tools.log_groceries
-    - forsch.adk_components.tools.get_grocery_log
-    - forsch.adk_components.tools.add_reminder
+    bundles:
+    - household_assistant
     smoke_prompts:
     - Introduce yourself and what you help Shelby with.
     model: gpt-5.5
@@ -288,15 +349,8 @@ agents:
       , give them the full step-by-step.\n\nYou are not a generic WoW wiki. You are\
       \ their guild bot. You know their characters. You remember what they asked last\
       \ time. You celebrate their upgrades.\n"
-    tools:
-    - forsch.adk_components.tools.search_items
-    - forsch.adk_components.tools.get_item_details
-    - forsch.adk_components.tools.search_quests
-    - forsch.adk_components.tools.get_dungeon_bosses
-    - forsch.adk_components.tools.get_boss_loot
-    - forsch.adk_components.tools.search_npcs
-    - forsch.adk_components.tools.register_player
-    - forsch.adk_components.tools.get_player
+    bundles:
+    - wow_guild_knowledge
     smoke_prompts:
     - Introduce yourself and describe what you help the guild with.
     - Search for spell hit gear for a level 70 mage.

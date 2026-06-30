@@ -1,8 +1,41 @@
 version: 1
 defaults:
   agent_class: LlmAgent
-agents:
-  stability:
+# Tool bundles — a named group of tools above the individual-tool layer.
+# Leaf-name form (the graph keys tool nodes by leaf name, not FQN). Mirrors the
+# FQN bundles in agent_specs/agents.yaml. Agents reference bundles via `bundles:`
+# (bare name = whole bundle, or {bundle, only:[...]} / {bundle, exclude:[...]}).
+# build_live_graph.py expands these into agent -> bundle -> tool links, marking
+# tools dropped by only/exclude as inactive FOR THAT AGENT's bundle instance.
+tool_bundles:
+  linkedin_core:
+    description: 'LinkedIn read surface: brand brief, metric dashboard, autonomous-action queue.'
+    tools:
+    - get_linkedin_brand_brief
+    - get_linkedin_metric_dashboard
+    - list_linkedin_autonomous_actions
+  linkedin_authoring:
+    description: 'LinkedIn authoring surface: draft, list, score, go-live plan, metric snapshot, observability cycle.'
+    tools:
+    - create_linkedin_draft
+    - list_linkedin_drafts
+    - score_linkedin_draft
+    - create_linkedin_go_live_plan
+    - record_linkedin_metric_snapshot
+    - run_linkedin_observability_cycle
+  brand_profile:
+    description: 'Brand-only LinkedIn surface: draft scoring + staged profile updates.'
+    tools:
+    - score_linkedin_draft
+    - stage_linkedin_profile_update
+  website_launch:
+    description: 'Personal-site launch readiness: brief, audit, staged launch tasks.'
+    tools:
+    - get_personal_site_launch_brief
+    - audit_personal_site_launch
+    - create_website_launch_task
+  stability_diagnostics:
+    description: Workspace inventory, git health, import + service checks, host bash + file I/O.
     tools:
     - get_workspace_inventory
     - get_git_state
@@ -11,54 +44,8 @@ agents:
     - execute_bash_command
     - read_host_file
     - write_host_file
-    model: glm-5.2
-    role: builder
-  assistant:
-    tools: []
-    model: gpt-5.5
-    group: hubert-team-lead
-  brand:
-    tools:
-    - get_linkedin_brand_brief
-    - score_linkedin_draft
-    - stage_linkedin_profile_update
-    - get_personal_site_launch_brief
-    - audit_personal_site_launch
-    - get_linkedin_metric_dashboard
-    - list_linkedin_autonomous_actions
-    model: gpt-5.5
-  build:
-    tools: []
-    model: glm-5.2
-    group: hubert-team-lead
-  social:
-    tools:
-    - get_linkedin_brand_brief
-    - create_linkedin_draft
-    - list_linkedin_drafts
-    - score_linkedin_draft
-    - create_linkedin_go_live_plan
-    - record_linkedin_metric_snapshot
-    - get_linkedin_metric_dashboard
-    - run_linkedin_observability_cycle
-    - list_linkedin_autonomous_actions
-    model: gpt-5.5
-  website:
-    tools:
-    - get_personal_site_launch_brief
-    - audit_personal_site_launch
-    - create_website_launch_task
-    - get_linkedin_brand_brief
-    - get_linkedin_metric_dashboard
-    - list_linkedin_autonomous_actions
-    model: gpt-5.5
-  ops:
-    tools:
-    - get_crm_health_snapshot
-    - list_recent_crm_leads
-    model: gpt-5.5
-    role: builder
-  shelby:
+  household_assistant:
+    description: 'Grocery logging + trends + reminders + email-receipt ingestion for personal assistants.'
     tools:
     - log_groceries
     - get_grocery_log
@@ -68,4 +55,50 @@ agents:
     - list_grocery_email_senders
     - is_grocery_email_sender_allowed
     - log_grocery_email_receipt
+  ops_telemetry:
+    description: 'Read-only CRM/business telemetry: health snapshot + recent leads.'
+    tools:
+    - get_crm_health_snapshot
+    - list_recent_crm_leads
+agents:
+  stability:
+    bundles:
+    - stability_diagnostics
+    model: glm-5.2
+    role: builder
+  assistant:
+    tools: []
+    model: gpt-5.5
+    group: hubert-team-lead
+  brand:
+    bundles:
+    - brand_profile
+    - linkedin_core
+    - bundle: website_launch
+      only:
+      - get_personal_site_launch_brief
+      - audit_personal_site_launch
+    model: gpt-5.5
+  build:
+    tools: []
+    model: glm-5.2
+    group: hubert-team-lead
+  social:
+    bundles:
+    - linkedin_core
+    - linkedin_authoring
+    model: gpt-5.5
+  website:
+    bundles:
+    - website_launch
+    - linkedin_core
+    model: gpt-5.5
+  ops:
+    bundles:
+    - ops_telemetry
+    model: gpt-5.5
+    role: builder
+  shelby:
+    bundles:
+    - household_assistant
     model: gpt-5.5
