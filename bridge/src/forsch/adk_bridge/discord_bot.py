@@ -36,6 +36,7 @@ class BotSpec:
     channels: list[str] = field(default_factory=list)  # guild channel names it answers in (bare)
     dm: bool = True                             # answer direct messages
     loader: str = "🐾 *scratching the post…*"    # shown while the agent thinks, then edited to the reply
+    context_provider: object = None             # optional callable: discord_user_id(str) -> a context line to inject
 
 
 class ADKDiscordBot(discord.Client):
@@ -76,9 +77,18 @@ class ADKDiscordBot(discord.Client):
     async def _run(self, message: discord.Message) -> str:
         user_id = f"discord:{message.author.id}"
         session_id = f"{self.spec.name}:{message.channel.id}"
+        text = message.content
+        if self.spec.context_provider is not None:
+            try:
+                ctx = self.spec.context_provider(str(message.author.id))
+            except Exception:
+                _LOG.exception("%s context_provider failed", self.spec.name)
+                ctx = ""
+            if ctx:
+                text = f"{ctx}\n\n{message.content}"
         chunks: list[str] = []
         async for token in stream_agent(self.spec.agent, self.spec.name, self._session_service,
-                                        user_id, session_id, message.content):
+                                        user_id, session_id, text):
             chunks.append(token)
         return "".join(chunks)[:_MAX_CHARS]
 

@@ -44,6 +44,7 @@ def _workspace() -> Path:
 def build_specs():
     from forsch.adk_bridge.cat_persona import make_cat_agent
     from forsch.adk_bridge.discord_bot import BotSpec
+    from forsch.adk_bridge.friend_memory import friend_context
 
     specs = []
     cat_token = os.environ.get("HUBERTO_DISCORD_BOT_TOKEN")
@@ -51,7 +52,7 @@ def build_specs():
         specs.append(BotSpec(
             name="huberto_cat", token=cat_token,
             expected_bot_id=os.environ.get("HUBERTO_EXPECTED_BOT_ID", HUBERTO_DEFAULT_ID),
-            agent=make_cat_agent(), dm=True,
+            agent=make_cat_agent(), dm=True, context_provider=friend_context,
         ))
     lead_token = os.environ.get("COMPANION_LEAD_DISCORD_BOT_TOKEN")
     if lead_token:

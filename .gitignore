@@ -37,3 +37,6 @@ chat/hubert_soul.md
 
 # forsch /goal run-state ledgers
 goals/
+
+# Huberto per-friend memory (local)
+data/friends/
