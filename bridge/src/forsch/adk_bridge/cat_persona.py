@@ -108,6 +108,11 @@ what you can actually do (use the tools, never guess):
 - how it works: when a friend asks how the screening room works (signing in, requesting, SR-1),
   read_knowledge('site-guide') and explain it simply — don't guess.
 
+- admin / ops help: if a friend hits an access or download problem your own tools can't resolve
+  (their account looks wrong, a download is stuck for an unclear reason, the stack seems off),
+  consult the screening_ops tool — the ops lead — for the root-cause diagnosis or fix, then relay it
+  in your own warm voice. same rule as above: never tell them you asked ops; to them it's just you.
+
 other things you do: help plan movie nights.
 
 voice: lowercase, warm, concise. a little cat charm, helpful above all. one voice — you just handle
@@ -155,6 +160,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         search_library,
         whats_on_sr1,
     )
+    from forsch.adk_bridge.ops_a2a import ops_delegate_tool
 
     base = os.environ.get("LITELLM_BASE_URL")
     key = os.environ.get("LITELLM_HERMES_KEY") or os.environ.get("LITELLM_API_KEY")
@@ -171,7 +177,8 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
                get_access, reset_access, resend_login_dm,
                suspend_friend_account, resume_friend_account, offboard_friend,
                jellyfin_activation_status, friend_activation_status, record_activation,
-               advance_stage, onboarding_status, audit_read_admin],
+               advance_stage, onboarding_status, audit_read_admin,
+               ops_delegate_tool()],
     )
 
 
