@@ -787,8 +787,8 @@ const PADI_LANES = [
 // LANE_Y value → swim-lane row index
 const LANE_INDEX = { '-240': 0, '-80': 1, '80': 2, '240': 3 };
 const RAIL_X = 900;
-const PADI_LANE_HEIGHT = 220;
-const PADI_LANE_STEP = 220;
+const PADI_LANE_HEIGHT = 320;
+const PADI_LANE_STEP = 320;
 const PADI_WORLD_X_SHIFT = -80;
 const PADI_CONTROL_GAP = 6;
 const PADI_CONTROL_LEFT_PAD = 18;
@@ -1415,7 +1415,7 @@ function layoutPadi() {
     buckets[li].push(n);
   });
   const maxBucket = Math.max(1, ...buckets.map(arr => arr.length));
-  const laneWidth = Math.max(960, Math.min(1900, maxBucket * 190));
+  const laneWidth = Math.max(1300, Math.min(2600, maxBucket * 230));
   const xLeft = PADI_WORLD_X_SHIFT - laneWidth / 2;
   const xRight = PADI_WORLD_X_SHIFT + laneWidth / 2;
   padiWorld = {
@@ -1524,7 +1524,7 @@ function fitPadiToViewport(ms = 650) {
   const yMax = padiWorld.yBottom + 18;
   const boundsW = Math.max(1, xMax - xMin);
   const boundsH = Math.max(1, yMax - yMin);
-  const zoom = Math.max(0.55, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
+  const zoom = Math.max(0.78, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
   const cx = (xMin + xMax) / 2;
   const cy = (yMin + yMax) / 2;
 
