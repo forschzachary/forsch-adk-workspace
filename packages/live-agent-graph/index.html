@@ -1442,23 +1442,53 @@ function layoutPadi() {
     });
   });
 
-  // Seed each tool near its bundle (resolved from the contains link) so the physics
-  // starts as a tight cloud, not from the origin. Tools aren't laned — applyForces
-  // gives bundles + tools real charge/link so they settle into an organic blob.
+  // ── Clean-line layout: order agents under their interface/router (barycenter),
+  //    place each bundle directly under its agent, and halo each bundle's tools —
+  //    so the tool → bundle → agent → router → interface chains run vertically.
   {
     const byId = {}; fg.graphData().nodes.forEach(n => byId[n.id] = n);
+    const links = fg.graphData().links;
+    const neighborTx = (node, kinds) => {
+      const xs = [];
+      for (const l of links) {
+        if (!kinds.includes(l.kind)) continue;
+        const s = byId[lid(l.source)], t = byId[lid(l.target)];
+        if (s === node && t && t.__tx != null) xs.push(t.__tx);
+        else if (t === node && s && s.__tx != null) xs.push(s.__tx);
+      }
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+    };
+    // 1. re-order agents into their lane slots by the barycenter of their interfaces/routers
+    const agents = fg.graphData().nodes.filter(n => n.type === 'agent' && n.__tx != null);
+    if (agents.length) {
+      const bary = new Map(agents.map(a => [a, neighborTx(a, ['listens', 'wears'])]));
+      const slots = agents.map(a => a.__tx).sort((x, y) => x - y);
+      agents.slice().sort((a, b) => (bary.get(a) ?? a.__tx) - (bary.get(b) ?? b.__tx))
+            .forEach((a, i) => { a.__tx = slots[i]; });
+    }
+    // 2. place each bundle directly under its agent (multiples spread around it)
+    const byAgent = {};
+    for (const l of links) {
+      if (l.kind !== 'uses-bundle') continue;
+      const a = byId[lid(l.source)], b = byId[lid(l.target)];
+      if (a && b && a.type === 'agent' && b.type === 'bundle') (byAgent[a.id] = byAgent[a.id] || { a, bs: [] }).bs.push(b);
+    }
+    Object.values(byAgent).forEach(({ a, bs }) => {
+      bs.forEach((b, i) => { b.__tx = a.__tx + (i - (bs.length - 1) / 2) * 110; });
+    });
+    // 3. halo each bundle's tools around it (seeded near the bundle's lane slot)
     const groups = {};
-    fg.graphData().links.forEach(l => {
-      if (l.kind !== 'contains') return;
+    for (const l of links) {
+      if (l.kind !== 'contains') continue;
       const s = byId[lid(l.source)], t = byId[lid(l.target)];
       if (s && t && t.type === 'tool' && s.type === 'bundle') {
         t.__bundle = s;
         (groups[s.id] = groups[s.id] || []).push(t);
       }
-    });
+    }
     Object.values(groups).forEach(arr => arr.forEach((t, i) => {
-      t.__ang = (i + 0.5) / arr.length * Math.PI * 2;   // slot in the halo ring
-      t.__rad = 24 + arr.length * 2.4;                  // bigger bundle → wider halo
+      t.__ang = (i + 0.5) / arr.length * Math.PI * 2;
+      t.__rad = 24 + arr.length * 2.4;
       if (!Number.isFinite(t.x)) {
         t.x = (t.__bundle.__tx || 0) + Math.cos(t.__ang) * t.__rad;
         t.y = (t.__bundle.__ty || 0) + Math.sin(t.__ang) * t.__rad;
