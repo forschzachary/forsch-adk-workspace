@@ -54,7 +54,8 @@ class ADKDiscordBot(discord.Client):
     def _handles(self, message: discord.Message) -> bool:
         if message.guild is None:
             return self.spec.dm
-        return message.channel.name.lower().lstrip("#") in self._channels
+        channel = message.channel
+        return (channel.name.lower().lstrip("#") in self._channels) or (str(channel.id) in self._channels)
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author == self.user or message.author.bot:

@@ -56,12 +56,15 @@ def build_specs():
         ))
     lead_token = os.environ.get("COMPANION_LEAD_DISCORD_BOT_TOKEN")
     if lead_token:
-        # internal lead: channel-only (no DMs). Its agent gets the ops/curator brains later;
-        # for now it shares the cat agent so the identity + serving prove out.
+        from forsch.adk_bridge.ops_persona import make_ops_agent
+
+        # internal ops lead on companion-lead: channel-only (no DMs), in the team-social channel.
         specs.append(BotSpec(
-            name="companion_lead", token=lead_token,
+            name="screening_ops", token=lead_token,
             expected_bot_id=os.environ.get("COMPANION_LEAD_EXPECTED_BOT_ID", COMPANION_LEAD_DEFAULT_ID),
-            agent=make_cat_agent(), dm=False, channels=["team-social"], loader="📋 *checking the board…*",
+            agent=make_ops_agent(), dm=False,
+            channels=[os.environ.get("OPS_CHANNEL_ID", "1511377396668825662")],
+            loader="📋 *checking the board…*",
         ))
     return specs
 
