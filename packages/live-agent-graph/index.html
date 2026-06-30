@@ -1972,25 +1972,30 @@ function initGraph(data) {
         }
       }
 
-      // ── Label ──
-      const label = node.name;
-      const fontSize = padiScreenStableNodes() && !node.rail
-        ? 11 / globalScale
-        : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale));
-      ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-      if (node.rail) {
-        // Rail nodes: label to the right, vertically centered
-        ctx.save();
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = color + hexAlpha(0.9);
-        ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
-        ctx.restore();
-      } else {
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = node.shared ? '#8b949e' : '#c9d1d9';
-        ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
+      // ── Label ── Tool names are hover-only (the halo would be an unreadable label
+      // pile-up); hover a tool for its name or click to inspect. Bundle names are
+      // emphasized — that's the label that matters at a glance.
+      if (node.type !== 'tool') {
+        const label = node.name;
+        const big = node.type === 'bundle' ? 1.3 : 1;
+        const fontSize = (padiScreenStableNodes() && !node.rail
+          ? 11 / globalScale
+          : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale))) * big;
+        ctx.font = `${node.type === 'bundle' ? '600 ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        if (node.rail) {
+          // Rail nodes: label to the right, vertically centered
+          ctx.save();
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = color + hexAlpha(0.9);
+          ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
+          ctx.restore();
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = node.type === 'bundle' ? '#f0c890' : (node.shared ? '#8b949e' : '#c9d1d9');
+          ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
+        }
       }
     })
     .nodePointerAreaPaint((node, color, ctx, globalScale) => {
@@ -2630,6 +2635,17 @@ function openInspect(node) {
     if (node.workspace) {
       html += `<div class="field"><label>Workspace</label><div class="ro" style="word-break:break-all;font-size:11px;">${esc(node.workspace)}</div></div>`;
     }
+  }
+
+  // Tool-specific card (mirrors the agent card: what bundles hold it + which agents use it)
+  if (node.type === 'tool') {
+    const _by = {}; (graphData.nodes || []).forEach(n => _by[n.id] = n);
+    const _bn = (graphData.links || []).filter(l => l.kind === 'contains' && lid(l.target) === node.id).map(l => _by[lid(l.source)]).filter(Boolean);
+    const _bk = [...new Set(_bn.map(b => b.bundle_key || b.name))];
+    const _ag = [...new Set(_bn.map(b => b.for_agent).filter(Boolean))];
+    if (node.family) html += `<div class="field"><label>Family</label><div class="ro">${esc(node.family)}</div></div>`;
+    html += `<div class="field"><label>In bundles</label><div>${_bk.map(k => `<span class="contract-tag accept">${esc(k)}</span>`).join('') || '<span class="ro">—</span>'}</div></div>`;
+    html += `<div class="field"><label>Used by</label><div>${_ag.map(a => `<span class="contract-tag emit">${esc(a)}</span>`).join('') || '<span class="ro">—</span>'}</div></div>`;
   }
 
   // Artifact
