@@ -46,25 +46,33 @@ def _save(rec: dict) -> None:
 def friend_context(discord_id: str) -> str:
     """The system line the bot injects before a turn: who Huberto is talking to + what he recalls."""
     discord_id = str(discord_id)
+    admin = discord_id in _admins()
     rec = _load(discord_id)
     if rec is None:
-        return (
-            f"[you're talking to a discord user you don't know yet (id {discord_id}). be warm, find "
+        base = (
+            f"you're talking to a discord user you don't know yet (id {discord_id}). be warm, find "
             f"out their name naturally, and once you know it call onboard_friend(discord_id='{discord_id}', "
-            f"name=...). don't interrogate — just chat and pick it up.]"
+            f"name=...). if they want to JOIN the screening room, check is_invited(name) once you know "
+            f"it — only provision an account for an INVITED friend (read_knowledge('onboarding-playbook'))."
         )
+        if admin:
+            base += " NOTE: this id is an ADMIN (Zach) — he runs the place; never quote credentials to him, and he approves new friends with invite_friend(name)."
+        return f"[{base}]"
     name = rec.get("name") or "a friend"
     profile = rec.get("jellyfin_profile") or ""
     facts = rec.get("facts") or []
+    stage = rec.get("stage") or ("member" if rec.get("jellyfin_username") else "new")
     fact_line = ("you remember: " + "; ".join(facts)) if facts else "no notes on them yet."
     prof = (
         f" their screening-room profile is '{profile}', so attribute their movie requests to that "
         f"(requested_for='{profile}')."
         if profile else ""
     )
+    stage_line = "" if stage == "member" else f" onboarding stage: {stage} — nudge the next step (read_knowledge('onboarding-playbook'))."
+    admin_line = " NOTE: this is an ADMIN (Zach) — never quote credentials to him; he approves new friends with invite_friend(name)." if admin else ""
     return (
-        f"[you're talking to {name} (discord id {discord_id}). {fact_line}{prof} greet them like you "
-        f"know them; jot anything new worth remembering with remember_about_friend(discord_id='{discord_id}', fact=...).]"
+        f"[you're talking to {name} (discord id {discord_id}). {fact_line}{prof}{stage_line}{admin_line} "
+        f"greet them like you know them; jot anything new with remember_about_friend(discord_id='{discord_id}', fact=...).]"
     )
 
 
@@ -89,3 +97,87 @@ def remember_about_friend(discord_id: str, fact: str) -> dict:
         facts.append(fact)
     _save(rec)
     return {"ok": True, "remembered": fact, "total_facts": len(facts)}
+
+
+# ── onboarding stages + invite gate ────────────────────────────────────────
+
+ONBOARDING_STAGES = ("new", "account", "toured", "request_fulfilled", "on_sr1", "member")
+
+
+def _admins() -> set[str]:
+    return {s.strip() for s in os.environ.get("SR_ADMIN_DISCORD_IDS", "").split(",") if s.strip()}
+
+
+def advance_stage(discord_id: str, stage: str) -> dict:
+    """Advance a friend's onboarding stage as they pass each gate. Order: new -> account -> toured ->
+    request_fulfilled -> on_sr1 -> member."""
+    if stage not in ONBOARDING_STAGES:
+        return {"ok": False, "error": f"unknown stage; use one of: {', '.join(ONBOARDING_STAGES)}"}
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    rec["stage"] = stage
+    _save(rec)
+    return {"ok": True, "stage": stage}
+
+
+def onboarding_status(discord_id: str) -> dict:
+    """Where a friend is in onboarding — their stage + whether they already have an account."""
+    rec = _load(str(discord_id)) or {}
+    return {
+        "stage": rec.get("stage") or ("member" if rec.get("jellyfin_username") else "new"),
+        "has_account": bool(rec.get("jellyfin_username")),
+        "name": rec.get("name"),
+    }
+
+
+def _invites_path() -> Path:
+    return _dir() / "_invites.json"
+
+
+def _load_invites() -> list[str]:
+    path = _invites_path()
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return []
+
+
+def invite_friend(name: str) -> dict:
+    """Approve a new person for onboarding — ONLY call when the admin (Zach) approves them. After
+    this, an account may be provisioned for someone who gives this name."""
+    invites = _load_invites()
+    key = name.strip().lower()
+    if key and key not in invites:
+        invites.append(key)
+        _invites_path().write_text(json.dumps(invites, indent=2))
+    return {"ok": True, "invited": name, "pending": invites}
+
+
+def is_invited(name: str) -> dict:
+    """Check whether a name was approved for onboarding — the gate before provisioning an account."""
+    return {"invited": name.strip().lower() in _load_invites(), "name": name}
+
+
+def list_invites() -> dict:
+    """List names approved for onboarding but not yet given an account."""
+    return {"invites": _load_invites()}
+
+
+def consume_invite(name: str) -> None:
+    """Remove a name from the approved list once their account is created (one-time invite)."""
+    invites = _load_invites()
+    key = name.strip().lower()
+    if key in invites:
+        invites.remove(key)
+        _invites_path().write_text(json.dumps(invites, indent=2))
+
+
+def record_account(discord_id: str, name: str, jellyfin_username: str, jellyfin_profile: str = "") -> None:
+    """Persist that a friend now has a Jellyfin account (advances stage to 'account')."""
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    rec["name"] = name
+    rec["jellyfin_username"] = jellyfin_username
+    rec["jellyfin_profile"] = jellyfin_profile or jellyfin_username
+    rec["stage"] = "account"
+    _save(rec)

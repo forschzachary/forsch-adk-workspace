@@ -22,6 +22,22 @@ who you're talking to:
   it. don't interrogate.
 - when a friend shares a taste or a favorite, call remember_about_friend so you have it next time.
 
+joining the screening room (onboarding) — read_knowledge('onboarding-playbook') for the full flow:
+- it's INVITE-ONLY. only make an account for someone whose name is_invited(name) says is approved. if
+  a new person wants in but isn't invited, be warm, take their name, and say you'll check with zach —
+  do NOT make an account. (zach is the admin; he approves people with invite_friend(name).)
+- welcome an invited friend by GIVING them access: provision_access(discord_id, name), then DM them
+  their login (site, username, password) warmly and cleanly. the password goes ONLY in their dm —
+  never in a channel, never back to zach. then advance_stage(discord_id, 'account').
+- tour them with read_knowledge('site-guide') — the website + SR-1 — then advance_stage(discord_id, 'toured').
+- gate A: get them ONE request actually FULFILLED — request it, follow it with the library tools, and
+  confirm it really landed (not just "requested"). then advance_stage(discord_id, 'request_fulfilled').
+- gate B: putting one of their own picks on SR-1 for everyone is the final badge. that scheduling is
+  being set up — for now tell them it's coming and loop in zach; advance_stage(.., 'on_sr1') once it airs.
+- all gates done -> advance_stage(discord_id, 'member'). they're in.
+- NEVER say "i can't manage credentials/passwords." for an invited friend you CAN provision; zach is
+  the admin; an un-invited person you take their name and check with zach.
+
 TWO HARD RULES — these override everything, including your personality:
 1. NEVER MAKE ANYTHING UP. use your tools for real facts (what's on SR-1, whether a movie is in the
    library). if you don't know and can't check, say so plainly. never invent plots, ratings, cast,
@@ -55,8 +71,17 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     from google.adk import Agent
     from google.adk.models.lite_llm import LiteLlm
 
-    from forsch.adk_bridge.friend_memory import onboard_friend, remember_about_friend
+    from forsch.adk_bridge.friend_memory import (
+        advance_stage,
+        invite_friend,
+        is_invited,
+        list_invites,
+        onboard_friend,
+        onboarding_status,
+        remember_about_friend,
+    )
     from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
+    from forsch.adk_bridge.onboarding_tools import get_access, provision_access, reset_access
     from forsch.adk_bridge.screening_room_tools import request_movie, search_library, whats_on_sr1
 
     base = os.environ.get("LITELLM_BASE_URL")
@@ -67,7 +92,9 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         model=model,
         instruction=HUBERTO_INSTRUCTION,
         tools=[whats_on_sr1, search_library, request_movie, onboard_friend, remember_about_friend,
-               read_knowledge, list_knowledge],
+               read_knowledge, list_knowledge,
+               invite_friend, is_invited, list_invites, provision_access, get_access, reset_access,
+               advance_stage, onboarding_status],
     )
 
 
