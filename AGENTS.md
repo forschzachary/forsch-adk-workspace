@@ -50,7 +50,7 @@ Plus the **house docs** in `docs/` (`ARCHITECTURE.md`, `AGENT_FACTORY_SPEC.md`, 
 ## 3. How to build a repeatable agent
 
 1. **Edit the spine:** add/modify the agent's entry in `agent_specs/agents.yaml`. An agent's **final instruction = its group preamble + its own `instruction:` job** (see §6 / `preambles/README.md`).
-2. **Regenerate:** `factory/.venv/bin/python -m forsch.adk_factory.cli apply --agent <id>` — writes `agents/<id>/` + `web_agents/<id>/`. (The factory has its own venv; it is *not* a uv workspace member.) Or use the cockpit's regenerate button. **Never hand-edit generated files.**
+2. **Regenerate via the `forsch` CLI** — the unified operator command, **installed on PATH on the box** (`/usr/local/bin/forsch`). Use it: `forsch build <id>` (or `forsch build --all`) writes `agents/<id>/` + `web_agents/<id>/`; `forsch plan <id>` dry-runs; `forsch check <id>` validates the agent's tools; `forsch graph` serves the live map; `forsch eval <id>` runs the eval flywheel. **You have this — use it for factory ops.** (Legacy equivalent: `factory/.venv/bin/python -m forsch.adk_factory.cli apply --agent <id>`.) Or use the cockpit's regenerate button. **Never hand-edit generated files.**
 3. **Reuse, don't reinvent:** shared tools live in `packages/adk-components` (`forsch.adk_components.tools.*`); the **patterns library** (`…/patterns/inventory.yaml`) is your first stop — match intent to a pattern before writing new code.
 4. **Make it runnable in chat:** add `agents/<id>/src` to `bridge/compose.yaml` PYTHONPATH, then `cd bridge && docker compose up -d`. Code-only change to an already-wired agent → `docker restart adk-bridge`. New pip dep → `docker compose build`.
 5. **Land it through the gate** (§4) — never commit on the box.

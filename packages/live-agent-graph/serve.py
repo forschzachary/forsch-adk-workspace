@@ -291,7 +291,7 @@ def _proxy_to_bridge(handler, method):
             if key.lower() in ("host", "content-length", "transfer-encoding"):
                 continue
             req.add_header(key, val)
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=280) as resp:  # above the 240s Hubert/mimo run timeout, so the harness reports before the proxy cuts
             handler.send_response(resp.status)
             for key, val in resp.headers.items():
                 if key.lower() in ("transfer-encoding", "connection"):
