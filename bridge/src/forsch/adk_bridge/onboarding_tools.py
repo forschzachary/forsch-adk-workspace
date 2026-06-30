@@ -151,3 +151,114 @@ def reset_access(name: str, caller_discord_id: str = "") -> dict:
         "deliver_privately": True,
         "login": {"site": _jellyfin_url(), "username": username, "password": password},
     }
+
+
+# ── lifecycle: recovery + suspend/offboard (Phase 8) ───────────────────────
+# Closes the loop after a friend is a member: recover an account whose login DM failed (idempotently,
+# no duplicate account), and reversibly suspend / archive a friend. The Jellyfin disable is the gated
+# `sr users disable` (reversible) — we NEVER hard-delete from a tool; offboarding archives the local
+# record first. Passwords only ever ride in a DM payload, never in a log.
+
+def is_account_created(name: str) -> bool:
+    """True if a Jellyfin account for this name already exists on the live server (idempotency check
+    via `sr users list`). Used by recovery so we never create a duplicate. Falls back to the local
+    friend record if the CLI can't be reached."""
+    username = name.strip().lower()
+    ok, out = _sr(["users", "list"])
+    if ok:
+        for line in out.splitlines():
+            # `sr users list` is a padded table; the first column is the name.
+            first = line.strip().split()
+            if first and first[0].strip().lower() == username:
+                return True
+        return False
+    # CLI unreachable — fall back to what we already recorded locally.
+    return fm.has_account(name)
+
+
+def resend_login_dm(discord_id: str, name: str) -> dict:
+    """Recover an account whose login DM never landed: mint a FRESH password (`sr users passwd`) and
+    return the login to DM the friend again. Idempotent by design — it resets the existing account
+    rather than provisioning a new one, so re-running it can't create a duplicate. If no account
+    exists yet, it says so (provision first). The password rides only in this return value, for the
+    DM — never logged."""
+    username = name.strip().lower()
+    if not is_account_created(name):
+        return {
+            "ok": False,
+            "error": f"no account for '{username}' yet — provision_access(discord_id, name) first; nothing to resend.",
+        }
+    rl_key = str(discord_id) or username
+    rl = check_rate_limit(rl_key, "reset_access")
+    if not rl["ok"]:
+        log_audit("resend_login_rate_limited", rl_key, {"name": username, "retry_after": rl["retry_after"]})
+        return {"ok": False, "rate_limited": True, "error": rl["reason"]}
+    password = _gen_password()
+    ok, out = _sr(["users", "passwd", username, password])
+    if not ok:
+        return {"ok": False, "error": f"could not refresh the login: {out[:180]}"}
+    # the DM had failed before; clear the stale pending entry and re-queue is the bot's job — here we
+    # just record the recovery (never the password) and hand back the fresh login to deliver.
+    log_audit("resend_login_dm", rl_key, {"name": username})
+    return {
+        "ok": True,
+        "deliver_privately": True,
+        "login": {"site": _jellyfin_url(), "username": username, "password": password},
+    }
+
+
+def suspend_friend_account(name: str, discord_id: str = "", reason: str = "") -> dict:
+    """Reversibly suspend a friend's access: disable their Jellyfin login (`sr users disable`, NOT a
+    delete) and mark their record `suspended`. The account, library and Jellyseerr link are untouched,
+    so resume_friend_account restores everything. Pass discord_id to also move the local stage. Audited;
+    no secret involved."""
+    username = name.strip().lower()
+    ok, out = _sr(["users", "disable", username])
+    if not ok:
+        return {"ok": False, "error": f"could not suspend '{username}': {out[:180]}"}
+    if discord_id:
+        fm.set_stage(str(discord_id), "suspended")
+    log_audit("suspend_account", str(discord_id), {"name": username, "reason": reason or ""})
+    return {"ok": True, "suspended": username, "reversible": True}
+
+
+def resume_friend_account(name: str, discord_id: str = "") -> dict:
+    """Undo a suspension: re-enable the Jellyfin login (`sr users enable`) and restore the friend's
+    stage to 'member'. The reverse of suspend_friend_account."""
+    username = name.strip().lower()
+    ok, out = _sr(["users", "enable", username])
+    if not ok:
+        return {"ok": False, "error": f"could not resume '{username}': {out[:180]}"}
+    if discord_id:
+        fm.set_stage(str(discord_id), "member")
+    log_audit("resume_account", str(discord_id), {"name": username})
+    return {"ok": True, "resumed": username}
+
+
+def offboard_friend(discord_id: str, name: str = "", reason: str = "", archive: bool = True) -> dict:
+    """Offboard a friend (they're leaving the club). SAFE BY DEFAULT: archive=True disables their
+    Jellyfin access (reversible) and archives the local record — it does NOT hard-delete the Jellyfin
+    account (that's irreversible and is left to a human running `sr users delete --yes` deliberately).
+    Pass archive=False only to skip the local archive (rare). Returns the archive location. Audited."""
+    username = (name or "").strip().lower()
+    # 1) disable Jellyfin access if we know the username (reversible — never delete from a tool).
+    disabled = None
+    if username:
+        ok, out = _sr(["users", "disable", username])
+        disabled = ok
+        if not ok:
+            # don't abort the offboard just because the disable hiccuped — record it and continue.
+            log_audit("offboard_disable_failed", str(discord_id), {"name": username, "detail": out[:120]})
+    # 2) archive the local record (export then wipe) unless explicitly told not to.
+    archived = None
+    if archive:
+        res = fm.archive_friend(str(discord_id), reason or "offboarded")
+        archived = res.get("archived_to") if res.get("ok") else None
+    log_audit("offboard_friend", str(discord_id), {"name": username, "archived": bool(archived), "disabled": bool(disabled)})
+    return {
+        "ok": True,
+        "offboarded": username or str(discord_id),
+        "jellyfin_disabled": disabled,
+        "archived_to": archived,
+        "note": "Jellyfin account disabled (reversible), record archived — NOT hard-deleted. Use `sr users delete --yes` by hand to remove the account for good.",
+    }

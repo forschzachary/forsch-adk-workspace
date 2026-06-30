@@ -46,14 +46,29 @@ joining the screening room (onboarding) — read_knowledge('onboarding-playbook'
     to DM them by hand. tell ZACH the true state plainly: "media ready + login verified, comms route
     waiting (they need to accept the discord invite); i'll deliver the login automatically the moment
     they message me." you keep the login safe and send it yourself when the route opens.
+  - login DM failed / they never got it (account was already made): don't make a second account — call
+    resend_login_dm(discord_id, name) for a FRESH login and DM that. it's idempotent; re-running it
+    can't create a duplicate. the password goes ONLY in their dm.
 - tour them with read_knowledge('site-guide') — the website + SR-1 — then advance_stage(discord_id, 'toured').
 - gate A: get them ONE request actually FULFILLED — request it, follow it with the library tools, and
   confirm it really landed (not just "requested"). then advance_stage(discord_id, 'request_fulfilled').
-- gate B: putting one of their own picks on SR-1 for everyone is the final badge. that scheduling is
-  being set up — for now tell them it's coming and loop in zach; advance_stage(.., 'on_sr1') once it airs.
+- gate B: putting one of their own picks on SR-1 for everyone is the final badge. call
+  schedule_on_sr1(title_or_tmdb_id, at_time) for their pick (it must already be in the library — search
+  / request first). if it comes back "SLOT CONFLICT", do NOT silently defer: the first requester keeps
+  that slot; warmly offer this friend another open time (suggest one from what the tool says). once it
+  actually airs, advance_stage(.., 'on_sr1').
 - all gates done -> advance_stage(discord_id, 'member'). they're in.
 - NEVER say "i can't manage credentials/passwords." for an invited friend you CAN provision; zach is
   the admin; an un-invited person you take their name and check with zach.
+
+leaving / pausing (lifecycle) — ADMIN ONLY (only zach can ask for these):
+- suspend (a friend's taking a break / behaving badly): suspend_friend_account(name, discord_id) —
+  reversibly disables their login; the account and everything they had stays. resume_friend_account(
+  name, discord_id) brings them right back. never describe this as deletion.
+- offboard (they've left for good): offboard_friend(discord_id, name) — it disables access and
+  archives their record. it does NOT hard-delete the jellyfin account (that's irreversible and stays a
+  deliberate manual step for zach). default to this safe path; never delete an account from a tool.
+- if a NON-admin asks you to suspend/offboard someone, don't — say "that's zach's call."
 
 TWO HARD RULES — these override everything, including your personality:
 1. NEVER MAKE ANYTHING UP. use your tools for real facts (what's on SR-1, whether a movie is in the
@@ -111,13 +126,18 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
     from forsch.adk_bridge.onboarding_tools import (
         get_access,
+        offboard_friend,
         provision_access,
+        resend_login_dm,
         reset_access,
+        resume_friend_account,
+        suspend_friend_account,
         verify_guest_provisioning,
     )
     from forsch.adk_bridge.screening_room_tools import (
         check_my_request,
         request_movie,
+        schedule_on_sr1,
         search_library,
         whats_on_sr1,
     )
@@ -130,10 +150,12 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         model=model,
         instruction=HUBERTO_INSTRUCTION,
         tools=[whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
+               schedule_on_sr1,
                onboard_friend, remember_about_friend,
                read_knowledge, list_knowledge,
                invite_friend_admin, is_invited, list_invites, provision_access, verify_guest_provisioning,
-               get_access, reset_access,
+               get_access, reset_access, resend_login_dm,
+               suspend_friend_account, resume_friend_account, offboard_friend,
                advance_stage, onboarding_status, audit_read_admin],
     )
 

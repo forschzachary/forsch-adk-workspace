@@ -91,7 +91,27 @@ def schedule_on_sr1(title_or_tmdb_id: str, at_time: str, dry_run: bool = True) -
     if dry_run:
         args.append("--dry-run")
     out = _run(args)
-    if not dry_run:
+    if _is_schedule_conflict(out):
+        # The slot is taken (the engine's unique-index / horizon rejection, surfaced as a 409). Don't
+        # silently drop the second pick — tell the caller it's a conflict so Huberto/curator can give
+        # the first requester the slot and offer this one an open time.
+        return (
+            f"SLOT CONFLICT: that SR-1 time is already taken — {out.strip()}\n"
+            f"don't silently defer: the first pick keeps '{at_time}'; offer this one another open slot "
+            f"(check `sr tv guide` for gaps, or try a different --at)."
+        )
+    if not dry_run and "fail" not in out.lower() and "error" not in out.lower():
         # a real mutation of the live SR-1 schedule — record it (the title + time, never a secret).
         log_audit("sr1_scheduled", "", {"title": str(title_or_tmdb_id), "at": str(at_time)})
     return out
+
+
+# A schedule attempt that lost the slot: the route returns 409 and `sr tv schedule` dies with that
+# status, or the reflow engine's plain-text reasons (taken / horizon / race). Detected so the caller
+# can arbitrate instead of dropping the second pick.
+_CONFLICT_MARKERS = ("409", "already taken", "lost the race", "slot already", "beyond the")
+
+
+def _is_schedule_conflict(out: str) -> bool:
+    low = (out or "").lower()
+    return any(m in low for m in _CONFLICT_MARKERS)

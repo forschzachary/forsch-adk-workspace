@@ -105,7 +105,12 @@ def remember_about_friend(discord_id: str, fact: str) -> dict:
 
 # ── onboarding stages + invite gate ────────────────────────────────────────
 
-ONBOARDING_STAGES = ("new", "account", "toured", "request_fulfilled", "on_sr1", "member")
+ONBOARDING_STAGES = (
+    "new", "account", "toured", "request_fulfilled", "on_sr1", "member",
+    # ── lifecycle (Phase 8) ──
+    "suspended",  # access disabled but recoverable — the record + invite history are kept
+    "archived",   # offboarded: record exported to _archive-<id>.json, then the active record is wiped
+)
 
 
 def _admins() -> set[str]:
@@ -267,6 +272,63 @@ def mark_dm_delivered(discord_id: str) -> dict:
 def _now_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# ── lifecycle: suspend / offboard / activation (Phase 8) ───────────────────
+# Closing the loop after "member": a member can be *suspended* (reversible — access is disabled but
+# the record + invite history stay) and *offboarded* (archived to `_archive-<id>.json`, then the
+# active record is wiped). These touch ONLY the local friend record; the actual Jellyfin disable is a
+# separate, gated `sr users disable` (driven from onboarding_tools). `friend_activation_status` reads
+# back where a friend stands without mutating anything — the basis for "did they ever log in?".
+
+def set_stage(discord_id: str, stage: str) -> dict:
+    """Set a friend's stage to any valid stage (incl. the Phase 8 lifecycle stages suspended/archived).
+    Unlike advance_stage this is the lifecycle setter — same validation, clearer intent."""
+    return advance_stage(discord_id, stage)
+
+
+def friend_activation_status(discord_id: str) -> dict:
+    """Where a friend stands, read-only: their stage, whether an account was created, whether the
+    login DM landed, and any active suspension. Pure read — no side effects. (Jellyfin login/playback
+    activity is a separate live check in screening_room_tools; this is the local-record view.)"""
+    rec = _load(str(discord_id)) or {}
+    return {
+        "discord_id": str(discord_id),
+        "name": rec.get("name"),
+        "stage": rec.get("stage") or ("member" if rec.get("jellyfin_username") else "new"),
+        "account_created": bool(rec.get("jellyfin_username")),
+        "dm_delivered": bool(rec.get("dm_delivered")),
+        "suspended": (rec.get("stage") == "suspended"),
+        "archived": False,  # an archived friend has no active record — this only sees live ones
+    }
+
+
+def _archive_path(discord_id: str) -> Path:
+    return _dir() / f"_archive-{discord_id}.json"
+
+
+def archive_friend(discord_id: str, reason: str = "") -> dict:
+    """Offboard a friend: export their record to `_archive-<id>.json` (preserved, not deleted) and
+    then remove the active `<id>.json`. Reversible only by hand from the archive — the bot never
+    auto-restores. Returns {ok, archived_to} or {ok:False} if there was no active record."""
+    rec = _load(str(discord_id))
+    if rec is None:
+        return {"ok": False, "error": f"no active record for {discord_id} to archive."}
+    rec["archived_at"] = _now_iso()
+    rec["archive_reason"] = reason or ""
+    rec["stage"] = "archived"
+    archive = _archive_path(str(discord_id))
+    tmp = archive.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(rec, indent=2))
+    tmp.replace(archive)
+    # wipe the active record only after the archive is safely on disk
+    _path(str(discord_id)).unlink(missing_ok=True)
+    return {"ok": True, "archived_to": archive.name, "name": rec.get("name")}
+
+
+def is_archived(discord_id: str) -> bool:
+    """True if this friend has been offboarded (an `_archive-<id>.json` exists)."""
+    return _archive_path(str(discord_id)).exists()
 
 
 # ── watched requests (Phase 5: proactive notifications) ────────────────────
