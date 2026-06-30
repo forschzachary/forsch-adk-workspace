@@ -1,5 +1,7 @@
+import json
 import os
 import chainlit as cl
+from chainlit.input_widget import Select
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from forsch.adk_chat.mimo_harness import run_hubert
 from forsch.adk_chat.claudewrap import map_block
@@ -12,6 +14,40 @@ _HUBERT_TIMEOUT = float(os.environ.get("HUBERT_TIMEOUT", "240"))
 
 # AskActionMessage timeout (seconds). On timeout the user can still type a reply.
 _ASK_TIMEOUT = 600
+
+# --- model picker: the chat exposes every model mimocode is configured for ---
+_MIMO_CONFIG = os.environ.get("MIMOCODE_CONFIG") or os.path.expanduser("~/.config/mimocode/mimocode.jsonc")
+
+
+def _available_models() -> list[str]:
+    """provider/model ids mimocode can use, parsed from its config — powers the chat picker."""
+    models: list[str] = []
+    try:
+        with open(_MIMO_CONFIG) as f:
+            raw = "\n".join(ln for ln in f.read().splitlines() if not ln.lstrip().startswith("//"))
+        cfg = json.loads(raw)
+        for prov, pdata in (cfg.get("provider") or {}).items():
+            for mid in ((pdata or {}).get("models") or {}).keys():
+                models.append(f"{prov}/{mid}")
+    except Exception:
+        pass
+    # keep the configured default selectable even if it routes via a built-in provider (e.g. Xiaomi)
+    if _HUBERT_MODEL not in models:
+        models.insert(0, _HUBERT_MODEL)
+    return models or [_HUBERT_MODEL]
+
+
+_MODELS = _available_models()
+
+
+async def _send_model_settings() -> None:
+    """Render the model dropdown and seed the session's model (Hubert/mimocode profile)."""
+    initial = _HUBERT_MODEL if _HUBERT_MODEL in _MODELS else _MODELS[0]
+    cl.user_session.set("model", initial)
+    await cl.ChatSettings([
+        Select(id="model", label="Hubert model (mimocode)", values=_MODELS,
+               initial_index=_MODELS.index(initial)),
+    ]).send()
 
 
 # --- chat persistence: Chainlit history sidebar (session selection) + resume (message-history continuity) ---
@@ -35,6 +71,7 @@ async def resume(thread):
         elif t in ("assistant_message", "llm") and content:
             hist.append({"role": "assistant", "content": content})
     cl.user_session.set("history", hist)
+    await _send_model_settings()
 
 
 
@@ -55,6 +92,14 @@ async def profiles(user):
 async def start():
     cl.user_session.set("who", cl.user_session.get("chat_profile") or "claude")
     cl.user_session.set("history", [])
+    await _send_model_settings()
+
+
+@cl.on_settings_update
+async def _on_settings(settings):
+    m = (settings or {}).get("model")
+    if m:
+        cl.user_session.set("model", m)
 
 
 def _render_ask_user_markdown(question: dict) -> str:
@@ -183,7 +228,9 @@ async def on_message(message: cl.Message):
         session_id = cl.user_session.get("mimo_session")
         new_session, error = await run_hubert(
             message.content, out, workdir=_WS,
-            session_id=session_id, model=_HUBERT_MODEL, timeout=_HUBERT_TIMEOUT,
+            session_id=session_id,
+            model=cl.user_session.get("model") or _HUBERT_MODEL,
+            timeout=_HUBERT_TIMEOUT,
         )
         if new_session:
             cl.user_session.set("mimo_session", new_session)
