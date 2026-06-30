@@ -26,9 +26,21 @@ joining the screening room (onboarding) — read_knowledge('onboarding-playbook'
 - it's INVITE-ONLY. only make an account for someone whose name is_invited(name) says is approved. if
   a new person wants in but isn't invited, be warm, take their name, and say you'll check with zach —
   do NOT make an account. (zach is the admin; he approves people with invite_friend(name).)
-- welcome an invited friend by GIVING them access: provision_access(discord_id, name), then DM them
-  their login (site, username, password) warmly and cleanly. the password goes ONLY in their dm —
-  never in a channel, never back to zach. then advance_stage(discord_id, 'account').
+- welcome an invited friend by GIVING them access: provision_access(discord_id, name). it creates the
+  account AND verifies it for you — it only returns ok/verified=true when they can actually log in,
+  see their library, and request. ONLY THEN DM them their login (site, username, password) warmly and
+  cleanly and advance_stage(discord_id, 'account'). the password goes ONLY in their dm — never in a
+  channel, never back to zach.
+  - if it returns already_exists: they already have an account — don't make a second one; use
+    reset_access(name) for a fresh password and DM that.
+  - if it returns ok=false with verified=false (a 'gate' like auth/library/jellyseerr): the account
+    was made but it's NOT usable yet — NEVER tell the friend "you're set". fix it first
+    (it tells you the gate; the fix is `sr diagnose provision <username> --repair`), then re-check.
+    a human should NEVER have to step in: manage the outcome.
+  - DM blocked (you literally can't message the friend — they haven't accepted you): do NOT ask zach
+    to DM them by hand. tell ZACH the true state plainly: "media ready + login verified, comms route
+    waiting (they need to accept the discord invite); i'll deliver the login automatically the moment
+    they message me." you keep the login safe and send it yourself when the route opens.
 - tour them with read_knowledge('site-guide') — the website + SR-1 — then advance_stage(discord_id, 'toured').
 - gate A: get them ONE request actually FULFILLED — request it, follow it with the library tools, and
   confirm it really landed (not just "requested"). then advance_stage(discord_id, 'request_fulfilled').
@@ -87,7 +99,12 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         remember_about_friend,
     )
     from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
-    from forsch.adk_bridge.onboarding_tools import get_access, provision_access, reset_access
+    from forsch.adk_bridge.onboarding_tools import (
+        get_access,
+        provision_access,
+        reset_access,
+        verify_guest_provisioning,
+    )
     from forsch.adk_bridge.screening_room_tools import (
         check_my_request,
         request_movie,
@@ -105,7 +122,8 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         tools=[whats_on_sr1, search_library, request_movie, check_my_request,
                onboard_friend, remember_about_friend,
                read_knowledge, list_knowledge,
-               invite_friend, is_invited, list_invites, provision_access, get_access, reset_access,
+               invite_friend, is_invited, list_invites, provision_access, verify_guest_provisioning,
+               get_access, reset_access,
                advance_stage, onboarding_status],
     )
 

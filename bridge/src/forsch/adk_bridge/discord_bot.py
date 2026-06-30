@@ -65,8 +65,18 @@ class ADKDiscordBot(discord.Client):
         loader = None
         try:
             loader = await message.channel.send(self.spec.loader)
+        except discord.Forbidden:
+            # DM-403: the friend hasn't accepted the bot / shares no guild, so we can't even open the
+            # channel. Don't drop the turn — record it so the true state is recoverable. We have no
+            # reply payload yet here (the loader is the first send), so just note the blocked route;
+            # the credential-bearing case is handled by _deliver below.
+            _LOG.warning("%s cannot DM %s (Forbidden) — comms route waiting",
+                         self.spec.name, getattr(message.author, "id", "?"))
+            self._note_blocked_dm(str(message.author.id))
+            return
+        try:
             reply = await self._run(message)
-            await loader.edit(content=reply or "…")
+            await self._deliver(message, loader, reply or "…")
         except Exception:
             _LOG.exception("%s run failed", self.spec.name)
             if loader is not None:
@@ -74,6 +84,40 @@ class ADKDiscordBot(discord.Client):
                     await loader.edit(content="(a hairball — something went wrong)")
                 except Exception:
                     pass
+
+    async def _deliver(self, message: discord.Message, loader, reply: str) -> None:
+        """Edit the reply into the loader; on a DM-403 queue it so it can be delivered automatically
+        once the friend opens the route (Phase 5 dispatch), and surface the true state, never a drop."""
+        try:
+            await loader.edit(content=reply)
+            self._note_dm_delivered(str(message.author.id))
+        except discord.Forbidden:
+            _LOG.warning("%s DM to %s blocked mid-turn (Forbidden) — queuing pending DM",
+                         self.spec.name, getattr(message.author, "id", "?"))
+            self._queue_pending_dm(str(message.author.id), reply)
+
+    # ── DM-403 bookkeeping — delegated to friend_memory; tolerant if it isn't wired ──
+    def _queue_pending_dm(self, discord_id: str, content: str) -> None:
+        try:
+            from forsch.adk_bridge import friend_memory as fm
+            fm.queue_pending_dm(discord_id, content)
+        except Exception:
+            _LOG.exception("%s could not queue pending DM for %s", self.spec.name, discord_id)
+
+    def _note_blocked_dm(self, discord_id: str) -> None:
+        try:
+            from forsch.adk_bridge import friend_memory as fm
+            fm.queue_pending_dm(discord_id, "")
+        except Exception:
+            pass
+
+    def _note_dm_delivered(self, discord_id: str) -> None:
+        try:
+            from forsch.adk_bridge import friend_memory as fm
+            if fm.get_pending_dm(discord_id) is not None:
+                fm.mark_dm_delivered(discord_id)
+        except Exception:
+            pass
 
     async def _run(self, message: discord.Message) -> str:
         user_id = f"discord:{message.author.id}"

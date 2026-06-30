@@ -181,3 +181,59 @@ def record_account(discord_id: str, name: str, jellyfin_username: str, jellyfin_
     rec["jellyfin_profile"] = jellyfin_profile or jellyfin_username
     rec["stage"] = "account"
     _save(rec)
+
+
+def has_account(name: str) -> bool:
+    """True if any friend record already has a Jellyfin account under this username (idempotency)."""
+    username = name.strip().lower()
+    for path in _dir().glob("*.json"):
+        if path.name.startswith("_"):
+            continue
+        try:
+            rec = json.loads(path.read_text())
+        except Exception:
+            continue
+        if (rec.get("jellyfin_username") or "").strip().lower() == username:
+            return True
+    return False
+
+
+# ── DM delivery tracking (Phase 4 + 5) ─────────────────────────────────────
+# When the credential DM can't be delivered (Discord 403 — the friend hasn't accepted the bot /
+# shares no guild), we don't lose the login: we queue it as a pending_dm and surface the true state
+# to Zach ("media ready + login verified, comms route waiting"). The dispatch/retry loop is Phase 5.
+# pending_dm never stores the password in Zach-facing output — it lives only in the friend's local
+# record so the bot can deliver it automatically once the route opens.
+
+def queue_pending_dm(discord_id: str, content: str) -> dict:
+    """Queue a DM that couldn't be delivered (Discord 403) so it can be sent automatically later."""
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    pending = rec.get("pending_dm") or {}
+    rec["pending_dm"] = {
+        "content": content,
+        "queued_at": pending.get("queued_at") or _now_iso(),
+        "attempts": int(pending.get("attempts", 0)),
+    }
+    rec["dm_delivered"] = False
+    _save(rec)
+    return {"ok": True, "queued": True}
+
+
+def get_pending_dm(discord_id: str) -> dict | None:
+    """The queued-but-undelivered DM for a friend, if any (for the Phase 5 dispatch loop)."""
+    rec = _load(str(discord_id))
+    return (rec or {}).get("pending_dm")
+
+
+def mark_dm_delivered(discord_id: str) -> dict:
+    """Record that the friend's DM landed; clears any pending_dm queue entry."""
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    rec["dm_delivered"] = True
+    rec.pop("pending_dm", None)
+    _save(rec)
+    return {"ok": True, "dm_delivered": True}
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
