@@ -1409,6 +1409,7 @@ function layoutPadi() {
   fg.graphData().nodes.forEach(n => {
     if (n.padiControl) { n.__lane = n.padiLaneIndex; return; }
     if (n.rail) { n.__lane = undefined; return; }
+    if (n.type === 'tool') { n.__lane = 3; return; }   // tools float around their bundle (physics), not bucketed into the row
     const li = LANE_INDEX[String(LANE_Y[n.type])] ?? 2;
     n.__lane = li;
     buckets[li].push(n);
@@ -1440,6 +1441,30 @@ function layoutPadi() {
       node.fx = undefined; node.fy = undefined;
     });
   });
+
+  // Seed each tool near its bundle (resolved from the contains link) so the physics
+  // starts as a tight cloud, not from the origin. Tools aren't laned — applyForces
+  // gives bundles + tools real charge/link so they settle into an organic blob.
+  {
+    const byId = {}; fg.graphData().nodes.forEach(n => byId[n.id] = n);
+    const groups = {};
+    fg.graphData().links.forEach(l => {
+      if (l.kind !== 'contains') return;
+      const s = byId[lid(l.source)], t = byId[lid(l.target)];
+      if (s && t && t.type === 'tool' && s.type === 'bundle') {
+        t.__bundle = s;
+        (groups[s.id] = groups[s.id] || []).push(t);
+      }
+    });
+    Object.values(groups).forEach(arr => arr.forEach((t, i) => {
+      t.__ang = (i + 0.5) / arr.length * Math.PI * 2;   // slot in the halo ring
+      t.__rad = 24 + arr.length * 2.4;                  // bigger bundle → wider halo
+      if (!Number.isFinite(t.x)) {
+        t.x = (t.__bundle.__tx || 0) + Math.cos(t.__ang) * t.__rad;
+        t.y = (t.__bundle.__ty || 0) + Math.sin(t.__ang) * t.__rad;
+      }
+    }));
+  }
 
   PADI_LANES.forEach((lane, li) => {
     const controls = fg.graphData().nodes
@@ -1532,18 +1557,24 @@ function padiLaneForce() {
   padiTick++;
   const nodes = padiLaneForce._nodes || [];
   for (const n of nodes) {
-    if (n.rail || n.__tx === undefined) continue;
-    if (n.padiControl) continue;
+    if (n.rail) continue;
     if (n.type === 'tool') {
-      // Tools float around their bundle (held by the `contains` link), not snapped
-      // into a column — only a gentle pull keeps them inside the Tools · Data band.
-      n.vy += (n.__ty - n.y) * 0.015;
+      // tool → its slot in the halo around its bundle (one-sided: the bundle is never moved)
+      const b = n.__bundle;
+      if (b && Number.isFinite(b.x)) {
+        const tx = b.x + Math.cos(n.__ang || 0) * (n.__rad || 30);
+        const ty = b.y + Math.sin(n.__ang || 0) * (n.__rad || 30);
+        n.vx += (tx - n.x) * 0.08;
+        n.vy += (ty - n.y) * 0.08 + Math.sin(padiTick * 0.02 + (n.__ang || 0) * 2) * 0.04;
+      }
       continue;
     }
+    if (n.__tx === undefined) continue;
+    if (n.padiControl) continue;
     const sx = n.padiControl ? 0.35 : 0.12;
     const sy = n.padiControl ? 0.35 : 0.06;
-    n.vx += (n.__tx - n.x) * sx;   // tight horizontal → clean columns
-    n.vy += (n.__ty - n.y) * sy;   // controls stay crisp; agents gently float
+    n.vx += (n.__tx - n.x) * sx;
+    n.vy += (n.__ty - n.y) * sy;
     if (!n.padiControl) n.vy += Math.sin(padiTick * 0.013 + n.__phase) * 0.07;
   }
 }
@@ -1597,8 +1628,11 @@ function applyForces() {
   if (currentLens === 'padi') {
     // No charge/link tug — they'd shove nodes off their even spread (and behind
     // the panel). Positioning + the floaty bob are entirely the lane force's job.
+    // Tools float in an organic blob around their bundle — only tools get charge
+    // (they repel each other for spacing) and the contains-link pulls them in;
+    // agents/bundles/interfaces keep charge 0 so their lanes stay clean + evenly spread.
     if (charge) charge.strength(0);
-    if (link) link.distance(90).strength(0);
+    if (link) link.strength(0);   // PADI positions everything via the lane force (backbone rows + the one-sided tool halo); charge/link stay off so nothing drifts off-lane
     if (center) center.strength(0);   // else it recentres the centroid, sliding the whole sheet off
     fg.d3Force('lane', padiLaneForce);
     fg.d3VelocityDecay(0.55);
