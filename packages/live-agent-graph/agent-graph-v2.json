@@ -1949,7 +1949,7 @@
       "family": "screening-curator",
       "type": "tool",
       "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_schedule) \u2014 Gate B; wraps sr tv schedule",
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_schedule)",
       "gates": {
         "L0": true,
         "L1": true,
@@ -2533,7 +2533,7 @@
   "node_count": 77,
   "link_count": 86,
   "meta": {
-    "generated_at": "2026-06-30T13:53:03.746006+00:00",
+    "generated_at": "2026-06-30T13:58:54.490828+00:00",
     "source": "registry/agents/agents.yaml + shared/components.yaml + clusters/* (all-clusters union)"
   }
 }

@@ -26,9 +26,6 @@
     "agents/ops": {
       "package-name": "forsch-agent-ops"
     },
-    "agents/screening": {
-      "package-name": "forsch-agent-screening"
-    },
     "agents/shelby": {
       "package-name": "forsch-agent-shelby"
     },

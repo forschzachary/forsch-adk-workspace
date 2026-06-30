@@ -295,7 +295,7 @@
       "family": "screening-curator",
       "type": "tool",
       "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_schedule) — Gate B; wraps sr tv schedule",
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_schedule)",
       "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
       "state": "built",
       "reachable": false,
