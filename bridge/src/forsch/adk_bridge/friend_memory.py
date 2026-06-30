@@ -237,3 +237,125 @@ def mark_dm_delivered(discord_id: str) -> dict:
 def _now_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# ── watched requests (Phase 5: proactive notifications) ────────────────────
+# When Huberto requests a movie for a friend, he records a *watch*: the friend's id, the title, and
+# (optionally) the tmdb id. A background loop (request_watcher.py) polls each unnotified watch; when
+# the title becomes watchable it DMs the friend once and flips `notified`. The flag persists in the
+# friend's JSON record, so a restart never re-sends a DM. Each watch is one dict in a per-friend
+# `watched_requests[]` array, keyed by `title` (lower-cased) so re-requesting the same title is a
+# no-op rather than a duplicate watch.
+
+WATCH_STALE_DAYS = 30  # auto-clear a never-fulfilled watch after this long
+
+
+def _watch_key(title: str, tmdb_id: str = "") -> str:
+    return (str(tmdb_id).strip() or title.strip().lower())
+
+
+def add_watched_request(discord_id: str, tmdb_id: str, title: str) -> dict:
+    """Remember that a friend is waiting on a requested title, so Huberto can DM them the moment it
+    lands — no need for the friend to ask again. Call this right after request_movie. Idempotent:
+    re-requesting the same title just refreshes the existing watch."""
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    watches = rec.setdefault("watched_requests", [])
+    key = _watch_key(title, tmdb_id)
+    for w in watches:
+        if _watch_key(w.get("title", ""), w.get("tmdb_id", "")) == key:
+            w["title"] = title
+            if tmdb_id:
+                w["tmdb_id"] = str(tmdb_id)
+            w["notified"] = False  # they re-asked / re-requested — re-arm the watch
+            _save(rec)
+            return {"ok": True, "watching": title, "total": len(watches)}
+    watches.append({
+        "tmdb_id": str(tmdb_id) if tmdb_id else "",
+        "title": title,
+        "requested_at": _now_iso(),
+        "notified": False,
+    })
+    _save(rec)
+    return {"ok": True, "watching": title, "total": len(watches)}
+
+
+def get_watched_requests(discord_id: str, include_notified: bool = False) -> list[dict]:
+    """The titles a friend is waiting on. By default only the un-notified (still-pending) ones."""
+    rec = _load(str(discord_id)) or {}
+    watches = rec.get("watched_requests") or []
+    if include_notified:
+        return list(watches)
+    return [w for w in watches if not w.get("notified")]
+
+
+def mark_watched_request_notified(discord_id: str, title: str, tmdb_id: str = "") -> dict:
+    """Flag a watch as notified once the 'it's ready' DM has gone out — so it's never sent twice."""
+    rec = _load(str(discord_id)) or {"discord_id": str(discord_id), "facts": []}
+    key = _watch_key(title, tmdb_id)
+    hit = False
+    for w in rec.get("watched_requests", []):
+        if _watch_key(w.get("title", ""), w.get("tmdb_id", "")) == key:
+            w["notified"] = True
+            w["notified_at"] = _now_iso()
+            hit = True
+    if hit:
+        _save(rec)
+    return {"ok": hit, "notified": title}
+
+
+def rearm_watched_request(discord_id: str, title: str, tmdb_id: str = "") -> dict:
+    """Un-flag a watch's `notified` (e.g. the 'ready' DM failed to send, so retry next pass)."""
+    rec = _load(str(discord_id))
+    if not rec:
+        return {"ok": False}
+    key = _watch_key(title, tmdb_id)
+    hit = False
+    for w in rec.get("watched_requests", []):
+        if _watch_key(w.get("title", ""), w.get("tmdb_id", "")) == key:
+            w["notified"] = False
+            w.pop("notified_at", None)
+            hit = True
+    if hit:
+        _save(rec)
+    return {"ok": hit}
+
+
+def clear_watched_request(discord_id: str, title: str, tmdb_id: str = "") -> dict:
+    """Drop a watch entirely (fulfilled, cancelled, or gone stale)."""
+    rec = _load(str(discord_id))
+    if not rec:
+        return {"ok": False}
+    key = _watch_key(title, tmdb_id)
+    before = rec.get("watched_requests") or []
+    after = [w for w in before if _watch_key(w.get("title", ""), w.get("tmdb_id", "")) != key]
+    rec["watched_requests"] = after
+    _save(rec)
+    return {"ok": len(after) != len(before), "remaining": len(after)}
+
+
+def all_friend_ids() -> list[str]:
+    """Every known friend's discord id (skips `_`-prefixed bookkeeping files). For the watcher loop."""
+    ids = []
+    for path in _dir().glob("*.json"):
+        if path.name.startswith("_"):
+            continue
+        ids.append(path.stem)
+    return ids
+
+
+def is_watch_stale(watch: dict, now_iso: str | None = None) -> bool:
+    """True if a watch has waited past WATCH_STALE_DAYS without being fulfilled (safe to auto-clear)."""
+    from datetime import datetime, timezone
+    requested = watch.get("requested_at")
+    if not requested:
+        return False
+    try:
+        then = datetime.fromisoformat(requested)
+    except Exception:
+        return False
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    now = datetime.fromisoformat(now_iso) if now_iso else datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return (now - then).days >= WATCH_STALE_DAYS

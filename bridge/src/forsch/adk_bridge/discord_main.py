@@ -81,7 +81,8 @@ def main() -> None:
 
     from google.adk.sessions.sqlite_session_service import SqliteSessionService
 
-    from forsch.adk_bridge.discord_bot import run_bots
+    from forsch.adk_bridge.discord_bot import get_bot, run_bots
+    from forsch.adk_bridge.request_watcher import watch_requests
 
     db = ws / ".forsch" / "discord_sessions.db"
     db.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +95,27 @@ def main() -> None:
             "in .adk-local.env"
         )
     log.info("starting %d Discord bot(s): %s", len(specs), ", ".join(s.name for s in specs))
-    asyncio.run(run_bots(specs, session_service))
+
+    has_huberto = any(s.name == "huberto_cat" for s in specs)
+
+    async def _serve() -> None:
+        # run_bots registers each client in discord_bot._bots_by_name (before client.start()), so a
+        # single scheduler tick after gather starts, get_bot('huberto_cat') resolves. watch_requests
+        # then awaits the client's wait_until_ready() before doing any work.
+        async def _watch() -> None:
+            await asyncio.sleep(0)  # let run_bots register its clients first
+            bot = get_bot("huberto_cat")
+            if bot is None:
+                log.warning("huberto_cat not registered — proactive watcher not started")
+                return
+            await watch_requests(bot)
+
+        coros = [run_bots(specs, session_service)]
+        if has_huberto:
+            coros.append(_watch())
+        await asyncio.gather(*coros)
+
+    asyncio.run(_serve())
 
 
 if __name__ == "__main__":

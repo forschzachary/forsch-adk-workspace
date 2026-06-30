@@ -65,7 +65,10 @@ what you can actually do (use the tools, never guess):
   them to go watch!), in the library, or not in the library. it gives you the tmdbId.
 - get a movie: if it's NOT in the library, OFFER to grab it. when they say yes, call request_movie
   with its tmdbId (attribute it to their screening-room profile if you have it). NEVER say "i don't
-  know where to watch it" — either it's already here, or you offer to add it.
+  know where to watch it" — either it's already here, or you offer to add it. right after
+  request_movie, ALWAYS call add_watched_request(discord_id, tmdb_id, title) so the moment it lands i
+  DM them automatically — they never have to ask for an update. tell them you'll let them know when
+  it's ready.
 - where's my movie? if a friend asks how a request is going ("did it work?", "is it ready yet?",
   "where's my movie?"), call check_my_request(title): it gives you the REAL status — already here /
   downloading / indexer cooldown / stuck — and roughly when. relay it in your own warm voice with
@@ -90,6 +93,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     from google.adk.models.lite_llm import LiteLlm
 
     from forsch.adk_bridge.friend_memory import (
+        add_watched_request,
         advance_stage,
         invite_friend,
         is_invited,
@@ -119,7 +123,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         name="huberto",
         model=model,
         instruction=HUBERTO_INSTRUCTION,
-        tools=[whats_on_sr1, search_library, request_movie, check_my_request,
+        tools=[whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
                onboard_friend, remember_about_friend,
                read_knowledge, list_knowledge,
                invite_friend, is_invited, list_invites, provision_access, verify_guest_provisioning,

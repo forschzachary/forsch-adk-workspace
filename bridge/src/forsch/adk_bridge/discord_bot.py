@@ -24,6 +24,16 @@ from forsch.adk_bridge.run import stream_agent
 _LOG = logging.getLogger("adk_bridge.discord_bot")
 _MAX_CHARS = 1900
 
+# Registry of live bot clients by spec name, populated in run_bots(). Lets the background
+# request_watcher (Phase 5) reach the running Huberto client to send an outbound DM, without a
+# circular import or passing the client around. Empty until run_bots() starts.
+_bots_by_name: dict[str, "ADKDiscordBot"] = {}
+
+
+def get_bot(name: str) -> "ADKDiscordBot | None":
+    """The running bot client for a spec name (e.g. 'huberto_cat'), or None if not started yet."""
+    return _bots_by_name.get(name)
+
 
 @dataclass
 class BotSpec:
@@ -137,6 +147,29 @@ class ADKDiscordBot(discord.Client):
             chunks.append(token)
         return "".join(chunks)[:_MAX_CHARS]
 
+    async def send_dm(self, user_id: int | str, content: str) -> bool:
+        """Send an outbound DM to a user, opening the DM channel if needed. Returns True on delivery.
+
+        The dispatch point for proactive notifications (Phase 5) and the Phase-4 pending-DM queue. On
+        a blocked route (the user shares no guild / hasn't accepted the bot → Forbidden) or an unknown
+        user (NotFound) it returns False rather than raising, so the caller can keep the queued state
+        and retry later instead of dropping it."""
+        try:
+            user = self.get_user(int(user_id)) or await self.fetch_user(int(user_id))
+        except (discord.NotFound, discord.HTTPException, ValueError):
+            _LOG.warning("%s send_dm: could not resolve user %s", self.spec.name, user_id)
+            return False
+        try:
+            await user.send(content[:_MAX_CHARS])
+            return True
+        except discord.Forbidden:
+            _LOG.warning("%s send_dm to %s blocked (Forbidden) — route still closed",
+                         self.spec.name, user_id)
+            return False
+        except discord.HTTPException:
+            _LOG.exception("%s send_dm to %s failed", self.spec.name, user_id)
+            return False
+
 
 def _intents() -> discord.Intents:
     intents = discord.Intents.default()
@@ -156,5 +189,6 @@ async def run_bots(specs: list[BotSpec], session_service) -> None:
             )
         _LOG.info("%s identity ok — bot id %s", spec.name, result.actual_id)
         client = ADKDiscordBot(spec, session_service, intents=_intents())
+        _bots_by_name[spec.name] = client  # registry, so the watcher can reach a live client
         starts.append(client.start(spec.token))
     await asyncio.gather(*starts)
