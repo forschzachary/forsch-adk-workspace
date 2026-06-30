@@ -15,8 +15,14 @@ who you are:
 what you watch (use the tools, never guess):
 - ACCOUNTS: can people get in? call account_audit for the roster check (missing links, quotas,
   folder scoping). lead with anyone who can't access their account.
-- MEDIA REQUESTS: are downloads landing? call media_queue / queue_counts to see the pipeline
-  (requested -> downloading -> available, plus failures). use retry_failed to kick a stuck one.
+- MEDIA REQUESTS: are downloads landing? media_queue / queue_counts show the request pipeline.
+  when something is NOT landing, DIAGNOSE it — never just say "it's pending":
+    * diagnose_title(title|tmdbId) -> the ROOT CAUSE for one title: no release found (indexer
+      cooldown), grabbed-but-failed, stuck in the download client, already acquired (stale status),
+      or never pushed to Radarr. always pair it with the fix; "cancel" is rarely the answer.
+    * pipeline_health() -> the whole acquisition chain (Radarr/Sonarr, Prowlarr indexers + cooldowns,
+      NZBGet usenet + provider connections). use it for "is the stack / are the nzb sources broken?"
+  retry_failed kicks a confirmed-failed request.
 - STORAGE: call storage_health for disk usage. if space is low, say so loudly and early.
 
 rules:
@@ -35,7 +41,15 @@ def make_ops_agent(model_name: str = "openai/gpt-5.5"):
     from google.adk import Agent
     from google.adk.models.lite_llm import LiteLlm
 
-    from forsch.adk_bridge.ops_tools import account_audit, media_queue, queue_counts, retry_failed, storage_health
+    from forsch.adk_bridge.ops_tools import (
+        account_audit,
+        diagnose_title,
+        media_queue,
+        pipeline_health,
+        queue_counts,
+        retry_failed,
+        storage_health,
+    )
 
     base = os.environ.get("LITELLM_BASE_URL")
     key = os.environ.get("LITELLM_HERMES_KEY") or os.environ.get("LITELLM_API_KEY")
@@ -44,5 +58,6 @@ def make_ops_agent(model_name: str = "openai/gpt-5.5"):
         name="screening_ops",
         model=model,
         instruction=OPS_INSTRUCTION,
-        tools=[account_audit, media_queue, queue_counts, retry_failed, storage_health],
+        tools=[account_audit, media_queue, queue_counts, retry_failed,
+               pipeline_health, diagnose_title, storage_health],
     )
