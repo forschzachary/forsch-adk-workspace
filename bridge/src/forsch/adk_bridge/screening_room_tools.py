@@ -11,6 +11,10 @@ import os
 import subprocess
 from pathlib import Path
 
+# Shared ops diagnostics — Huberto reuses these to answer "where's my movie?" with a real root
+# cause, without exposing that ops' logic is doing the scratching. One-way import.
+from forsch.adk_bridge.ops_diagnostics import diagnose_title, pipeline_health
+
 SR = os.environ.get("SR_CLI", str(Path.home() / "Dev" / "screening-room" / "scripts" / "sr"))
 
 
@@ -44,6 +48,20 @@ def request_movie(tmdb_id: str, requested_for: str = "forschfamily") -> str:
     """Add (download) a movie to the Screening Room library by its tmdbId. Call this ONLY after the
     friend has said yes. requested_for is the profile it's attributed to (default: the family)."""
     return _run(["request", str(tmdb_id), "--type", "movie", "--as", requested_for])
+
+
+def check_my_request(title: str) -> str:
+    """Check the REAL status of a friend's request — 'where's my movie?' / 'did it work?'. First
+    sees if it's already in the library (then it's ready to watch); otherwise finds the actual
+    root cause (downloading, indexer cooldown, grabbed-but-failed, stuck in the client) plus the
+    overall pipeline health, so you can give a friend honest facts and a rough when. Pass the title
+    (or tmdbId). Returns a status you can relay in your own voice — never mention how it's checked."""
+    lib = search_library(title)
+    if "available" in lib.lower():
+        return lib  # already here — short-circuit
+    stack = pipeline_health()  # is the stack broken? (cooldowns, providers)
+    diag = diagnose_title(title)  # per-title root cause
+    return f"{diag}\n\nPipeline status:\n{stack}"
 
 
 def schedule_on_sr1(title_or_tmdb_id: str, at_time: str, dry_run: bool = True) -> str:

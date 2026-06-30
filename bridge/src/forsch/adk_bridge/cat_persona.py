@@ -54,6 +54,12 @@ what you can actually do (use the tools, never guess):
 - get a movie: if it's NOT in the library, OFFER to grab it. when they say yes, call request_movie
   with its tmdbId (attribute it to their screening-room profile if you have it). NEVER say "i don't
   know where to watch it" — either it's already here, or you offer to add it.
+- where's my movie? if a friend asks how a request is going ("did it work?", "is it ready yet?",
+  "where's my movie?"), call check_my_request(title): it gives you the REAL status — already here /
+  downloading / indexer cooldown / stuck — and roughly when. relay it in your own warm voice with
+  facts and a rough when; never "i'll check later". also call it right after request_movie so you can
+  tell them what's happening. it scratches the post behind the scenes — never mention checking with
+  anyone or "asking ops"; to the friend it's just you knowing.
 - how it works: when a friend asks how the screening room works (signing in, requesting, SR-1),
   read_knowledge('site-guide') and explain it simply — don't guess.
 
@@ -82,7 +88,12 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     )
     from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
     from forsch.adk_bridge.onboarding_tools import get_access, provision_access, reset_access
-    from forsch.adk_bridge.screening_room_tools import request_movie, search_library, whats_on_sr1
+    from forsch.adk_bridge.screening_room_tools import (
+        check_my_request,
+        request_movie,
+        search_library,
+        whats_on_sr1,
+    )
 
     base = os.environ.get("LITELLM_BASE_URL")
     key = os.environ.get("LITELLM_HERMES_KEY") or os.environ.get("LITELLM_API_KEY")
@@ -91,7 +102,8 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         name="huberto",
         model=model,
         instruction=HUBERTO_INSTRUCTION,
-        tools=[whats_on_sr1, search_library, request_movie, onboard_friend, remember_about_friend,
+        tools=[whats_on_sr1, search_library, request_movie, check_my_request,
+               onboard_friend, remember_about_friend,
                read_knowledge, list_knowledge,
                invite_friend, is_invited, list_invites, provision_access, get_access, reset_access,
                advance_stage, onboarding_status],

@@ -10,6 +10,20 @@ import os
 import subprocess
 from pathlib import Path
 
+# pipeline_health + diagnose_title live in the shared diagnostics module so Huberto can reuse them
+# (re-exported here so make_ops_agent's tool list and any callers are unchanged).
+from forsch.adk_bridge.ops_diagnostics import diagnose_title, pipeline_health
+
+__all__ = [
+    "account_audit",
+    "media_queue",
+    "queue_counts",
+    "retry_failed",
+    "pipeline_health",
+    "diagnose_title",
+    "storage_health",
+]
+
 SR = os.environ.get("SR_CLI", str(Path.home() / "Dev" / "screening-room" / "scripts" / "sr"))
 
 
@@ -46,24 +60,6 @@ def queue_counts() -> str:
 def retry_failed(request_id: str) -> str:
     """Retry a failed media request by its id. Only after you've confirmed it actually failed."""
     return _sr(["queue", "retry", str(request_id), "--yes"])
-
-
-def pipeline_health() -> str:
-    """Deep acquisition-pipeline health — the whole download chain: Radarr/Sonarr, the Prowlarr
-    indexers (incl. cooldowns / expired VIP), and the NZBGet usenet client + provider connections.
-    Use this to answer 'is the stack or the NZB sources broken?' when downloads aren't landing."""
-    return _sr(["stack"])
-
-
-def diagnose_title(title_or_tmdb_id: str, media_type: str = "") -> str:
-    """Find the ROOT CAUSE for why one specific title isn't downloading — maps it through
-    Radarr/Sonarr -> indexers and reports the cause + fix: no release found (indexer cooldown),
-    grabbed-but-failed, stuck in the download client, already acquired (stale Jellyseerr status),
-    or never pushed to Radarr. Pass a tmdbId or a title; media_type is 'movie' or 'tv' (optional)."""
-    args = ["diagnose", str(title_or_tmdb_id)]
-    if media_type in ("movie", "tv"):
-        args += ["--type", media_type]
-    return _sr(args)
 
 
 def storage_health() -> str:
