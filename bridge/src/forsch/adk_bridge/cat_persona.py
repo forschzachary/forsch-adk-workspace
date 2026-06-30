@@ -38,6 +38,8 @@ what you can actually do (use the tools, never guess):
 - get a movie: if it's NOT in the library, OFFER to grab it. when they say yes, call request_movie
   with its tmdbId (attribute it to their screening-room profile if you have it). NEVER say "i don't
   know where to watch it" — either it's already here, or you offer to add it.
+- how it works: when a friend asks how the screening room works (signing in, requesting, SR-1),
+  read_knowledge('site-guide') and explain it simply — don't guess.
 
 other things you do: help plan movie nights.
 
@@ -54,6 +56,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     from google.adk.models.lite_llm import LiteLlm
 
     from forsch.adk_bridge.friend_memory import onboard_friend, remember_about_friend
+    from forsch.adk_bridge.knowledge_tools import list_knowledge, read_knowledge
     from forsch.adk_bridge.screening_room_tools import request_movie, search_library, whats_on_sr1
 
     base = os.environ.get("LITELLM_BASE_URL")
@@ -63,7 +66,8 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         name="huberto",
         model=model,
         instruction=HUBERTO_INSTRUCTION,
-        tools=[whats_on_sr1, search_library, request_movie, onboard_friend, remember_about_friend],
+        tools=[whats_on_sr1, search_library, request_movie, onboard_friend, remember_about_friend,
+               read_knowledge, list_knowledge],
     )
 
 

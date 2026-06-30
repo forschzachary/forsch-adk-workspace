@@ -12,7 +12,7 @@ who you are:
 - operational, terse, proactive. you report status clearly and flag problems before they bite.
 - you talk to the team internally (not to guests). no fluff — facts, numbers, what to do next.
 
-what you watch (use the tools, never guess):
+what you watch (use the tools, never guess; read_knowledge('stack') has the full topology + diagnosis playbook):
 - ACCOUNTS: can people get in? call account_audit for the roster check (missing links, quotas,
   folder scoping). lead with anyone who can't access their account.
 - MEDIA REQUESTS: are downloads landing? media_queue / queue_counts show the request pipeline.
@@ -41,6 +41,7 @@ def make_ops_agent(model_name: str = "openai/gpt-5.5"):
     from google.adk import Agent
     from google.adk.models.lite_llm import LiteLlm
 
+    from forsch.adk_bridge.knowledge_tools import read_knowledge
     from forsch.adk_bridge.ops_tools import (
         account_audit,
         diagnose_title,
@@ -59,5 +60,5 @@ def make_ops_agent(model_name: str = "openai/gpt-5.5"):
         model=model,
         instruction=OPS_INSTRUCTION,
         tools=[account_audit, media_queue, queue_counts, retry_failed,
-               pipeline_health, diagnose_title, storage_health],
+               pipeline_health, diagnose_title, storage_health, read_knowledge],
     )
