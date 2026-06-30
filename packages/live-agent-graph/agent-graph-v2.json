@@ -14,10 +14,10 @@
         "L0": false,
         "L1": false,
         "L2": false,
-        "L3": true
+        "L3": false
       },
-      "state": "building",
-      "reachable": true,
+      "state": "blank",
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -41,10 +41,10 @@
         "L0": false,
         "L1": false,
         "L2": false,
-        "L3": true
+        "L3": false
       },
-      "state": "building",
-      "reachable": true,
+      "state": "blank",
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -68,10 +68,10 @@
         "L0": false,
         "L1": false,
         "L2": false,
-        "L3": true
+        "L3": false
       },
-      "state": "building",
-      "reachable": true,
+      "state": "blank",
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -79,6 +79,41 @@
         "emits": [
           "response",
           "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:huberto",
+      "name": "huberto",
+      "kind": "agent",
+      "shared": false,
+      "type": "agent",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/cat_persona.py",
+      "model": "gpt-5.5",
+      "discord_channels": [
+        "DM"
+      ],
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": true
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "message:DM",
+          "instruction"
+        ],
+        "emits": [
+          "response",
+          "tool_call",
+          "tool:whats_on_sr1",
+          "tool:search_library",
+          "tool:request_movie"
         ]
       },
       "role": "plain"
@@ -98,7 +133,7 @@
         "L3": true
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -113,35 +148,40 @@
       "role": "builder"
     },
     {
-      "id": "agent:screening",
-      "name": "screening",
+      "id": "agent:screening-ops",
+      "name": "screening_ops",
       "kind": "agent",
       "shared": false,
       "type": "agent",
-      "artifact": "agents/screening/src/forsch/agent_screening/agent.py",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_persona.py",
       "model": "gpt-5.5",
+      "discord_channels": [
+        "#team-social"
+      ],
       "gates": {
-        "L0": false,
+        "L0": true,
         "L1": true,
-        "L2": false,
+        "L2": true,
         "L3": true
       },
-      "state": "building",
-      "reachable": true,
+      "state": "built",
+      "reachable": false,
       "contract": {
         "accepts": [
+          "message:#team-social",
           "instruction"
         ],
         "emits": [
           "response",
           "tool_call",
-          "tool:search_movies",
-          "tool:get_movie_details",
-          "tool:get_similar_movies",
-          "tool:add_to_watchlist",
-          "tool:get_watchlist",
-          "tool:log_watched",
-          "tool:get_watched"
+          "tool:account_audit",
+          "tool:media_queue",
+          "tool:queue_counts",
+          "tool:retry_failed",
+          "tool:pipeline_health",
+          "tool:diagnose_title",
+          "tool:storage_health"
         ]
       },
       "role": "plain"
@@ -158,10 +198,10 @@
         "L0": false,
         "L1": true,
         "L2": false,
-        "L3": true
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -193,10 +233,10 @@
         "L0": false,
         "L1": false,
         "L2": false,
-        "L3": true
+        "L3": false
       },
-      "state": "building",
-      "reachable": true,
+      "state": "blank",
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -220,10 +260,10 @@
         "L0": false,
         "L1": true,
         "L2": false,
-        "L3": true
+        "L3": false
       },
       "state": "building",
-      "reachable": true,
+      "reachable": false,
       "contract": {
         "accepts": [
           "instruction"
@@ -398,6 +438,58 @@
       "external": true
     },
     {
+      "id": "chan:#team-social",
+      "name": "#team-social",
+      "kind": "intake",
+      "shared": false,
+      "type": "intake",
+      "native": true,
+      "artifact": "Discord channel config (OPS_CHANNEL_ID)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "chan:DM",
+      "name": "DM (friend)",
+      "kind": "intake",
+      "shared": false,
+      "type": "intake",
+      "native": true,
+      "artifact": "Discord DM (Huberto)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": false,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "external_message"
+        ],
+        "emits": [
+          "routed_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
       "id": "cred:cloudflare-global",
       "name": "Cloudflare (global)",
       "kind": "database",
@@ -507,17 +599,44 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": true,
-        "L3": true
+        "L2": false,
+        "L3": false
       },
-      "state": "built",
-      "reachable": true,
+      "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "routed_message"
         ],
         "emits": [
           "agent_message"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:account_audit",
+      "name": "account_audit",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-ops",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def account_audit)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
         ]
       },
       "role": "plain"
@@ -575,13 +694,13 @@
       "role": "plain"
     },
     {
-      "id": "tool:add_to_watchlist",
-      "name": "add_to_watchlist",
+      "id": "tool:check_service_health",
+      "name": "check_service_health",
       "kind": "tool",
-      "shared": false,
-      "family": "agent-specific",
+      "shared": true,
+      "family": "terminal",
       "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def add_to_watchlist)",
+      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def check_service_health)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -601,20 +720,21 @@
       "role": "plain"
     },
     {
-      "id": "tool:check_service_health",
-      "name": "check_service_health",
+      "id": "tool:diagnose_title",
+      "name": "diagnose_title",
       "kind": "tool",
-      "shared": true,
-      "family": "terminal",
+      "shared": false,
+      "family": "screening-ops",
       "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def check_service_health)",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def diagnose_title)",
       "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
+        "L0": true,
+        "L1": true,
+        "L2": true,
         "L3": false
       },
-      "state": "blank",
+      "state": "built",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -712,110 +832,6 @@
       "family": "household",
       "type": "tool",
       "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_grocery_log)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_movie_details",
-      "name": "get_movie_details",
-      "kind": "tool",
-      "shared": false,
-      "family": "agent-specific",
-      "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_movie_details)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_similar_movies",
-      "name": "get_similar_movies",
-      "kind": "tool",
-      "shared": false,
-      "family": "agent-specific",
-      "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_similar_movies)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_watched",
-      "name": "get_watched",
-      "kind": "tool",
-      "shared": false,
-      "family": "agent-specific",
-      "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_watched)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:get_watchlist",
-      "name": "get_watchlist",
-      "kind": "tool",
-      "shared": false,
-      "family": "agent-specific",
-      "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_watchlist)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -991,20 +1007,75 @@
       "role": "plain"
     },
     {
-      "id": "tool:log_watched",
-      "name": "log_watched",
+      "id": "tool:media_queue",
+      "name": "media_queue",
       "kind": "tool",
       "shared": false,
-      "family": "agent-specific",
+      "family": "screening-ops",
       "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def log_watched)",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def media_queue)",
       "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
+        "L0": true,
+        "L1": true,
+        "L2": true,
         "L3": false
       },
-      "state": "blank",
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:pipeline_health",
+      "name": "pipeline_health",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-ops",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def pipeline_health)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:queue_counts",
+      "name": "queue_counts",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-ops",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def queue_counts)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -1069,20 +1140,102 @@
       "role": "plain"
     },
     {
-      "id": "tool:search_movies",
-      "name": "search_movies",
+      "id": "tool:request_movie",
+      "name": "request_movie",
       "kind": "tool",
       "shared": false,
-      "family": "agent-specific",
+      "family": "screening",
       "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def search_movies)",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py (def request_movie)",
       "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
+        "L0": true,
+        "L1": true,
+        "L2": true,
         "L3": false
       },
-      "state": "blank",
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:retry_failed",
+      "name": "retry_failed",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-ops",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def retry_failed)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:search_library",
+      "name": "search_library",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py (def search_library)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:storage_health",
+      "name": "storage_health",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-ops",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def storage_health)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -1109,6 +1262,33 @@
         "L3": false
       },
       "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "tool_call"
+        ],
+        "emits": [
+          "tool_result"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "tool:whats_on_sr1",
+      "name": "whats_on_sr1",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py (def whats_on_sr1)",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -1156,11 +1336,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": true,
+        "L2": false,
         "L3": false
       },
-      "state": "built",
-      "reachable": true,
+      "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "user_input"
@@ -1181,11 +1361,11 @@
       "gates": {
         "L0": true,
         "L1": true,
-        "L2": true,
+        "L2": false,
         "L3": false
       },
-      "state": "built",
-      "reachable": true,
+      "state": "building",
+      "reachable": false,
       "contract": {
         "accepts": [
           "user_input"
@@ -1209,6 +1389,26 @@
       "kind": "wears"
     },
     {
+      "source": "agent:huberto",
+      "target": "chan:DM",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:huberto",
+      "target": "tool:request_movie",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:huberto",
+      "target": "tool:search_library",
+      "kind": "uses"
+    },
+    {
+      "source": "agent:huberto",
+      "target": "tool:whats_on_sr1",
+      "kind": "uses"
+    },
+    {
       "source": "agent:ops",
       "target": "tool:get_crm_health_snapshot",
       "kind": "uses"
@@ -1219,38 +1419,43 @@
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:add_to_watchlist",
+      "source": "agent:screening-ops",
+      "target": "chan:#team-social",
+      "kind": "listens"
+    },
+    {
+      "source": "agent:screening-ops",
+      "target": "tool:account_audit",
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:get_movie_details",
+      "source": "agent:screening-ops",
+      "target": "tool:diagnose_title",
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:get_similar_movies",
+      "source": "agent:screening-ops",
+      "target": "tool:media_queue",
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:get_watched",
+      "source": "agent:screening-ops",
+      "target": "tool:pipeline_health",
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:get_watchlist",
+      "source": "agent:screening-ops",
+      "target": "tool:queue_counts",
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:log_watched",
+      "source": "agent:screening-ops",
+      "target": "tool:retry_failed",
       "kind": "uses"
     },
     {
-      "source": "agent:screening",
-      "target": "tool:search_movies",
+      "source": "agent:screening-ops",
+      "target": "tool:storage_health",
       "kind": "uses"
     },
     {
@@ -1374,10 +1579,10 @@
       "kind": "requires"
     }
   ],
-  "node_count": 45,
-  "link_count": 35,
+  "node_count": 51,
+  "link_count": 40,
   "meta": {
-    "generated_at": "2026-06-28T19:57:11.680826+00:00",
+    "generated_at": "2026-06-30T04:42:21.063210+00:00",
     "source": "registry/agents/agents.yaml + shared/components.yaml + clusters/* (all-clusters union)"
   }
 }
