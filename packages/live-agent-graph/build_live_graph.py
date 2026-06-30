@@ -828,6 +828,21 @@ if cap_file.exists():
     except Exception:
         pass
 
+# ── Derive the NATIVE bots from the bridge code (parity: the map IS the code) ──
+# The native ScreeningRoom bots are no longer hand-declared in capabilities.json; graph_manifest
+# reads the bridge's own definitions, so deleting a bot/tool from the bridge removes it from the map.
+try:
+    _bridge_src = SPIKE_DIR.parents[1] / "bridge" / "src"
+    if str(_bridge_src) not in sys.path:
+        sys.path.insert(0, str(_bridge_src))
+    from forsch.adk_bridge.graph_manifest import native_graph
+
+    _ng = native_graph()
+    extra_nodes = extra_nodes + _ng["nodes"]
+    extra_links = extra_links + _ng["links"]
+except Exception as _e:  # noqa: BLE001 — surface but don't crash the whole graph build
+    print("WARN: native_graph() unavailable (%s) — native bots omitted from the graph" % _e, file=sys.stderr)
+
 all_nodes = sorted(
     list(nodes.values()) + extra_nodes,
     key=lambda n: str(n.get("id", "")),

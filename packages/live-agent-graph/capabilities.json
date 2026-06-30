@@ -1,10 +1,9 @@
 {
   "version": 2,
-  "_comment": "Single source of truth for cross-cutting 'rail' dependencies AND the NATIVE ScreeningRoom bots. Read by BOTH index.html (runtime merge) and build_live_graph.py (manifest merge) so the rail can never drift from the manifest. Nodes here are merged verbatim and are NOT touched by `forsch build` — that is exactly why the native (non-Factory) bots live here. Link targets must reference node ids that exist in agent-graph-v2.json (or here).",
+  "_comment": "External rails only. The NATIVE ScreeningRoom bots (huberto/ops/curator + their tools/channels/bundles/edges) are now DERIVED from the bridge code via forsch.adk_bridge.graph_manifest.native_graph() \u2014 see build_live_graph.py. Delete a bot/tool from the bridge and it disappears from the map; this file no longer declares them.",
   "_meta": {
-    "description": "NATIVE BOTS — Huberto + screening_ops + (optional) curator. NOT Factory-generated. Preserve across forsch build. DO NOT DELETE.",
-    "last_review": "2026-06-30",
-    "native_source": "bridge/src/forsch/adk_bridge/ (discord_main.py launches them; cat_persona.py + ops_persona.py + curator_persona.py define them; curator runs only when CURATOR_DISCORD_BOT_TOKEN is set)"
+    "description": "External rail/capability dependencies (Supabase/Cloudflare/Railway/Ollama/local-mac) \u2014 genuinely declarative (not code, can't be derived). Native bots are derived; see graph_manifest.py.",
+    "last_review": "2026-06-30"
   },
   "nodes": [
     {
@@ -13,10 +12,22 @@
       "kind": "capability",
       "type": "capability",
       "artifact": "external dependency (LMCP host bridge)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": true
+      },
       "state": "built",
       "reachable": false,
-      "contract": { "accepts": ["request"], "emits": ["host_access"] },
+      "contract": {
+        "accepts": [
+          "request"
+        ],
+        "emits": [
+          "host_access"
+        ]
+      },
       "role": "plain",
       "rail": "left",
       "external": true
@@ -27,10 +38,22 @@
       "kind": "capability",
       "type": "capability",
       "artifact": "external dependency (local relay -> Ollama Cloud)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": true
+      },
       "state": "built",
       "reachable": false,
-      "contract": { "accepts": ["request"], "emits": ["completion"] },
+      "contract": {
+        "accepts": [
+          "request"
+        ],
+        "emits": [
+          "completion"
+        ]
+      },
       "role": "plain",
       "rail": "left",
       "external": true
@@ -41,10 +64,22 @@
       "kind": "capability",
       "type": "capability",
       "artifact": "external dependency",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": true
+      },
       "state": "built",
       "reachable": false,
-      "contract": { "accepts": ["request"], "emits": ["host"] },
+      "contract": {
+        "accepts": [
+          "request"
+        ],
+        "emits": [
+          "host"
+        ]
+      },
       "role": "plain",
       "rail": "left",
       "external": true
@@ -55,10 +90,22 @@
       "kind": "capability",
       "type": "capability",
       "artifact": "external dependency",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": true
+      },
       "state": "built",
       "reachable": false,
-      "contract": { "accepts": ["request"], "emits": ["edge"] },
+      "contract": {
+        "accepts": [
+          "request"
+        ],
+        "emits": [
+          "edge"
+        ]
+      },
       "role": "plain",
       "rail": "left",
       "external": true
@@ -69,480 +116,42 @@
       "kind": "capability",
       "type": "capability",
       "artifact": "external dependency",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": true
+      },
       "state": "built",
       "reachable": false,
-      "contract": { "accepts": ["query"], "emits": ["data"] },
+      "contract": {
+        "accepts": [
+          "query"
+        ],
+        "emits": [
+          "data"
+        ]
+      },
       "role": "plain",
       "rail": "left",
       "external": true
-    },
-
-    {
-      "id": "agent:huberto",
-      "name": "huberto",
-      "kind": "agent",
-      "shared": false,
-      "type": "agent",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/cat_persona.py",
-      "model": "gpt-5.5",
-      "discord_channels": ["DM"],
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": ["message:DM", "instruction"],
-        "emits": ["response", "tool_call", "tool:whats_on_sr1", "tool:search_library", "tool:request_movie"]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "agent:screening-ops",
-      "name": "screening_ops",
-      "kind": "agent",
-      "shared": false,
-      "type": "agent",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_persona.py",
-      "model": "gpt-5.5",
-      "discord_channels": ["#team-social"],
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": true },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": ["message:#team-social", "instruction"],
-        "emits": ["response", "tool_call", "tool:account_audit", "tool:media_queue", "tool:queue_counts", "tool:retry_failed", "tool:pipeline_health", "tool:diagnose_title", "tool:storage_health"]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "agent:curator",
-      "name": "screening_curator",
-      "kind": "agent",
-      "shared": false,
-      "type": "agent",
-      "native": true,
-      "optional": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_persona.py",
-      "model": "gpt-5.5",
-      "discord_channels": ["#screening-tv"],
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": ["message:#screening-tv", "instruction"],
-        "emits": ["response", "tool_call", "tool:tv_now", "tool:tv_guide", "tool:tv_reprogram", "tool:tv_schedule", "tool:bumps", "tool:playlist", "tool:events", "tool:suggest_to_main"]
-      },
-      "role": "plain"
-    },
-
-    {
-      "id": "bundle:huberto:sr1_concierge",
-      "name": "sr1_concierge",
-      "kind": "bundle",
-      "shared": false,
-      "type": "bundle",
-      "native": true,
-      "bundle_key": "sr1_concierge",
-      "for_agent": "huberto",
-      "description": "SR1 friend concierge: what's-on, library search, movie requests.",
-      "tools_count": 3,
-      "inactive_tools": [],
-      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["agent_message"], "emits": ["tool_call"] },
-      "role": "plain"
-    },
-    {
-      "id": "bundle:screening-ops:screening_media_pipeline",
-      "name": "screening_media_pipeline",
-      "kind": "bundle",
-      "shared": false,
-      "type": "bundle",
-      "native": true,
-      "bundle_key": "screening_media_pipeline",
-      "for_agent": "screening-ops",
-      "description": "Screening media pipeline: account audit, queue health/counts, retries, title diagnosis, storage health.",
-      "tools_count": 7,
-      "inactive_tools": [],
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["agent_message"], "emits": ["tool_call"] },
-      "role": "plain"
-    },
-    {
-      "id": "bundle:curator:sr1_curation",
-      "name": "sr1_curation",
-      "kind": "bundle",
-      "shared": false,
-      "type": "bundle",
-      "native": true,
-      "optional": true,
-      "bundle_key": "sr1_curation",
-      "for_agent": "curator",
-      "description": "SR1 channel curation: now/guide/schedule/reprogram, bumps, playlist, events, suggest-to-main.",
-      "tools_count": 8,
-      "inactive_tools": [],
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["agent_message"], "emits": ["tool_call"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:whats_on_sr1",
-      "name": "whats_on_sr1",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py (def whats_on_sr1)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:search_library",
-      "name": "search_library",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py (def search_library)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:request_movie",
-      "name": "request_movie",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py (def request_movie)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:account_audit",
-      "name": "account_audit",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def account_audit)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:media_queue",
-      "name": "media_queue",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def media_queue)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:queue_counts",
-      "name": "queue_counts",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def queue_counts)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:retry_failed",
-      "name": "retry_failed",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def retry_failed)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:pipeline_health",
-      "name": "pipeline_health",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def pipeline_health)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:diagnose_title",
-      "name": "diagnose_title",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def diagnose_title)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:storage_health",
-      "name": "storage_health",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-ops",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py (def storage_health)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:tv_schedule",
-      "name": "tv_schedule",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_schedule)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:tv_now",
-      "name": "tv_now",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_now)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:tv_guide",
-      "name": "tv_guide",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_guide)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:tv_reprogram",
-      "name": "tv_reprogram",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_reprogram)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:bumps",
-      "name": "bumps_add/list/remove",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def bumps_add/bumps_list/bumps_remove)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:playlist",
-      "name": "playlist_add/list/remove",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def playlist_add/playlist_list/playlist_remove)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:events",
-      "name": "events_list/create/cancel",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def events_list/events_create/events_cancel)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-    {
-      "id": "tool:suggest_to_main",
-      "name": "suggest_to_main",
-      "kind": "tool",
-      "shared": false,
-      "family": "screening-curator",
-      "type": "tool",
-      "native": true,
-      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def suggest_to_main)",
-      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
-      "role": "plain"
-    },
-
-    {
-      "id": "chan:DM",
-      "name": "DM (friend)",
-      "kind": "intake",
-      "shared": false,
-      "type": "intake",
-      "native": true,
-      "artifact": "Discord DM (Huberto)",
-      "gates": { "L0": true, "L1": true, "L2": false, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["external_message"], "emits": ["routed_message"] },
-      "role": "plain"
-    },
-    {
-      "id": "chan:#team-social",
-      "name": "#team-social",
-      "kind": "intake",
-      "shared": false,
-      "type": "intake",
-      "native": true,
-      "artifact": "Discord channel config (OPS_CHANNEL_ID)",
-      "gates": { "L0": true, "L1": true, "L2": false, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["external_message"], "emits": ["routed_message"] },
-      "role": "plain"
-    },
-    {
-      "id": "chan:#screening-tv",
-      "name": "#screening-tv",
-      "kind": "intake",
-      "shared": false,
-      "type": "intake",
-      "native": true,
-      "optional": true,
-      "artifact": "Discord channel config (TV_CHANNEL_ID) — curator; optional third bot",
-      "gates": { "L0": true, "L1": true, "L2": false, "L3": false },
-      "state": "built",
-      "reachable": false,
-      "contract": { "accepts": ["external_message"], "emits": ["routed_message"] },
-      "role": "plain"
     }
   ],
   "links": [
-    { "source": "tool:execute_bash_command", "target": "cap:local-mac-access", "kind": "requires" },
-    { "source": "tool:read_host_file", "target": "cap:local-mac-access", "kind": "requires" },
-    { "source": "tool:write_host_file", "target": "cap:local-mac-access", "kind": "requires" },
-
-    { "source": "agent:huberto", "target": "bundle:huberto:sr1_concierge", "kind": "uses-bundle" },
-    { "source": "bundle:huberto:sr1_concierge", "target": "tool:whats_on_sr1", "kind": "contains" },
-    { "source": "bundle:huberto:sr1_concierge", "target": "tool:search_library", "kind": "contains" },
-    { "source": "bundle:huberto:sr1_concierge", "target": "tool:request_movie", "kind": "contains" },
-    { "source": "agent:huberto", "target": "chan:DM", "kind": "listens" },
-
-    { "source": "agent:screening-ops", "target": "bundle:screening-ops:screening_media_pipeline", "kind": "uses-bundle" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:account_audit", "kind": "contains" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:media_queue", "kind": "contains" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:queue_counts", "kind": "contains" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:retry_failed", "kind": "contains" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:pipeline_health", "kind": "contains" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:diagnose_title", "kind": "contains" },
-    { "source": "bundle:screening-ops:screening_media_pipeline", "target": "tool:storage_health", "kind": "contains" },
-    { "source": "agent:screening-ops", "target": "chan:#team-social", "kind": "listens" },
-
-    { "source": "agent:curator", "target": "bundle:curator:sr1_curation", "kind": "uses-bundle" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:tv_now", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:tv_guide", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:tv_reprogram", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:tv_schedule", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:bumps", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:playlist", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:events", "kind": "contains" },
-    { "source": "bundle:curator:sr1_curation", "target": "tool:suggest_to_main", "kind": "contains" },
-    { "source": "agent:curator", "target": "chan:#screening-tv", "kind": "listens" },
-
-    { "source": "agent:huberto", "target": "agent:screening-ops", "kind": "delegates" },
-    { "source": "agent:huberto", "target": "agent:curator", "kind": "delegates" }
+    {
+      "source": "tool:execute_bash_command",
+      "target": "cap:local-mac-access",
+      "kind": "requires"
+    },
+    {
+      "source": "tool:read_host_file",
+      "target": "cap:local-mac-access",
+      "kind": "requires"
+    },
+    {
+      "source": "tool:write_host_file",
+      "target": "cap:local-mac-access",
+      "kind": "requires"
+    }
   ]
 }

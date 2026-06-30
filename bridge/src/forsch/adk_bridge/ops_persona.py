@@ -34,13 +34,9 @@ be brief, be precise, be proactive.
 """
 
 
-def make_ops_agent(model_name: str = "openai/gpt-5.5"):
-    """Build the ops lead as an ADK agent on the gateway, with the operational tools."""
-    import os
-
-    from google.adk import Agent
-    from google.adk.models.lite_llm import LiteLlm
-
+def ops_toolset():
+    """The ops lead's tools. Single source of truth — read by BOTH make_ops_agent (runtime) and the
+    graph manifest (the map). Light imports only (no google.adk), so the graph builder can read it."""
     from forsch.adk_bridge.knowledge_tools import read_knowledge
     from forsch.adk_bridge.ops_tools import (
         account_audit,
@@ -51,6 +47,16 @@ def make_ops_agent(model_name: str = "openai/gpt-5.5"):
         retry_failed,
         storage_health,
     )
+    return [account_audit, media_queue, queue_counts, retry_failed,
+            pipeline_health, diagnose_title, storage_health, read_knowledge]
+
+
+def make_ops_agent(model_name: str = "openai/gpt-5.5"):
+    """Build the ops lead as an ADK agent on the gateway, with the operational tools."""
+    import os
+
+    from google.adk import Agent
+    from google.adk.models.lite_llm import LiteLlm
 
     base = os.environ.get("LITELLM_BASE_URL")
     key = os.environ.get("LITELLM_HERMES_KEY") or os.environ.get("LITELLM_API_KEY")
@@ -59,6 +65,5 @@ def make_ops_agent(model_name: str = "openai/gpt-5.5"):
         name="screening_ops",
         model=model,
         instruction=OPS_INSTRUCTION,
-        tools=[account_audit, media_queue, queue_counts, retry_failed,
-               pipeline_health, diagnose_title, storage_health, read_knowledge],
+        tools=ops_toolset(),
     )

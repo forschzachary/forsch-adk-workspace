@@ -124,13 +124,13 @@ it (you might mention you're scratching the post while you work). let friends go
 """
 
 
-def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
-    """Build the Huberto persona as an ADK agent on the gateway, with all his tools."""
-    import os
+def huberto_toolset():
+    """Huberto's OWN tools (NOT the A2A delegate tools — those come from the a2a registry).
 
-    from google.adk import Agent
-    from google.adk.models.lite_llm import LiteLlm
-
+    Single source of truth for what huberto can do: read by BOTH make_huberto_agent (runtime) and
+    the graph manifest (the map), so the cockpit can never show a tool he doesn't actually have.
+    Light imports only (no google.adk / a2a), so it's safe to read from the graph builder.
+    """
     from forsch.adk_bridge.audit_log import audit_read_admin
     from forsch.adk_bridge.friend_memory import (
         add_watched_request,
@@ -164,6 +164,24 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         search_library,
         whats_on_sr1,
     )
+    return [whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
+            schedule_on_sr1, announce_sr1_pick,
+            onboard_friend, remember_about_friend,
+            read_knowledge, list_knowledge,
+            invite_friend_admin, is_invited, list_invites, provision_access, verify_guest_provisioning,
+            get_access, reset_access, resend_login_dm,
+            suspend_friend_account, resume_friend_account, offboard_friend,
+            jellyfin_activation_status, friend_activation_status, record_activation,
+            advance_stage, onboarding_status, audit_read_admin]
+
+
+def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
+    """Build the Huberto persona as an ADK agent on the gateway, with all his tools."""
+    import os
+
+    from google.adk import Agent
+    from google.adk.models.lite_llm import LiteLlm
+
     from forsch.adk_bridge.a2a_delegation import delegate_tools
 
     base = os.environ.get("LITELLM_BASE_URL")
@@ -173,16 +191,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         name="huberto",
         model=model,
         instruction=HUBERTO_INSTRUCTION,
-        tools=[whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
-               schedule_on_sr1, announce_sr1_pick,
-               onboard_friend, remember_about_friend,
-               read_knowledge, list_knowledge,
-               invite_friend_admin, is_invited, list_invites, provision_access, verify_guest_provisioning,
-               get_access, reset_access, resend_login_dm,
-               suspend_friend_account, resume_friend_account, offboard_friend,
-               jellyfin_activation_status, friend_activation_status, record_activation,
-               advance_stage, onboarding_status, audit_read_admin,
-               *delegate_tools()],
+        tools=[*huberto_toolset(), *delegate_tools()],
     )
 
 
