@@ -1621,11 +1621,14 @@ function drawPadiLink(link, ctx, scale) {
   const s = link.source, t = link.target;
   if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
   const col = padiLinkColor(link);
-  ctx.lineWidth = 1.1 / scale;
+  const delegates = link.kind === 'delegates';   // a real agent→agent handoff (Huberto consults Ops over A2A)
+  ctx.lineWidth = (delegates ? 1.8 : 1.1) / scale;
   ctx.strokeStyle = col;
+  if (delegates) ctx.setLineDash([6 / scale, 4 / scale]);   // dashed: a relationship, not structural plumbing
   // Rail or same-lane links: a plain straight line.
   if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
     ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    ctx.setLineDash([]);
     return;
   }
   const upper = s.__lane < t.__lane ? s : t;   // smaller index = higher row
@@ -1649,8 +1652,10 @@ function drawPadiLink(link, ctx, scale) {
   ctx.lineWidth = 1.5 / scale;
   ctx.strokeStyle = '#0d1117';
   ctx.stroke();
+  ctx.setLineDash([]);
 }
 function padiLinkColor(l) {
+  if (l.kind === 'delegates') return 'rgba(212,165,116,0.85)';   // delegation: warm + visible (Huberto → Ops over A2A)
   if (l.kind === 'depends-on') return 'rgba(165,214,255,0.45)';
   if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.45)';
   return 'rgba(139,160,184,0.5)';

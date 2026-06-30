@@ -12,8 +12,9 @@ dependencies = [
     "forsch-agent-assistant>=0.1.0",
     "forsch-agent-build>=0.1.0",
     "forsch-adk-components>=0.1.0",
-    "google-adk[extensions]>=2.3.0",
+    "google-adk[extensions,a2a]>=2.3.0",
     "discord.py>=2.4",
+    "uvicorn>=0.30",
     "pyyaml>=6.0",
 ]
 
