@@ -765,7 +765,12 @@ function padiScreenStableNodes() {
 
 function nodeVisualRadius(node, scale) {
   const r = nodeRadius(node);
-  return padiScreenStableNodes() && !node.rail ? r / scale : r;
+  // Screen-stable nodes (PADI) render at r/scale so they hold a constant on-screen size.
+  // But when you zoom OUT (scale < ~0.67) r/scale balloons the WORLD radius — a bundle blob
+  // grows past its fixed halo ring and swallows its own tools, collapsing the cluster into a
+  // pile. Cap the world radius at 1.5× the base so zoom-out stays legible (below the cap the
+  // nodes simply shrink on screen with the world, which is what you want for an overview).
+  return padiScreenStableNodes() && !node.rail ? Math.min(r / scale, r * 1.5) : r;
 }
 
 // ── PADI swim-lane geometry ──
@@ -820,7 +825,7 @@ const CHANNEL_LABEL = {
 };
 function channelTypeOf(n) {
   if (n.channel) return n.channel;
-  if (n.id.startsWith('chan:')) return 'discord';
+  if (n.id.startsWith('chan:')) return n.id;   // each Discord channel is its own surface (DM vs #team-social vs #screening-tv) — don't merge into one "Discord"
   if (n.id.startsWith('iface:')) return n.id.split(':')[1];
   return (n.id.split(':')[1] || 'other');
 }
@@ -841,7 +846,7 @@ function collapseIntake(data) {
     const state = has('live') ? 'live' : has('built') ? 'built' : has('building') ? 'building' : 'blank';
     const gates = ['L0','L1','L2','L3'].reduce((o,k) => { o[k] = g.members.some(m => m.gates && m.gates[k]); return o; }, {});
     return {
-      id: 'iface:' + g.type, name: CHANNEL_LABEL[g.type] || g.type,
+      id: 'iface:' + g.type, name: CHANNEL_LABEL[g.type] || g.members[0].name || g.type,
       kind: 'intake', type: 'intake', channel: g.type,
       artifact: g.type === 'discord' ? ('Discord channels: ' + g.names.join(', ')) : (g.members[0].artifact || ''),
       gates, state, reachable: false,
