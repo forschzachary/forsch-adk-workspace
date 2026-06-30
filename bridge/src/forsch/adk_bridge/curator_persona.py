@@ -51,13 +51,9 @@ lead with the why. keep it tight. make the lineup feel intentional.
 """
 
 
-def make_curator_agent(model_name: str = "openai/gpt-5.5"):
-    """Build the curator (SR-1 showrunner) as an ADK agent on the gateway, with its programming tools."""
-    import os
-
-    from google.adk import Agent
-    from google.adk.models.lite_llm import LiteLlm
-
+def curator_toolset():
+    """The curator's tools. Single source of truth — read by BOTH make_curator_agent (runtime) and
+    the graph manifest (the map). Light imports only (no google.adk), so the graph builder can read it."""
     from forsch.adk_bridge.curator_tools import (
         bumps_add,
         bumps_list,
@@ -75,6 +71,19 @@ def make_curator_agent(model_name: str = "openai/gpt-5.5"):
         tv_schedule,
     )
     from forsch.adk_bridge.knowledge_tools import read_knowledge
+    return [tv_now, tv_guide, tv_reprogram, tv_schedule,
+            bumps_add, bumps_list, bumps_remove,
+            playlist_add, playlist_list, playlist_remove,
+            events_list, events_create, events_cancel,
+            suggest_to_main, read_knowledge]
+
+
+def make_curator_agent(model_name: str = "openai/gpt-5.5"):
+    """Build the curator (SR-1 showrunner) as an ADK agent on the gateway, with its programming tools."""
+    import os
+
+    from google.adk import Agent
+    from google.adk.models.lite_llm import LiteLlm
 
     base = os.environ.get("LITELLM_BASE_URL")
     key = os.environ.get("LITELLM_HERMES_KEY") or os.environ.get("LITELLM_API_KEY")
@@ -83,9 +92,5 @@ def make_curator_agent(model_name: str = "openai/gpt-5.5"):
         name="screening_curator",
         model=model,
         instruction=CURATOR_INSTRUCTION,
-        tools=[tv_now, tv_guide, tv_reprogram, tv_schedule,
-               bumps_add, bumps_list, bumps_remove,
-               playlist_add, playlist_list, playlist_remove,
-               events_list, events_create, events_cancel,
-               suggest_to_main, read_knowledge],
+        tools=curator_toolset(),
     )
