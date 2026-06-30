@@ -542,6 +542,7 @@
     { "source": "bundle:curator:sr1_curation", "target": "tool:suggest_to_main", "kind": "contains" },
     { "source": "agent:curator", "target": "chan:#screening-tv", "kind": "listens" },
 
-    { "source": "agent:huberto", "target": "agent:screening-ops", "kind": "delegates" }
+    { "source": "agent:huberto", "target": "agent:screening-ops", "kind": "delegates" },
+    { "source": "agent:huberto", "target": "agent:curator", "kind": "delegates" }
   ]
 }
