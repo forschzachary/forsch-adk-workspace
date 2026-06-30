@@ -6,7 +6,7 @@
   "agents/website": "0.1.0",
   "agents/build": "0.1.0",
   "agents/ops": "0.1.0",
-  "agents/screening": "0.1.0",
+  "agents/screening": "0.2.0",
   "agents/shelby": "0.1.0",
   "agents/social": "0.1.0",
   "agents/stability": "0.1.0"
