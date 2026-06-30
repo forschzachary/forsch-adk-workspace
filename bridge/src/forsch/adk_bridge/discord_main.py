@@ -10,6 +10,8 @@ Env (gitignored .adk-local.env):
   LITELLM_BASE_URL, LITELLM_HERMES_KEY                 — gateway (cat agent)
   HUBERTO_DISCORD_BOT_TOKEN  (+ HUBERTO_EXPECTED_BOT_ID, default 1499544375204773969)
   COMPANION_LEAD_DISCORD_BOT_TOKEN (+ COMPANION_LEAD_EXPECTED_BOT_ID, default 1512599235910963371)
+  CURATOR_DISCORD_BOT_TOKEN (+ CURATOR_EXPECTED_BOT_ID, TV_CHANNEL_ID)  — OPTIONAL third bot
+                                                       (SR-1 curator); unset → runs on two bots.
 """
 from __future__ import annotations
 
@@ -20,6 +22,8 @@ from pathlib import Path
 
 HUBERTO_DEFAULT_ID = "1499544375204773969"
 COMPANION_LEAD_DEFAULT_ID = "1512599235910963371"
+CURATOR_DEFAULT_ID = ""  # no registered curator bot id yet — supply via CURATOR_EXPECTED_BOT_ID
+TV_CHANNEL_DEFAULT_ID = "1511377396668825662"  # falls back to team-social until #screening-tv exists
 
 
 def _load_env(path: Path) -> None:
@@ -66,6 +70,28 @@ def build_specs():
             channels=[os.environ.get("OPS_CHANNEL_ID", "1511377396668825662")],
             loader="📋 *checking the board…*",
         ))
+
+    # OPTIONAL third bot — the SR-1 curator. Only runs if CURATOR_DISCORD_BOT_TOKEN is set; with the
+    # token unset the system runs unchanged on the two bots above. Needs CURATOR_EXPECTED_BOT_ID too
+    # (the identity guard fails closed without it); fail loudly rather than booting as the wrong bot.
+    curator_token = os.environ.get("CURATOR_DISCORD_BOT_TOKEN")
+    if curator_token:
+        from forsch.adk_bridge.curator_persona import make_curator_agent
+
+        curator_id = os.environ.get("CURATOR_EXPECTED_BOT_ID", CURATOR_DEFAULT_ID)
+        if not curator_id:
+            raise SystemExit(
+                "CURATOR_DISCORD_BOT_TOKEN is set but CURATOR_EXPECTED_BOT_ID is not — set the "
+                "curator's bot id (from the Discord dev portal) so the identity guard can verify it."
+            )
+        # SR-1 curator on its own channel (#screening-tv via TV_CHANNEL_ID); channel-only, no DMs.
+        specs.append(BotSpec(
+            name="screening_curator", token=curator_token,
+            expected_bot_id=curator_id,
+            agent=make_curator_agent(), dm=False,
+            channels=[os.environ.get("TV_CHANNEL_ID", TV_CHANNEL_DEFAULT_ID)],
+            loader="🎬 *curating the lineup…*",
+        ))
     return specs
 
 
@@ -91,8 +117,8 @@ def main() -> None:
     specs = build_specs()
     if not specs:
         raise SystemExit(
-            "no bot tokens — set HUBERTO_DISCORD_BOT_TOKEN (+ optionally COMPANION_LEAD_DISCORD_BOT_TOKEN) "
-            "in .adk-local.env"
+            "no bot tokens — set HUBERTO_DISCORD_BOT_TOKEN (+ optionally COMPANION_LEAD_DISCORD_BOT_TOKEN "
+            "and/or CURATOR_DISCORD_BOT_TOKEN) in .adk-local.env"
         )
     log.info("starting %d Discord bot(s): %s", len(specs), ", ".join(s.name for s in specs))
 

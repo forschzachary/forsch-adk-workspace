@@ -2,9 +2,9 @@
   "version": 2,
   "_comment": "Single source of truth for cross-cutting 'rail' dependencies AND the NATIVE ScreeningRoom bots. Read by BOTH index.html (runtime merge) and build_live_graph.py (manifest merge) so the rail can never drift from the manifest. Nodes here are merged verbatim and are NOT touched by `forsch build` — that is exactly why the native (non-Factory) bots live here. Link targets must reference node ids that exist in agent-graph-v2.json (or here).",
   "_meta": {
-    "description": "NATIVE BOTS — Huberto + screening_ops. NOT Factory-generated. Preserve across forsch build. DO NOT DELETE.",
+    "description": "NATIVE BOTS — Huberto + screening_ops + (optional) curator. NOT Factory-generated. Preserve across forsch build. DO NOT DELETE.",
     "last_review": "2026-06-30",
-    "native_source": "bridge/src/forsch/adk_bridge/ (discord_main.py launches them; cat_persona.py + ops_persona.py define them)"
+    "native_source": "bridge/src/forsch/adk_bridge/ (discord_main.py launches them; cat_persona.py + ops_persona.py + curator_persona.py define them; curator runs only when CURATOR_DISCORD_BOT_TOKEN is set)"
   },
   "nodes": [
     {
@@ -113,6 +113,26 @@
       "contract": {
         "accepts": ["message:#team-social", "instruction"],
         "emits": ["response", "tool_call", "tool:account_audit", "tool:media_queue", "tool:queue_counts", "tool:retry_failed", "tool:pipeline_health", "tool:diagnose_title", "tool:storage_health"]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "agent:curator",
+      "name": "screening_curator",
+      "kind": "agent",
+      "shared": false,
+      "type": "agent",
+      "native": true,
+      "optional": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_persona.py",
+      "model": "gpt-5.5",
+      "discord_channels": ["#screening-tv"],
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": ["message:#screening-tv", "instruction"],
+        "emits": ["response", "tool_call", "tool:tv_now", "tool:tv_guide", "tool:tv_reprogram", "tool:tv_schedule", "tool:bumps", "tool:playlist", "tool:events", "tool:suggest_to_main"]
       },
       "role": "plain"
     },
@@ -267,6 +287,126 @@
       "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
       "role": "plain"
     },
+    {
+      "id": "tool:tv_schedule",
+      "name": "tv_schedule",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_schedule) — Gate B; wraps sr tv schedule",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:tv_now",
+      "name": "tv_now",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_now)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:tv_guide",
+      "name": "tv_guide",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_guide)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:tv_reprogram",
+      "name": "tv_reprogram",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def tv_reprogram)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:bumps",
+      "name": "bumps_add/list/remove",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def bumps_add/bumps_list/bumps_remove)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:playlist",
+      "name": "playlist_add/list/remove",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def playlist_add/playlist_list/playlist_remove)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:events",
+      "name": "events_list/create/cancel",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def events_list/events_create/events_cancel)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
+    {
+      "id": "tool:suggest_to_main",
+      "name": "suggest_to_main",
+      "kind": "tool",
+      "shared": false,
+      "family": "screening-curator",
+      "type": "tool",
+      "native": true,
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py (def suggest_to_main)",
+      "gates": { "L0": true, "L1": true, "L2": true, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["tool_call"], "emits": ["tool_result"] },
+      "role": "plain"
+    },
 
     {
       "id": "chan:DM",
@@ -295,6 +435,21 @@
       "reachable": false,
       "contract": { "accepts": ["external_message"], "emits": ["routed_message"] },
       "role": "plain"
+    },
+    {
+      "id": "chan:#screening-tv",
+      "name": "#screening-tv",
+      "kind": "intake",
+      "shared": false,
+      "type": "intake",
+      "native": true,
+      "optional": true,
+      "artifact": "Discord channel config (TV_CHANNEL_ID) — curator; optional third bot",
+      "gates": { "L0": true, "L1": true, "L2": false, "L3": false },
+      "state": "built",
+      "reachable": false,
+      "contract": { "accepts": ["external_message"], "emits": ["routed_message"] },
+      "role": "plain"
     }
   ],
   "links": [
@@ -314,6 +469,16 @@
     { "source": "agent:screening-ops", "target": "tool:pipeline_health", "kind": "uses" },
     { "source": "agent:screening-ops", "target": "tool:diagnose_title", "kind": "uses" },
     { "source": "agent:screening-ops", "target": "tool:storage_health", "kind": "uses" },
-    { "source": "agent:screening-ops", "target": "chan:#team-social", "kind": "listens" }
+    { "source": "agent:screening-ops", "target": "chan:#team-social", "kind": "listens" },
+
+    { "source": "agent:curator", "target": "tool:tv_now", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:tv_guide", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:tv_reprogram", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:tv_schedule", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:bumps", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:playlist", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:events", "kind": "uses" },
+    { "source": "agent:curator", "target": "tool:suggest_to_main", "kind": "uses" },
+    { "source": "agent:curator", "target": "chan:#screening-tv", "kind": "listens" }
   ]
 }

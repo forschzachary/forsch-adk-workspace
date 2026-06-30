@@ -71,7 +71,11 @@ def schedule_on_sr1(title_or_tmdb_id: str, at_time: str, dry_run: bool = True) -
     in the library (use search_library / request_movie first).
 
     Defaults to dry_run=True (computes the reflow, writes nothing). Pass dry_run=False to actually
-    place it on the air — that mutates the live SR-1 schedule, so only do it when explicitly asked."""
+    place it on the air — that mutates the live SR-1 schedule, so only do it when explicitly asked.
+
+    SR-1 programming is OWNED by the curator persona (curator_tools.tv_schedule wraps this same
+    engine); Huberto uses this only to put a friend's own badge pick on the air or delegates to the
+    curator. The Phase 2 `sr tv schedule` engine backs both."""
     args = ["tv", "schedule", str(title_or_tmdb_id), "--at", str(at_time)]
     if dry_run:
         args.append("--dry-run")
