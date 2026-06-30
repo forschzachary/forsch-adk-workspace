@@ -44,3 +44,17 @@ def request_movie(tmdb_id: str, requested_for: str = "forschfamily") -> str:
     """Add (download) a movie to the Screening Room library by its tmdbId. Call this ONLY after the
     friend has said yes. requested_for is the profile it's attributed to (default: the family)."""
     return _run(["request", str(tmdb_id), "--type", "movie", "--as", requested_for])
+
+
+def schedule_on_sr1(title_or_tmdb_id: str, at_time: str, dry_run: bool = True) -> str:
+    """Put a title on SR-1 (the always-on channel) at a wall-clock time and reflow the rest of the
+    schedule so there are no gaps. `title_or_tmdb_id` is a library title or a Jellyfin item id;
+    `at_time` is when to start it ("20:00", "+2h", or an absolute time). The title must already be
+    in the library (use search_library / request_movie first).
+
+    Defaults to dry_run=True (computes the reflow, writes nothing). Pass dry_run=False to actually
+    place it on the air — that mutates the live SR-1 schedule, so only do it when explicitly asked."""
+    args = ["tv", "schedule", str(title_or_tmdb_id), "--at", str(at_time)]
+    if dry_run:
+        args.append("--dry-run")
+    return _run(args)
