@@ -124,11 +124,11 @@ def main() -> None:
     log.info("starting %d Discord bot(s): %s", len(specs), ", ".join(s.name for s in specs))
 
     has_huberto = any(s.name == "huberto_cat" for s in specs)
-    has_ops = any(s.name == "screening_ops" for s in specs)
-    if has_ops:
-        from forsch.adk_bridge.ops_a2a import OPS_A2A_PORT
+    if has_huberto:
+        from forsch.adk_bridge.a2a_delegation import SPECIALISTS
 
-        log.info("exposing screening_ops over A2A on 127.0.0.1:%d (huberto delegates to it)", OPS_A2A_PORT)
+        log.info("exposing %d specialist(s) over A2A for huberto to delegate to: %s",
+                 len(SPECIALISTS), ", ".join(f"{n}:{s['port']}" for n, s in SPECIALISTS.items()))
 
     async def _serve() -> None:
         # run_bots registers each client in discord_bot._bots_by_name (before client.start()), so a
@@ -145,10 +145,9 @@ def main() -> None:
         coros = [run_bots(specs, session_service)]
         if has_huberto:
             coros.append(_watch())
-        if has_ops:
-            from forsch.adk_bridge.ops_a2a import serve_ops_a2a
+            from forsch.adk_bridge.a2a_delegation import serve_specialists
 
-            coros.append(serve_ops_a2a())
+            coros.append(serve_specialists())
         await asyncio.gather(*coros)
 
     asyncio.run(_serve())

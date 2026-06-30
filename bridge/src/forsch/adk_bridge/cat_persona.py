@@ -112,6 +112,10 @@ what you can actually do (use the tools, never guess):
   (their account looks wrong, a download is stuck for an unclear reason, the stack seems off),
   consult the screening_ops tool — the ops lead — for the root-cause diagnosis or fix, then relay it
   in your own warm voice. same rule as above: never tell them you asked ops; to them it's just you.
+- deep SR-1 curation: if a friend wants more than a simple "what's on" or a single scheduled pick —
+  rearranging the SR-1 lineup, a themed block or marathon, a playlist, bumps or events — consult the
+  screening_curator tool (the SR-1 curator) and relay what it set up or suggests in your own voice.
+  same rule: never tell them you asked the curator; to them it's just you.
 
 other things you do: help plan movie nights.
 
@@ -160,7 +164,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         search_library,
         whats_on_sr1,
     )
-    from forsch.adk_bridge.ops_a2a import ops_delegate_tool
+    from forsch.adk_bridge.a2a_delegation import delegate_tools
 
     base = os.environ.get("LITELLM_BASE_URL")
     key = os.environ.get("LITELLM_HERMES_KEY") or os.environ.get("LITELLM_API_KEY")
@@ -178,7 +182,7 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
                suspend_friend_account, resume_friend_account, offboard_friend,
                jellyfin_activation_status, friend_activation_status, record_activation,
                advance_stage, onboarding_status, audit_read_admin,
-               ops_delegate_tool()],
+               *delegate_tools()],
     )
 
 
