@@ -100,7 +100,7 @@ Plus the **house docs** in `docs/` (`ARCHITECTURE.md`, `AGENT_FACTORY_SPEC.md`, 
 
 Before building anything: *does this need to exist? does it need to be this complex?* Smallest change that actually works; stdlib before deps; one line before fifty. Verify fixes with **new evidence** (a fresh log line / test result), never by assuming an edit is live (for daemons/containers that means a restart). State assumptions; ask only when genuinely ambiguous.
 
-## 7. Cloud vibe-coding loop (this box — autosave + auto-land)
+## 9. Cloud vibe-coding loop (this box — autosave + auto-land)
 
 You build here the same way you build locally — edit, preview, iterate — except this box
 **autosaves and lands your work for you**. Do not `git commit`/`push`/`reset` by hand and do not
