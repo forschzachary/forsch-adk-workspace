@@ -20,4 +20,10 @@ def load_manifest(path) -> Manifest:
     for aid, spec in (raw.get("agents") or {}).items():
         merged = {**defaults, **(spec or {}), "id": aid}
         agents[aid] = AgentSpec(**merged)
-    return Manifest(version=raw.get("version", 1), agents=agents)
+    # Bundles are NOT agents — pass them through verbatim (no defaults merge).
+    tool_bundles = raw.get("tool_bundles") or {}
+    return Manifest(
+        version=raw.get("version", 1),
+        agents=agents,
+        tool_bundles=tool_bundles,
+    )

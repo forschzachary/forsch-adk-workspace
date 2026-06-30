@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 
+from forsch.adk_factory.bundles import expand_bundles, validate_bundles, BundleError
 from forsch.adk_factory.loader import load_manifest
 from forsch.adk_factory.renderer import (
     compose_instruction,
@@ -58,6 +59,14 @@ def plan(manifest_path, agent_id: str, *, manifest=None, spec=None) -> dict:
     # Compose on a COPY — never mutate the shared manifest spec in place, or a second
     # render of it (apply --all reuse, plan-then-apply) would double the preamble.
     spec = spec.model_copy(update={"instruction": compose_instruction(str(workspace), spec)})
+    # Collapse bundles + explicit tools into one flat ordered list on the same copy,
+    # BEFORE any renderer runs. After this step spec.tools is the same flat-list shape
+    # the renderers consume today, so neither renderer changes; bundles is consumed so
+    # nothing downstream ever sees it.
+    spec = spec.model_copy(update={
+        "tools": expand_bundles(spec.tools, spec.bundles, manifest.tool_bundles),
+        "bundles": [],
+    })
     rendered = {**render_agent(spec), **render_agent_package(spec)}
     files = [{"path": rel, "content": content} for rel, content in rendered.items()]
     return {"agent": agent_id, "files": files}
@@ -121,7 +130,14 @@ def apply(manifest_path, agent_id: str, workspace_root, *, force: bool = False, 
     spec = manifest.agents[agent_id]
 
     if not skip_validate:
-        report = validate_agent_tools(spec)
+        # Validate the EXPANDED tool set so the deploy gate sees what actually ships.
+        # Reuses the exact flat-list code path validate_agent_tools already runs —
+        # validate_agent_tools needs zero internal change (plan §2.4, option A).
+        expanded_spec = spec.model_copy(update={
+            "tools": expand_bundles(spec.tools, spec.bundles, manifest.tool_bundles),
+            "bundles": [],
+        })
+        report = validate_agent_tools(expanded_spec)
         try:
             check_deploy_gate(agent_id, report)
         except DeployGateBlocked as e:
@@ -187,6 +203,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     # validate is a different code path — no agent selection needed
     if args.command == "validate":
         manifest = load_manifest(manifest_path)
+        # Bundle refs are a red gate: a bad only/exclude typo or unknown bundle
+        # blocks before any per-agent tool validation runs.
+        try:
+            validate_bundles(manifest)
+        except BundleError as e:
+            print(f"[validate] BUNDLE ERROR — {e}")
+            return 1
         agent_ids = [args.agent] if args.agent else list(manifest.agents)
         for aid in agent_ids:
             spec = manifest.agents[aid]
