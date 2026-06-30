@@ -56,7 +56,7 @@ def friend_context(discord_id: str) -> str:
             f"it — only provision an account for an INVITED friend (read_knowledge('onboarding-playbook'))."
         )
         if admin:
-            base += " NOTE: this id is an ADMIN (Zach) — he runs the place; never quote credentials to him, and he approves new friends with invite_friend(name)."
+            base += f" NOTE: this id is an ADMIN (Zach) — he runs the place; never quote credentials to him, and he approves new friends with invite_friend_admin(caller_discord_id='{discord_id}', name=...). he can also read the audit log via audit_read_admin(caller_discord_id='{discord_id}')."
         return f"[{base}]"
     name = rec.get("name") or "a friend"
     profile = rec.get("jellyfin_profile") or ""
@@ -69,7 +69,11 @@ def friend_context(discord_id: str) -> str:
         if profile else ""
     )
     stage_line = "" if stage == "member" else f" onboarding stage: {stage} — nudge the next step (read_knowledge('onboarding-playbook'))."
-    admin_line = " NOTE: this is an ADMIN (Zach) — never quote credentials to him; he approves new friends with invite_friend(name)." if admin else ""
+    admin_line = (
+        f" NOTE: this is an ADMIN (Zach) — never quote credentials to him; he approves new friends with "
+        f"invite_friend_admin(caller_discord_id='{discord_id}', name=...) and can read the audit log via "
+        f"audit_read_admin(caller_discord_id='{discord_id}')."
+    ) if admin else ""
     return (
         f"[you're talking to {name} (discord id {discord_id}). {fact_line}{prof}{stage_line}{admin_line} "
         f"greet them like you know them; jot anything new with remember_about_friend(discord_id='{discord_id}', fact=...).]"
@@ -143,15 +147,36 @@ def _load_invites() -> list[str]:
         return []
 
 
-def invite_friend(name: str) -> dict:
-    """Approve a new person for onboarding — ONLY call when the admin (Zach) approves them. After
-    this, an account may be provisioned for someone who gives this name."""
+def _approve_invite(name: str) -> dict:
+    """Append a name to the approved list (no auth — internal). Use invite_friend_admin from a tool."""
     invites = _load_invites()
     key = name.strip().lower()
     if key and key not in invites:
         invites.append(key)
         _invites_path().write_text(json.dumps(invites, indent=2))
     return {"ok": True, "invited": name, "pending": invites}
+
+
+def invite_friend_admin(caller_discord_id: str, name: str) -> dict:
+    """Approve a new person for onboarding — ADMIN ONLY. Pass the caller's own discord id; the gate is
+    enforced HERE, not by the prompt: only an id in SR_ADMIN_DISCORD_IDS (Zach) may invite. A non-admin
+    caller is denied and the attempt is audited. On approval, an account may later be provisioned for
+    someone who gives this name."""
+    from forsch.adk_bridge.audit_log import log_audit
+
+    caller = str(caller_discord_id)
+    if caller not in _admins():
+        log_audit("invite_denied", caller, {"name": name, "reason": "not an admin"})
+        return {"ok": False, "error": "only an admin (Zach) can invite a new friend."}
+    out = _approve_invite(name)
+    log_audit("invite_issued", caller, {"name": name.strip().lower()})
+    return out
+
+
+# Back-compat / internal primitive: the unauthenticated approve. NOT exposed as an agent tool — the
+# agent must call invite_friend_admin (the gated entry point). Kept so internal callers/tests can seed
+# the approved list directly.
+invite_friend = _approve_invite
 
 
 def is_invited(name: str) -> dict:
@@ -171,6 +196,11 @@ def consume_invite(name: str) -> None:
     if key in invites:
         invites.remove(key)
         _invites_path().write_text(json.dumps(invites, indent=2))
+        try:
+            from forsch.adk_bridge.audit_log import log_audit
+            log_audit("invite_consumed", "", {"name": key})
+        except Exception:
+            pass
 
 
 def record_account(discord_id: str, name: str, jellyfin_username: str, jellyfin_profile: str = "") -> None:

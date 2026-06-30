@@ -13,7 +13,9 @@ from pathlib import Path
 
 # Shared ops diagnostics — Huberto reuses these to answer "where's my movie?" with a real root
 # cause, without exposing that ops' logic is doing the scratching. One-way import.
+from forsch.adk_bridge.audit_log import log_audit
 from forsch.adk_bridge.ops_diagnostics import diagnose_title, pipeline_health
+from forsch.adk_bridge.rate_limit import check_rate_limit
 
 SR = os.environ.get("SR_CLI", str(Path.home() / "Dev" / "screening-room" / "scripts" / "sr"))
 
@@ -44,10 +46,19 @@ def search_library(title: str) -> str:
     return _run(["search", title])
 
 
-def request_movie(tmdb_id: str, requested_for: str = "forschfamily") -> str:
+def request_movie(tmdb_id: str, requested_for: str = "forschfamily", requester_discord_id: str = "") -> str:
     """Add (download) a movie to the Screening Room library by its tmdbId. Call this ONLY after the
-    friend has said yes. requested_for is the profile it's attributed to (default: the family)."""
-    return _run(["request", str(tmdb_id), "--type", "movie", "--as", requested_for])
+    friend has said yes. requested_for is the profile it's attributed to (default: the family).
+    Pass requester_discord_id (the friend's discord id) so the request is rate-limited + audited per
+    person; it's keyed on that id, falling back to requested_for when absent."""
+    rl_key = str(requester_discord_id) or requested_for
+    rl = check_rate_limit(rl_key, "request_movie")
+    if not rl["ok"]:
+        log_audit("request_rate_limited", rl_key, {"tmdb_id": str(tmdb_id), "retry_after": rl["retry_after"]})
+        return rl["reason"]
+    out = _run(["request", str(tmdb_id), "--type", "movie", "--as", requested_for])
+    log_audit("request_movie", rl_key, {"tmdb_id": str(tmdb_id), "requested_for": requested_for})
+    return out
 
 
 def check_my_request(title: str) -> str:
@@ -79,4 +90,8 @@ def schedule_on_sr1(title_or_tmdb_id: str, at_time: str, dry_run: bool = True) -
     args = ["tv", "schedule", str(title_or_tmdb_id), "--at", str(at_time)]
     if dry_run:
         args.append("--dry-run")
-    return _run(args)
+    out = _run(args)
+    if not dry_run:
+        # a real mutation of the live SR-1 schedule — record it (the title + time, never a secret).
+        log_audit("sr1_scheduled", "", {"title": str(title_or_tmdb_id), "at": str(at_time)})
+    return out

@@ -62,11 +62,12 @@ def build_specs():
     if lead_token:
         from forsch.adk_bridge.ops_persona import make_ops_agent
 
-        # internal ops lead on companion-lead: channel-only (no DMs), in the team-social channel.
+        # internal ops lead on companion-lead: channel-only (no DMs), in the team-social channel, and
+        # mention-only so it answers only when @-ed rather than on every line of team chatter.
         specs.append(BotSpec(
             name="screening_ops", token=lead_token,
             expected_bot_id=os.environ.get("COMPANION_LEAD_EXPECTED_BOT_ID", COMPANION_LEAD_DEFAULT_ID),
-            agent=make_ops_agent(), dm=False,
+            agent=make_ops_agent(), dm=False, mention_only=True,
             channels=[os.environ.get("OPS_CHANNEL_ID", "1511377396668825662")],
             loader="📋 *checking the board…*",
         ))

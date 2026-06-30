@@ -45,6 +45,7 @@ class BotSpec:
     expected_bot_id: str | None = None          # identity guard; the bot refuses to boot otherwise
     channels: list[str] = field(default_factory=list)  # guild channel names it answers in (bare)
     dm: bool = True                             # answer direct messages
+    mention_only: bool = False                  # in a guild channel, only answer when @-mentioned (DMs unaffected)
     loader: str = "🐾 *scratching the post…*"    # shown while the agent thinks, then edited to the reply
     context_provider: object = None             # optional callable: discord_user_id(str) -> a context line to inject
 
@@ -65,7 +66,14 @@ class ADKDiscordBot(discord.Client):
         if message.guild is None:
             return self.spec.dm
         channel = message.channel
-        return (channel.name.lower().lstrip("#") in self._channels) or (str(channel.id) in self._channels)
+        in_channel = (channel.name.lower().lstrip("#") in self._channels) or (str(channel.id) in self._channels)
+        if not in_channel:
+            return False
+        if self.spec.mention_only:
+            # Only respond to messages that actually @-mention this bot — so ops doesn't barge into
+            # every line of team chatter in its channel. DMs (handled above) always bypass this.
+            return self.user in getattr(message, "mentions", [])
+        return True
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author == self.user or message.author.bot:

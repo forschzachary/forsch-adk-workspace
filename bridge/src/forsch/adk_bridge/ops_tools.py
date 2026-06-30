@@ -12,7 +12,9 @@ from pathlib import Path
 
 # pipeline_health + diagnose_title live in the shared diagnostics module so Huberto can reuse them
 # (re-exported here so make_ops_agent's tool list and any callers are unchanged).
+from forsch.adk_bridge.audit_log import log_audit
 from forsch.adk_bridge.ops_diagnostics import diagnose_title, pipeline_health
+from forsch.adk_bridge.rate_limit import check_rate_limit
 
 __all__ = [
     "account_audit",
@@ -58,8 +60,16 @@ def queue_counts() -> str:
 
 
 def retry_failed(request_id: str) -> str:
-    """Retry a failed media request by its id. Only after you've confirmed it actually failed."""
-    return _sr(["queue", "retry", str(request_id), "--yes"])
+    """Retry a failed media request by its id. Only after you've confirmed it actually failed.
+    Rate-limited (ops is a shared internal identity, so the limit is keyed on the ops bucket) and
+    audited so repeated re-pokes of the pipeline are capped and recorded."""
+    rl = check_rate_limit("ops", "retry_failed")
+    if not rl["ok"]:
+        log_audit("retry_rate_limited", "ops", {"request_id": str(request_id), "retry_after": rl["retry_after"]})
+        return rl["reason"]
+    out = _sr(["queue", "retry", str(request_id), "--yes"])
+    log_audit("retry_failed", "ops", {"request_id": str(request_id)})
+    return out
 
 
 def storage_health() -> str:

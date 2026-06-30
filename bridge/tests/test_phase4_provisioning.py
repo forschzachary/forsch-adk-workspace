@@ -32,6 +32,8 @@ def fm(tmp_path, monkeypatch):
 @pytest.fixture
 def ot(tmp_path, monkeypatch, fm):
     monkeypatch.setenv("FORSCH_ADK_WORKSPACE", str(tmp_path))
+    import forsch.adk_bridge.rate_limit as rl
+    rl.reset_all()  # Phase 7's limiter is process-global; reset so each test starts with a fresh budget
     import forsch.adk_bridge.onboarding_tools as ot
     importlib.reload(ot)
     return ot

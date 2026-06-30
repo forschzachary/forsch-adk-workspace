@@ -14,6 +14,8 @@ import subprocess
 from pathlib import Path
 
 from forsch.adk_bridge import friend_memory as fm
+from forsch.adk_bridge.audit_log import log_audit
+from forsch.adk_bridge.rate_limit import check_rate_limit
 
 SR = os.environ.get("SR_CLI", str(Path.home() / "Dev" / "screening-room" / "scripts" / "sr"))
 
@@ -65,7 +67,11 @@ def provision_access(discord_id: str, name: str) -> dict:
     password) — never post it in a channel or back to Zach. `verified` is only true when the friend
     can log in, see their library, and request — don't tell them "you're set" unless it's true."""
     if not fm.is_invited(name)["invited"]:
-        return {"ok": False, "error": f"'{name}' isn't approved yet — Zach must invite_friend('{name}') first."}
+        return {"ok": False, "error": f"'{name}' isn't approved yet — Zach must invite the friend first."}
+    rl = check_rate_limit(str(discord_id), "provision_access")
+    if not rl["ok"]:
+        log_audit("provision_rate_limited", str(discord_id), {"name": name.strip().lower(), "retry_after": rl["retry_after"]})
+        return {"ok": False, "rate_limited": True, "error": rl["reason"]}
     username = name.strip().lower()
     if fm.has_account(name):
         # Don't create a second account — steer to reset_access for a fresh password.
@@ -81,6 +87,9 @@ def provision_access(discord_id: str, name: str) -> dict:
         return {"ok": False, "error": f"account creation failed: {out[:180]}"}
     fm.record_account(str(discord_id), name, username)
     fm.consume_invite(name)
+
+    # Account exists now — record it in the audit log (NEVER the password) before we verify.
+    log_audit("provision_access", str(discord_id), {"name": name.strip().lower(), "username": username})
 
     # Managed outcome: don't return success until we've PROVEN the friend can use it.
     check = verify_guest_provisioning(str(discord_id), name, password)
@@ -121,13 +130,22 @@ def get_access(name: str) -> dict:
     }
 
 
-def reset_access(name: str) -> dict:
-    """Reset a friend's Jellyfin password and return the new login to DM them privately."""
+def reset_access(name: str, caller_discord_id: str = "") -> dict:
+    """Reset a friend's Jellyfin password and return the new login to DM them privately. Pass the
+    caller's discord id (the admin/friend asking) so the reset is rate-limited + audited per user;
+    it's keyed on that id, falling back to the friend's username when absent."""
     username = name.strip().lower()
+    rl_key = str(caller_discord_id) or username
+    rl = check_rate_limit(rl_key, "reset_access")
+    if not rl["ok"]:
+        log_audit("reset_rate_limited", rl_key, {"name": username, "retry_after": rl["retry_after"]})
+        return {"ok": False, "rate_limited": True, "error": rl["reason"]}
     password = _gen_password()
     ok, out = _sr(["users", "passwd", username, password])
     if not ok:
         return {"ok": False, "error": f"password reset failed: {out[:180]}"}
+    # audit the reset — NEVER the new password (only that a reset happened).
+    log_audit("reset_access", rl_key, {"name": username})
     return {
         "ok": True,
         "deliver_privately": True,

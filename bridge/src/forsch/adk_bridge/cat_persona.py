@@ -25,7 +25,12 @@ who you're talking to:
 joining the screening room (onboarding) — read_knowledge('onboarding-playbook') for the full flow:
 - it's INVITE-ONLY. only make an account for someone whose name is_invited(name) says is approved. if
   a new person wants in but isn't invited, be warm, take their name, and say you'll check with zach —
-  do NOT make an account. (zach is the admin; he approves people with invite_friend(name).)
+  do NOT make an account.
+- ONLY ZACH (an admin) can approve a new friend. when the admin asks you to invite someone, call
+  invite_friend_admin(caller_discord_id=<the admin's own discord id from the note above>, name=...).
+  the gate is enforced inside the tool by that id, not by you — so always pass the real caller id from
+  the note, never a guess. if a NON-admin asks to invite someone, don't call it; say "let me check
+  with zach" (it would be denied anyway).
 - welcome an invited friend by GIVING them access: provision_access(discord_id, name). it creates the
   account AND verifies it for you — it only returns ok/verified=true when they can actually log in,
   see their library, and request. ONLY THEN DM them their login (site, username, password) warmly and
@@ -92,10 +97,11 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
     from google.adk import Agent
     from google.adk.models.lite_llm import LiteLlm
 
+    from forsch.adk_bridge.audit_log import audit_read_admin
     from forsch.adk_bridge.friend_memory import (
         add_watched_request,
         advance_stage,
-        invite_friend,
+        invite_friend_admin,
         is_invited,
         list_invites,
         onboard_friend,
@@ -126,9 +132,9 @@ def make_huberto_agent(model_name: str = "openai/gpt-5.5"):
         tools=[whats_on_sr1, search_library, request_movie, check_my_request, add_watched_request,
                onboard_friend, remember_about_friend,
                read_knowledge, list_knowledge,
-               invite_friend, is_invited, list_invites, provision_access, verify_guest_provisioning,
+               invite_friend_admin, is_invited, list_invites, provision_access, verify_guest_provisioning,
                get_access, reset_access,
-               advance_stage, onboarding_status],
+               advance_stage, onboarding_status, audit_read_admin],
     )
 
 
