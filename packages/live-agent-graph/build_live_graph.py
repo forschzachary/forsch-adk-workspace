@@ -34,6 +34,46 @@ def _lid(x):
     return x if isinstance(x, str) else x.get("id", "")
 
 
+def _bundle_ref(ref):
+    """Normalize a per-agent bundle reference into (name, only, exclude).
+
+    A ref is either a bare string (whole bundle) or a mapping
+    {bundle: <name>, only: [...]} / {bundle: <name>, exclude: [...]}.
+    `only` and `exclude` are mutually exclusive (only/exclude both set is a
+    malformed manifest; we honor `only` and ignore the rest — the Factory's
+    expand_bundles is the loud gate for that, the graph is a viewer)."""
+    if isinstance(ref, str):
+        return ref, None, None
+    name = ref.get("bundle")
+    only_l = ref.get("only")
+    excl_l = ref.get("exclude")
+    return name, (list(only_l) if only_l else None), (list(excl_l) if excl_l else None)
+
+
+def resolve_bundle(ref, bundle_defs):
+    """Resolve one bundle ref against the bundle definitions.
+
+    Returns (name, all_tools, active, inactive) where:
+      all_tools = every tool the bundle DEFINES (the bundle's own `tools:` list),
+      active    = tools kept after this agent's only/exclude filter,
+      inactive  = the rest (greyed for THIS agent's bundle instance).
+    A tool in only/exclude that the bundle never defined is ignored for graph
+    purposes (the Factory raises BundleError on it; the graph stays additive)."""
+    name, only_l, excl_l = _bundle_ref(ref)
+    all_tools = list((bundle_defs.get(name) or {}).get("tools", []))
+    if only_l is not None:
+        keep = set(only_l)
+        active = [t for t in all_tools if t in keep]
+    elif excl_l is not None:
+        drop = set(excl_l)
+        active = [t for t in all_tools if t not in drop]
+    else:
+        active = list(all_tools)
+    active_set = set(active)
+    inactive = [t for t in all_tools if t not in active_set]
+    return name, all_tools, active, inactive
+
+
 SPIKE_DIR = Path(__file__).resolve().parent
 ADK_WS = workspace_root() / "adk"  # real ADK workspace for filesystem gate checks
 
@@ -324,7 +364,9 @@ if args.all:
     registry_yaml = SPIKE_DIR / "registry" / "agents" / "agents.yaml"
     shared_yaml = SPIKE_DIR / "shared" / "components.yaml"
 
-    registry = (yaml.safe_load(registry_yaml.read_text()) or {}).get("agents", {}) if registry_yaml.exists() else {}
+    registry_raw = (yaml.safe_load(registry_yaml.read_text()) or {}) if registry_yaml.exists() else {}
+    registry = registry_raw.get("agents", {})
+    TOOL_BUNDLES = registry_raw.get("tool_bundles", {}) or {}
     shared = yaml.safe_load(shared_yaml.read_text()) if shared_yaml.exists() else {}
 
     TOOL_FAMILIES = shared.get("tool_families", {})
@@ -360,7 +402,9 @@ elif args.cluster:
         print(f"ERROR: cluster '{args.cluster}' not found at {cluster_yaml}", file=sys.stderr)
         sys.exit(1)
 
-    registry = (yaml.safe_load(registry_yaml.read_text()) or {}).get("agents", {}) if registry_yaml.exists() else {}
+    registry_raw = (yaml.safe_load(registry_yaml.read_text()) or {}) if registry_yaml.exists() else {}
+    registry = registry_raw.get("agents", {})
+    TOOL_BUNDLES = registry_raw.get("tool_bundles", {}) or {}
     shared = yaml.safe_load(shared_yaml.read_text()) if shared_yaml.exists() else {}
     cluster_def = yaml.safe_load(cluster_yaml.read_text()) or {}
     member_ids = cluster_def.get("members", [])
@@ -391,7 +435,9 @@ elif args.cluster:
 else:
     # Legacy mode: read from ADK workspace
     agents_yaml = ADK_WS / "agent_specs" / "agents.yaml"
-    agents = (yaml.safe_load(agents_yaml.read_text()) or {}).get("agents", {}) if agents_yaml.exists() else {}
+    _legacy_raw = (yaml.safe_load(agents_yaml.read_text()) or {}) if agents_yaml.exists() else {}
+    agents = _legacy_raw.get("agents", {})
+    TOOL_BUNDLES = _legacy_raw.get("tool_bundles", {}) or {}
     SHARED_TOOLS = set()
     SHARED_MODELS = set()
     TOOL_FAMILY_MAP = {}
@@ -543,7 +589,7 @@ def check_gates(node_type: str, node_id: str, aid: str | None = None) -> dict:
 def derive_state(node_type: str, gates: dict) -> str:
     required = {
         "agent": 4, "router": 4,
-        "tool": 3, "ui": 3, "database": 3,
+        "tool": 3, "ui": 3, "database": 3, "bundle": 3,
         "intake": 2,
     }
     needed = required.get(node_type, 2)
@@ -614,6 +660,14 @@ node("ui:cockpit", "Builder Cockpit", "ui", shared=True)
 
 # ── Cluster members: agents + their deps ──
 
+def _tool_node(t):
+    """Create the leaf tool node if absent. Returns its id."""
+    tid = f"tool:{t}"
+    if tid not in nodes:
+        family = TOOL_FAMILY_MAP.get(t, "agent-specific")
+        node(tid, t, "tool", shared=False, family=family)
+    return tid
+
 for aid, a in agents.items():
     nid = f"agent:{aid}"
     node(nid, aid, "agent")
@@ -622,13 +676,59 @@ for aid, a in agents.items():
         node(f"group:{g}", g, "router")
         link(nid, f"group:{g}", "wears")
 
+    # ── Bundle layer: agent -> bundle -> tool ──
+    # Bundle nodes are PER-AGENT instances (bundle:<aid>:<name>): the same bundle
+    # resolves to different active tool sets per agent via only/exclude, so the
+    # node must carry this agent's active/inactive state. A tool dropped by
+    # only/exclude is still a `contains` member of the bundle (so the bundle
+    # DEFINITION is intact in the graph) but the link is flagged inactive=true
+    # and the leaf is recorded in the bundle node's inactive_tools.
+    declared_bundles = a.get("bundles", []) or []
+    seen_tools: set = set()       # leaf names already wired via a bundle
+    active_tools: list = []       # this agent's effective (active) tool leaves, in order
+
+    for ref in declared_bundles:
+        name, all_btools, active, inactive = resolve_bundle(ref, TOOL_BUNDLES)
+        if not name:
+            continue
+        bdef = TOOL_BUNDLES.get(name) or {}
+        bid = f"bundle:{aid}:{name}"
+        node(
+            bid, name, "bundle",
+            shared=False,
+            bundle_key=name,
+            for_agent=aid,
+            description=bdef.get("description", ""),
+            tools_count=len(active),
+            inactive_tools=inactive,
+        )
+        link(nid, bid, "uses-bundle")          # agent -> bundle
+
+        active_set = set(active)
+        for t in all_btools:                   # emit ALL member tools as nodes
+            tid = _tool_node(t)
+            l = {"source": bid, "target": tid, "kind": "contains"}
+            if t not in active_set:
+                l["inactive"] = True           # greyed for THIS agent's bundle
+            links.append(l)
+            seen_tools.add(t)
+        for t in active:                       # preserve order, de-dupe across bundles
+            if t not in active_tools:
+                active_tools.append(t)
+
+    # Explicit tools that did NOT come via a bundle keep the direct agent->tool link.
     for t in a.get("tools", []) or []:
-        # Tool may be in shared layer (already created) or cluster-specific
-        tid = f"tool:{t}"
-        if tid not in nodes:
-            family = TOOL_FAMILY_MAP.get(t, "agent-specific")
-            node(tid, t, "tool", shared=False, family=family)
-        link(nid, tid, "uses")
+        if t in seen_tools:
+            continue
+        _tool_node(t)
+        link(nid, f"tool:{t}", "uses")
+        if t not in active_tools:
+            active_tools.append(t)
+
+    # Write the resolved effective tool list back onto the in-memory agent so the
+    # downstream enrichment (gates L1, derive_contract emits) sees the agent's
+    # real active tools whether they came from `tools:` or from bundles.
+    a["tools"] = active_tools
 
     for c in a.get("discord_channels", []) or []:
         node(f"chan:{c}", c, "intake")
@@ -642,7 +742,23 @@ type_map = {
     "ui": "ui", "group": "router", "channel": "intake",
     "credential": "database", "broker": "database",
     "capability": "capability", "logic": "logic",
+    "bundle": "bundle",
 }
+
+
+def bundle_gates(active_leaves: list[str]) -> dict:
+    """A bundle is green on a level only if EVERY active member tool is green on
+    that level — the worst active tool drags the bundle down, so the node
+    visually flags 'one of your tools is red'. Empty bundle = all-False."""
+    gates = {"L0": True, "L1": True, "L2": True, "L3": True}
+    if not active_leaves:
+        return {"L0": False, "L1": False, "L2": False, "L3": False}
+    for leaf in active_leaves:
+        tg = check_gates("tool", f"tool:{leaf}")
+        for k in gates:
+            gates[k] = gates[k] and tg.get(k, False)
+    return gates
+
 
 for n in list(nodes.values()):
     nid = n["id"]
@@ -657,6 +773,9 @@ for n in list(nodes.values()):
     elif ntype == "tool":
         tname = nid.replace("tool:", "")
         n["artifact"] = f"packages/adk-components/src/forsch/adk_components/tools/*.py (def {tname})"
+    elif ntype == "bundle":
+        # repo-root-relative so the bijection artifact-path check resolves it
+        n["artifact"] = "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)"
     elif ntype in ("intake", "channel"):
         n["artifact"] = "Discord channel config"
     elif ntype in ("router", "group"):
@@ -670,14 +789,24 @@ for n in list(nodes.values()):
 
     # Gates
     aid = nid.replace("agent:", "") if ntype == "agent" else None
-    n["gates"] = check_gates(n["type"], nid, aid)
+    if ntype == "bundle":
+        # Derive from this agent's ACTIVE member tools (defined tools minus inactive).
+        _all = list((TOOL_BUNDLES.get(n.get("bundle_key")) or {}).get("tools", []))
+        _inactive = set(n.get("inactive_tools", []))
+        _active = [t for t in _all if t not in _inactive]
+        n["gates"] = bundle_gates(_active)
+    else:
+        n["gates"] = check_gates(n["type"], nid, aid)
 
     # State
     n["state"] = derive_state(n["type"], n["gates"])
     n["reachable"] = bridge_healthy() if n["type"] in ("agent", "router", "ui") else False
 
     # Contract
-    n["contract"] = derive_contract(n["type"], aid)
+    if ntype == "bundle":
+        n["contract"] = {"accepts": ["agent_message"], "emits": ["tool_call"]}
+    else:
+        n["contract"] = derive_contract(n["type"], aid)
 
     # Role
     if ntype == "agent":
@@ -710,7 +839,10 @@ all_links = sorted(
 
 # ── Prune orphan shared tools (shared tools not linked to any cluster agent) ──
 
-# Find tools that have a direct link to/from an agent node
+# Find tools referenced by an agent — either directly (agent -> tool `uses`) or
+# via a bundle (bundle -> tool `contains`; the bundle itself is reached from an
+# agent through `uses-bundle`, so a contains link is a live reference and the
+# tool must NOT be pruned, even when it is greyed/inactive for that agent).
 agent_linked_tools = set()
 for l in all_links:
     s = _lid(l["source"])
@@ -719,6 +851,8 @@ for l in all_links:
         agent_linked_tools.add(t)
     if t.startswith("agent:") and s.startswith("tool:"):
         agent_linked_tools.add(s)
+    if s.startswith("bundle:") and t.startswith("tool:"):
+        agent_linked_tools.add(t)
 
 # Remove shared tool nodes that no cluster agent uses
 # Also remove their non-agent links (tool -> cred/cap links become orphans)

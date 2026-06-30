@@ -52,13 +52,13 @@
         "emits": [
           "response",
           "tool_call",
-          "tool:get_linkedin_brand_brief",
           "tool:score_linkedin_draft",
           "tool:stage_linkedin_profile_update",
-          "tool:get_personal_site_launch_brief",
-          "tool:audit_personal_site_launch",
+          "tool:get_linkedin_brand_brief",
           "tool:get_linkedin_metric_dashboard",
-          "tool:list_linkedin_autonomous_actions"
+          "tool:list_linkedin_autonomous_actions",
+          "tool:get_personal_site_launch_brief",
+          "tool:audit_personal_site_launch"
         ]
       },
       "role": "plain"
@@ -293,14 +293,14 @@
           "response",
           "tool_call",
           "tool:get_linkedin_brand_brief",
+          "tool:get_linkedin_metric_dashboard",
+          "tool:list_linkedin_autonomous_actions",
           "tool:create_linkedin_draft",
           "tool:list_linkedin_drafts",
           "tool:score_linkedin_draft",
           "tool:create_linkedin_go_live_plan",
           "tool:record_linkedin_metric_snapshot",
-          "tool:get_linkedin_metric_dashboard",
-          "tool:run_linkedin_observability_cycle",
-          "tool:list_linkedin_autonomous_actions"
+          "tool:run_linkedin_observability_cycle"
         ]
       },
       "role": "plain"
@@ -393,6 +393,402 @@
         ],
         "emits": [
           "data"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:brand:brand_profile",
+      "name": "brand_profile",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "brand_profile",
+      "for_agent": "brand",
+      "description": "Brand-only LinkedIn surface: draft scoring + staged profile updates.",
+      "tools_count": 2,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:brand:linkedin_core",
+      "name": "linkedin_core",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "linkedin_core",
+      "for_agent": "brand",
+      "description": "LinkedIn read surface: brand brief, metric dashboard, autonomous-action queue.",
+      "tools_count": 3,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:brand:website_launch",
+      "name": "website_launch",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "website_launch",
+      "for_agent": "brand",
+      "description": "Personal-site launch readiness: brief, audit, staged launch tasks.",
+      "tools_count": 2,
+      "inactive_tools": [
+        "create_website_launch_task"
+      ],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:curator:sr1_curation",
+      "name": "sr1_curation",
+      "kind": "bundle",
+      "shared": false,
+      "type": "bundle",
+      "native": true,
+      "optional": true,
+      "bundle_key": "sr1_curation",
+      "for_agent": "curator",
+      "description": "SR1 channel curation: now/guide/schedule/reprogram, bumps, playlist, events, suggest-to-main.",
+      "tools_count": 8,
+      "inactive_tools": [],
+      "artifact": "bridge/src/forsch/adk_bridge/curator_tools.py",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:huberto:sr1_concierge",
+      "name": "sr1_concierge",
+      "kind": "bundle",
+      "shared": false,
+      "type": "bundle",
+      "native": true,
+      "bundle_key": "sr1_concierge",
+      "for_agent": "huberto",
+      "description": "SR1 friend concierge: what's-on, library search, movie requests.",
+      "tools_count": 3,
+      "inactive_tools": [],
+      "artifact": "bridge/src/forsch/adk_bridge/screening_room_tools.py",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:ops:ops_telemetry",
+      "name": "ops_telemetry",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "ops_telemetry",
+      "for_agent": "ops",
+      "description": "Read-only CRM/business telemetry: health snapshot + recent leads.",
+      "tools_count": 2,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:screening-ops:screening_media_pipeline",
+      "name": "screening_media_pipeline",
+      "kind": "bundle",
+      "shared": false,
+      "type": "bundle",
+      "native": true,
+      "bundle_key": "screening_media_pipeline",
+      "for_agent": "screening-ops",
+      "description": "Screening media pipeline: account audit, queue health/counts, retries, title diagnosis, storage health.",
+      "tools_count": 7,
+      "inactive_tools": [],
+      "artifact": "bridge/src/forsch/adk_bridge/ops_tools.py",
+      "gates": {
+        "L0": true,
+        "L1": true,
+        "L2": true,
+        "L3": false
+      },
+      "state": "built",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:shelby:household_assistant",
+      "name": "household_assistant",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "household_assistant",
+      "for_agent": "shelby",
+      "description": "Grocery logging + trends + reminders + email-receipt ingestion for personal assistants.",
+      "tools_count": 8,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:social:linkedin_authoring",
+      "name": "linkedin_authoring",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "linkedin_authoring",
+      "for_agent": "social",
+      "description": "LinkedIn authoring surface: draft, list, score, go-live plan, metric snapshot, observability cycle.",
+      "tools_count": 6,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:social:linkedin_core",
+      "name": "linkedin_core",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "linkedin_core",
+      "for_agent": "social",
+      "description": "LinkedIn read surface: brand brief, metric dashboard, autonomous-action queue.",
+      "tools_count": 3,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:stability:stability_diagnostics",
+      "name": "stability_diagnostics",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "stability_diagnostics",
+      "for_agent": "stability",
+      "description": "Workspace inventory, git health, import + service checks, host bash + file I/O.",
+      "tools_count": 7,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:website:linkedin_core",
+      "name": "linkedin_core",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "linkedin_core",
+      "for_agent": "website",
+      "description": "LinkedIn read surface: brand brief, metric dashboard, autonomous-action queue.",
+      "tools_count": 3,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
+        ]
+      },
+      "role": "plain"
+    },
+    {
+      "id": "bundle:website:website_launch",
+      "name": "website_launch",
+      "kind": "bundle",
+      "shared": false,
+      "bundle_key": "website_launch",
+      "for_agent": "website",
+      "description": "Personal-site launch readiness: brief, audit, staged launch tasks.",
+      "tools_count": 3,
+      "inactive_tools": [],
+      "type": "bundle",
+      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
+      "gates": {
+        "L0": false,
+        "L1": false,
+        "L2": false,
+        "L3": false
+      },
+      "state": "blank",
+      "reachable": false,
+      "contract": {
+        "accepts": [
+          "agent_message"
+        ],
+        "emits": [
+          "tool_call"
         ]
       },
       "role": "plain"
@@ -2106,38 +2502,18 @@
     },
     {
       "source": "agent:brand",
-      "target": "tool:audit_personal_site_launch",
-      "kind": "uses"
+      "target": "bundle:brand:brand_profile",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:brand",
-      "target": "tool:get_linkedin_brand_brief",
-      "kind": "uses"
+      "target": "bundle:brand:linkedin_core",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:brand",
-      "target": "tool:get_linkedin_metric_dashboard",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:brand",
-      "target": "tool:get_personal_site_launch_brief",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:brand",
-      "target": "tool:list_linkedin_autonomous_actions",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:brand",
-      "target": "tool:score_linkedin_draft",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:brand",
-      "target": "tool:stage_linkedin_profile_update",
-      "kind": "uses"
+      "target": "bundle:brand:website_launch",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:build",
@@ -2146,48 +2522,18 @@
     },
     {
       "source": "agent:curator",
+      "target": "bundle:curator:sr1_curation",
+      "kind": "uses-bundle"
+    },
+    {
+      "source": "agent:curator",
       "target": "chan:#screening-tv",
       "kind": "listens"
     },
     {
-      "source": "agent:curator",
-      "target": "tool:bumps",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:events",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:playlist",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:suggest_to_main",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:tv_guide",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:tv_now",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:tv_reprogram",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:curator",
-      "target": "tool:tv_schedule",
-      "kind": "uses"
+      "source": "agent:huberto",
+      "target": "bundle:huberto:sr1_concierge",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:huberto",
@@ -2195,29 +2541,14 @@
       "kind": "listens"
     },
     {
-      "source": "agent:huberto",
-      "target": "tool:request_movie",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:huberto",
-      "target": "tool:search_library",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:huberto",
-      "target": "tool:whats_on_sr1",
-      "kind": "uses"
-    },
-    {
       "source": "agent:ops",
-      "target": "tool:get_crm_health_snapshot",
-      "kind": "uses"
+      "target": "bundle:ops:ops_telemetry",
+      "kind": "uses-bundle"
     },
     {
-      "source": "agent:ops",
-      "target": "tool:list_recent_crm_leads",
-      "kind": "uses"
+      "source": "agent:screening-ops",
+      "target": "bundle:screening-ops:screening_media_pipeline",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:screening-ops",
@@ -2225,189 +2556,34 @@
       "kind": "listens"
     },
     {
-      "source": "agent:screening-ops",
-      "target": "tool:account_audit",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:screening-ops",
-      "target": "tool:diagnose_title",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:screening-ops",
-      "target": "tool:media_queue",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:screening-ops",
-      "target": "tool:pipeline_health",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:screening-ops",
-      "target": "tool:queue_counts",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:screening-ops",
-      "target": "tool:retry_failed",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:screening-ops",
-      "target": "tool:storage_health",
-      "kind": "uses"
-    },
-    {
       "source": "agent:shelby",
-      "target": "tool:add_grocery_email_sender",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:add_reminder",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:get_grocery_log",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:is_grocery_email_sender_allowed",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:list_grocery_email_senders",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:log_groceries",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:log_grocery_email_receipt",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:shelby",
-      "target": "tool:remove_grocery_email_sender",
-      "kind": "uses"
+      "target": "bundle:shelby:household_assistant",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:social",
-      "target": "tool:create_linkedin_draft",
-      "kind": "uses"
+      "target": "bundle:social:linkedin_authoring",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:social",
-      "target": "tool:create_linkedin_go_live_plan",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:get_linkedin_brand_brief",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:get_linkedin_metric_dashboard",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:list_linkedin_autonomous_actions",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:list_linkedin_drafts",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:record_linkedin_metric_snapshot",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:run_linkedin_observability_cycle",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:social",
-      "target": "tool:score_linkedin_draft",
-      "kind": "uses"
+      "target": "bundle:social:linkedin_core",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:stability",
-      "target": "tool:check_service_health",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:stability",
-      "target": "tool:execute_bash_command",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:stability",
-      "target": "tool:get_git_state",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:stability",
-      "target": "tool:get_workspace_inventory",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:stability",
-      "target": "tool:read_host_file",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:stability",
-      "target": "tool:validate_agent_imports",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:stability",
-      "target": "tool:write_host_file",
-      "kind": "uses"
+      "target": "bundle:stability:stability_diagnostics",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:website",
-      "target": "tool:audit_personal_site_launch",
-      "kind": "uses"
+      "target": "bundle:website:linkedin_core",
+      "kind": "uses-bundle"
     },
     {
       "source": "agent:website",
-      "target": "tool:create_website_launch_task",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:website",
-      "target": "tool:get_linkedin_brand_brief",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:website",
-      "target": "tool:get_linkedin_metric_dashboard",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:website",
-      "target": "tool:get_personal_site_launch_brief",
-      "kind": "uses"
-    },
-    {
-      "source": "agent:website",
-      "target": "tool:list_linkedin_autonomous_actions",
-      "kind": "uses"
+      "target": "bundle:website:website_launch",
+      "kind": "uses-bundle"
     },
     {
       "source": "authsome",
@@ -2438,6 +2614,297 @@
       "source": "authsome",
       "target": "cred:resend",
       "kind": "brokers"
+    },
+    {
+      "source": "bundle:brand:brand_profile",
+      "target": "tool:score_linkedin_draft",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:brand:brand_profile",
+      "target": "tool:stage_linkedin_profile_update",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:brand:linkedin_core",
+      "target": "tool:get_linkedin_brand_brief",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:brand:linkedin_core",
+      "target": "tool:get_linkedin_metric_dashboard",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:brand:linkedin_core",
+      "target": "tool:list_linkedin_autonomous_actions",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:brand:website_launch",
+      "target": "tool:audit_personal_site_launch",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:brand:website_launch",
+      "target": "tool:create_website_launch_task",
+      "kind": "contains",
+      "inactive": true
+    },
+    {
+      "source": "bundle:brand:website_launch",
+      "target": "tool:get_personal_site_launch_brief",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:bumps",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:events",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:playlist",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:suggest_to_main",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:tv_guide",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:tv_now",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:tv_reprogram",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:curator:sr1_curation",
+      "target": "tool:tv_schedule",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:huberto:sr1_concierge",
+      "target": "tool:request_movie",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:huberto:sr1_concierge",
+      "target": "tool:search_library",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:huberto:sr1_concierge",
+      "target": "tool:whats_on_sr1",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:ops:ops_telemetry",
+      "target": "tool:get_crm_health_snapshot",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:ops:ops_telemetry",
+      "target": "tool:list_recent_crm_leads",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:account_audit",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:diagnose_title",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:media_queue",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:pipeline_health",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:queue_counts",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:retry_failed",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:screening-ops:screening_media_pipeline",
+      "target": "tool:storage_health",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:add_grocery_email_sender",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:add_reminder",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:get_grocery_log",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:is_grocery_email_sender_allowed",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:list_grocery_email_senders",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:log_groceries",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:log_grocery_email_receipt",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:shelby:household_assistant",
+      "target": "tool:remove_grocery_email_sender",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_authoring",
+      "target": "tool:create_linkedin_draft",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_authoring",
+      "target": "tool:create_linkedin_go_live_plan",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_authoring",
+      "target": "tool:list_linkedin_drafts",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_authoring",
+      "target": "tool:record_linkedin_metric_snapshot",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_authoring",
+      "target": "tool:run_linkedin_observability_cycle",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_authoring",
+      "target": "tool:score_linkedin_draft",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_core",
+      "target": "tool:get_linkedin_brand_brief",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_core",
+      "target": "tool:get_linkedin_metric_dashboard",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:social:linkedin_core",
+      "target": "tool:list_linkedin_autonomous_actions",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:check_service_health",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:execute_bash_command",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:get_git_state",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:get_workspace_inventory",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:read_host_file",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:validate_agent_imports",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:stability:stability_diagnostics",
+      "target": "tool:write_host_file",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:website:linkedin_core",
+      "target": "tool:get_linkedin_brand_brief",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:website:linkedin_core",
+      "target": "tool:get_linkedin_metric_dashboard",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:website:linkedin_core",
+      "target": "tool:list_linkedin_autonomous_actions",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:website:website_launch",
+      "target": "tool:audit_personal_site_launch",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:website:website_launch",
+      "target": "tool:create_website_launch_task",
+      "kind": "contains"
+    },
+    {
+      "source": "bundle:website:website_launch",
+      "target": "tool:get_personal_site_launch_brief",
+      "kind": "contains"
     },
     {
       "source": "tool:audit_personal_site_launch",
@@ -2530,10 +2997,10 @@
       "kind": "requires"
     }
   ],
-  "node_count": 77,
-  "link_count": 86,
+  "node_count": 90,
+  "link_count": 100,
   "meta": {
-    "generated_at": "2026-06-30T13:58:54.490828+00:00",
+    "generated_at": "2026-06-30T15:47:00.261861+00:00",
     "source": "registry/agents/agents.yaml + shared/components.yaml + clusters/* (all-clusters union)"
   }
 }
