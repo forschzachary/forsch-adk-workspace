@@ -715,6 +715,7 @@ const COLORS = {
 // ── Helpers ──
 const hexAlpha = a => Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
 const lid = x => (x && typeof x === 'object') ? x.id : x;
+const rgba = (hex, alpha) => hex + hexAlpha(alpha);
 
 // ── Double-click detector (fallback for libraries without onNodeDoubleClick) ──
 let _lastClick = { id: null, ts: 0 };
@@ -919,6 +920,9 @@ const info = document.getElementById('info');
 const tooltip = document.getElementById('tooltip');
 // Per-lane spawn/library state (controls live in the swim-lane headers).
 let registryAgentIds = [], dragItem = null;
+// Hover focus state. force-graph mutates link endpoints into node objects, so keep
+// object identity for links and ids for nodes.
+let hoverNode = null, hoverLink = null, hoverNodeIds = new Set(), hoverLinks = new Set();
 
 // ── Cluster loading ──
 function loadClusters() {
@@ -969,7 +973,8 @@ function selectCluster(name) {
 
 function loadGraph(clusterName) {
   info.textContent = 'Loading…';
-  const url = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
+  const _base = clusterName ? apiUrl(`/manifest?cluster=${encodeURIComponent(clusterName)}`) : 'agent-graph-v2.json';
+  const url = _base + (_base.includes('?') ? '&' : '?') + '_=' + Date.now();   // cache-bust: the graph is derived live, always fetch fresh
   fetch(url)
     .then(r => r.json())
     .then(data => {
@@ -1464,27 +1469,30 @@ function layoutPadi() {
       return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     };
     // 1. re-order agents into their lane slots by the barycenter of their interfaces/routers
-    const agents = fg.graphData().nodes.filter(n => n.type === 'agent' && n.__tx != null);
+    const agents = fg.graphData().nodes.filter(n => n.type === 'agent' && n.__tx != null && !n.padiControl);
     if (agents.length) {
       const bary = new Map();
-      // pass 1: interface/router barycenter for ordinary (non-delegating) agents
+      // pass 1: interface/router barycenter for ordinary (non-delegating) agents. An agent with NO
+      //   interface (e.g. a built-but-channel-less bot like the curator) keeps its seed x so it still
+      //   has a real position instead of a null that would collapse the ordering.
       agents.forEach(a => {
         const isHub = links.some(l => l.kind === 'delegates' && byId[lid(l.source)] === a);
-        if (!isHub) bary.set(a, neighborTx(a, ['listens', 'wears']));
+        if (!isHub) bary.set(a, neighborTx(a, ['listens', 'wears']) ?? a.__tx);
       });
       // pass 2: a hub that delegates to OTHER agents centers among its targets' barycenters, so it
-      //   sits strictly BETWEEN them and its delegation edges radiate symmetrically (rather than
-      //   spanning the lane from one end). Using the targets' barys, not their seed x, avoids a tie
-      //   with a target whose own interface already sits mid-lane.
+      //   sits strictly BETWEEN them and its delegation edges radiate symmetrically.
       agents.forEach(a => {
         if (bary.has(a)) return;
         const xs = links.filter(l => l.kind === 'delegates' && byId[lid(l.source)] === a)
                         .map(l => bary.get(byId[lid(l.target)])).filter(v => v != null);
-        bary.set(a, xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : neighborTx(a, ['listens', 'wears']));
+        bary.set(a, xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : (neighborTx(a, ['listens', 'wears']) ?? a.__tx));
       });
-      const slots = agents.map(a => a.__tx).sort((x, y) => x - y);
-      agents.slice().sort((a, b) => (bary.get(a) ?? a.__tx) - (bary.get(b) ?? b.__tx))
-            .forEach((a, i) => { a.__tx = slots[i]; });
+      // Place agents at EVENLY-SPACED lane positions in barycenter order. Robust spacing (computed from
+      //   the lane width, not sorted prior __tx 'slots' which drift across re-layouts) — so bundles and
+      //   their halos always get the full lane gap between them and never collide, however many tools.
+      const _xL = padiWorld.xLeft, _xR = padiWorld.xRight, _n = agents.length;
+      agents.slice().sort((a, b) => bary.get(a) - bary.get(b))
+            .forEach((a, i) => { a.__tx = _xL + (_xR - _xL) * (i + 0.5) / _n; });
     }
     // 1b. re-order interfaces above the agent that listens to them, so the interface → agent
     //     chains don't cross after a hub agent re-centers (no-agent interfaces keep to the right).
@@ -1520,14 +1528,18 @@ function layoutPadi() {
         (groups[s.id] = groups[s.id] || []).push(t);
       }
     }
-    Object.values(groups).forEach(arr => arr.forEach((t, i) => {
-      t.__ang = (i + 0.5) / arr.length * Math.PI * 2;
-      t.__rad = 24 + arr.length * 2.4;
-      if (!Number.isFinite(t.x)) {
-        t.x = (t.__bundle.__tx || 0) + Math.cos(t.__ang) * t.__rad;
-        t.y = (t.__bundle.__ty || 0) + Math.sin(t.__ang) * t.__rad;
-      }
-    }));
+    Object.values(groups).forEach(arr => {
+      const haloR = 24 + arr.length * 2.4;
+      if (arr[0]?.__bundle) arr[0].__bundle.__toolHaloR = haloR;
+      arr.forEach((t, i) => {
+        t.__ang = (i + 0.5) / arr.length * Math.PI * 2;
+        t.__rad = haloR;
+        if (!Number.isFinite(t.x)) {
+          t.x = (t.__bundle.__tx || 0) + Math.cos(t.__ang) * t.__rad;
+          t.y = (t.__bundle.__ty || 0) + Math.sin(t.__ang) * t.__rad;
+        }
+      });
+    });
   }
 
   PADI_LANES.forEach((lane, li) => {
@@ -1552,18 +1564,18 @@ function fitPadiToViewport(ms = 650) {
   const usableW = Math.max(320, panelLeft - 24);
   const usableH = Math.max(320, H - 72);
 
-  const xMin = padiWorld.xLeft - 56;
-  const xMax = padiWorld.xRight + 56;
-  const yMin = padiWorld.yTop - 18;
-  const yMax = padiWorld.yBottom + 18;
+  const xMin = padiWorld.xLeft - 64;
+  const xMax = padiWorld.xRight + 64;
+  const yMin = padiWorld.yTop - 44;
+  const yMax = padiWorld.yBottom + 88;
   const boundsW = Math.max(1, xMax - xMin);
   const boundsH = Math.max(1, yMax - yMin);
-  const zoom = Math.max(0.78, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
+  const zoom = Math.max(0.46, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
   const cx = (xMin + xMax) / 2;
   const cy = (yMin + yMax) / 2;
 
   const panelOffset = Math.max(0, W - usableW) / 2;
-  fg.centerAt(cx + panelOffset / zoom, cy - 18 / zoom, ms);
+  fg.centerAt(cx + panelOffset / zoom, cy, ms);
   fg.zoom(zoom, ms);
   window.setTimeout(() => {
     layoutPadi();
@@ -1649,45 +1661,44 @@ padiLaneForce.initialize = nodes => { padiLaneForce._nodes = nodes; };
 function drawPadiLink(link, ctx, scale) {
   const s = link.source, t = link.target;
   if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
-  const col = padiLinkColor(link);
+  const highlighted = hoverLink === link || hoverLinks.has(link);
+  const hoverDim = (hoverNode || hoverLink) && !highlighted;
+  const col = padiLinkColor(link, hoverDim ? 0.22 : 1);
   const delegates = link.kind === 'delegates';   // a real agent→agent handoff (Huberto consults Ops over A2A)
-  ctx.lineWidth = (delegates ? 1.8 : 1.1) / scale;
+  const inactive = !!link.inactive;
+  ctx.lineWidth = (highlighted ? 2.4 : delegates ? 1.8 : inactive ? 0.8 : 1.1) / scale;
   ctx.strokeStyle = col;
   if (delegates) ctx.setLineDash([6 / scale, 4 / scale]);   // dashed: a relationship, not structural plumbing
-  // Rail or same-lane links: a plain straight line.
-  if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
-    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
-    ctx.setLineDash([]);
-    return;
-  }
-  const upper = s.__lane < t.__lane ? s : t;   // smaller index = higher row
-  const lower = s.__lane < t.__lane ? t : s;
-  const boundY = padiLaneBound[upper.__lane];   // divider just below the upper lane
-  const px = lower.__tx;                         // static column x → pin never jitters
-  if (!Number.isFinite(boundY) || !Number.isFinite(px)) {
-    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
-    return;
-  }
+  if (inactive) ctx.setLineDash([2 / scale, 5 / scale]);
+  const pts = padiLinkPath(s, t);
+  if (pts.length < 2) return;
   ctx.beginPath();
-  ctx.moveTo(lower.x, lower.y);   // straight up from the lower node…
-  ctx.lineTo(px, boundY);         // …to the static pin on the row crossing…
-  ctx.lineTo(upper.x, upper.y);   // …then bend to the upper node.
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
   ctx.stroke();
-  // Static pin at the crossing.
-  ctx.beginPath();
-  ctx.arc(px, boundY, 2.6 / scale, 0, 2 * Math.PI);
-  ctx.fillStyle = col;
-  ctx.fill();
-  ctx.lineWidth = 1.5 / scale;
-  ctx.strokeStyle = '#0d1117';
-  ctx.stroke();
+  if (!inactive && !hoverDim && link.kind !== 'contains') drawPadiArrow(link, pts, ctx, scale, col);
+  if (highlighted && link.kind === 'contains') drawPadiArrow(link, pts, ctx, scale, col);
+  if (pts.length === 3) {
+    const pin = pts[1];
+    ctx.beginPath();
+    ctx.arc(pin.x, pin.y, (highlighted ? 3.4 : 2.6) / scale, 0, 2 * Math.PI);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.lineWidth = 1.5 / scale;
+    ctx.strokeStyle = '#0d1117';
+    ctx.stroke();
+  }
   ctx.setLineDash([]);
+  drawPadiLinkLabel(link, pts, ctx, scale, col, highlighted);
 }
-function padiLinkColor(l) {
-  if (l.kind === 'delegates') return 'rgba(212,165,116,0.85)';   // delegation: warm + visible (Huberto → Ops over A2A)
-  if (l.kind === 'depends-on') return 'rgba(165,214,255,0.45)';
-  if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.45)';
-  return 'rgba(139,160,184,0.5)';
+function padiLinkColor(l, alphaScale = 1) {
+  if (l.kind === 'delegates') return rgba('#d4a574', 0.9 * alphaScale);   // delegation: warm + visible (Huberto → Ops over A2A)
+  if (l.kind === 'depends-on') return rgba('#a5d6ff', 0.48 * alphaScale);
+  if (l.kind === 'runs-on' || l.kind === 'runs-in') return rgba('#c8a0ff', 0.5 * alphaScale);
+  if (l.kind === 'listens') return rgba('#d2a8ff', 0.56 * alphaScale);
+  if (l.kind === 'uses-bundle') return rgba('#d4a574', 0.72 * alphaScale);
+  if (l.kind === 'contains') return rgba('#f0883e', (l.inactive ? 0.2 : 0.38) * alphaScale);
+  return rgba('#8ba0b8', 0.5 * alphaScale);
 }
 
 function applyForces() {
@@ -1759,6 +1770,118 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + rr);
   ctx.quadraticCurveTo(x, y, x + rr, y);
   ctx.closePath();
+}
+
+function nodeShapePath(ctx, node, x, y, r, scale) {
+  const rr = Math.max(2 / scale, Math.min(7 / scale, r * 0.45));
+  if (node.type === 'agent') {
+    const k = 0.38;
+    ctx.beginPath();
+    ctx.moveTo(x - r * k, y - r);
+    ctx.lineTo(x + r * k, y - r);
+    ctx.lineTo(x + r, y - r * k);
+    ctx.lineTo(x + r, y + r * k);
+    ctx.lineTo(x + r * k, y + r);
+    ctx.lineTo(x - r * k, y + r);
+    ctx.lineTo(x - r, y + r * k);
+    ctx.lineTo(x - r, y - r * k);
+    ctx.closePath();
+    return;
+  }
+  if (node.type === 'tool' || node.type === 'network') {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    return;
+  }
+  if (node.type === 'bundle') {
+    roundRectPath(ctx, x - r * 1.28, y - r * 0.76, r * 2.56, r * 1.52, rr);
+    return;
+  }
+  if (node.type === 'router') {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 1.05);
+    ctx.lineTo(x + r * 0.95, y + r * 0.72);
+    ctx.lineTo(x - r * 0.95, y + r * 0.72);
+    ctx.closePath();
+    return;
+  }
+  if (node.type === 'intake') {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.9, y - r * 0.65);
+    ctx.lineTo(x + r * 0.5, y - r * 0.65);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x + r * 0.5, y + r * 0.65);
+    ctx.lineTo(x - r * 0.9, y + r * 0.65);
+    ctx.closePath();
+    return;
+  }
+  if (node.type === 'ui') {
+    roundRectPath(ctx, x - r * 1.18, y - r * 0.72, r * 2.36, r * 1.44, rr);
+    return;
+  }
+  if (node.type === 'database') {
+    roundRectPath(ctx, x - r * 0.9, y - r * 1.05, r * 1.8, r * 2.1, rr);
+    return;
+  }
+  if (node.type === 'service' || node.type === 'container' || node.type === 'host') {
+    roundRectPath(ctx, x - r, y - r * 0.82, r * 2, r * 1.64, rr);
+    return;
+  }
+  if (node.type === 'tunnel') {
+    ctx.beginPath();
+    ctx.arc(x, y + r * 0.18, r * 0.85, Math.PI, 0);
+    ctx.lineTo(x + r * 0.62, y + r * 0.8);
+    ctx.lineTo(x - r * 0.62, y + r * 0.8);
+    ctx.closePath();
+    return;
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+}
+
+function drawMiniBadge(ctx, x, y, text, color, scale) {
+  const fs = text.length > 1 ? 7.5 / scale : 8.5 / scale;
+  ctx.font = `700 ${fs}px ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace`;
+  const w = Math.max(10 / scale, ctx.measureText(text).width + 5 / scale);
+  const h = 11 / scale;
+  roundRectPath(ctx, x - w / 2, y - h / 2, w, h, h / 2);
+  ctx.fillStyle = '#0d1117cc';
+  ctx.fill();
+  ctx.strokeStyle = rgba(color, 0.8);
+  ctx.lineWidth = 1 / scale;
+  ctx.stroke();
+  ctx.fillStyle = rgba(color, 0.95);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y + 0.2 / scale);
+}
+
+function drawNodeBadges(node, ctx, r, scale, color) {
+  const badges = [];
+  if (node.native && ['agent', 'bundle', 'intake', 'ui'].includes(node.type)) badges.push('N');
+  if (node.optional && ['agent', 'bundle', 'intake', 'ui'].includes(node.type)) badges.push('opt');
+  if (node.role === 'builder') badges.push('B');
+  if (node.role === 'orchestrator') badges.push('O');
+  if (node.type === 'bundle' && (node.inactive_tools || []).length) badges.push('-' + node.inactive_tools.length);
+  badges.slice(0, 2).forEach((badge, i) => {
+    drawMiniBadge(ctx, node.x + r * 0.78 + i * 14 / scale, node.y - r * 0.78, badge, color, scale);
+  });
+}
+
+function truncateLabel(ctx, label, maxWidth) {
+  if (!label || ctx.measureText(label).width <= maxWidth) return label || '';
+  const ell = '…';
+  let lo = 0, hi = label.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (ctx.measureText(label.slice(0, mid) + ell).width <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return label.slice(0, Math.max(1, lo)) + ell;
 }
 
 function padiControlRect(node, scale) {
@@ -1876,19 +1999,19 @@ function drawLiveParticles(ctx, scale) {
 }
 
 function padiLinkPath(s, t) {
+  const rS = nodeVisualRadius(s, 1) + 2;
+  const rT = nodeVisualRadius(t, 1) + 2;
   if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
-    return [s, t];
+    return clipSegment(s, t, rS, rT);
   }
-  const upper = s.__lane < t.__lane ? s : t;
+  const upper = s.__lane < t.__lane ? s : t;   // smaller index = higher row
   const lower = s.__lane < t.__lane ? t : s;
   const boundY = padiLaneBound[upper.__lane];
   const px = lower.__tx;
-  if (!Number.isFinite(boundY) || !Number.isFinite(px)) return [s, t];
-  const rS = nodeVisualRadius(s, 1) + 2;
-  const rT = nodeVisualRadius(t, 1) + 2;
+  if (!Number.isFinite(boundY) || !Number.isFinite(px)) return clipSegment(s, t, rS, rT);
   const pin = { x: px, y: boundY };
-  const seg1 = clipSegment(lower, pin, rS, 0);
-  const seg2 = clipSegment(pin, upper, 0, rT);
+  const seg1 = clipSegment(s, pin, rS, 0);
+  const seg2 = clipSegment(pin, t, 0, rT);
   return [seg1[0], seg1[1], seg2[1]];
 }
 
@@ -1926,6 +2049,110 @@ function pointAtDist(pts, dist) {
   return pts[pts.length - 1];
 }
 
+function drawPadiArrow(link, pts, ctx, scale, color) {
+  const totalLen = pathLength(pts);
+  if (totalLen < 18 / scale) return;
+  const headDist = Math.max(8 / scale, totalLen - 8 / scale);
+  const tailDist = Math.max(0, headDist - 10 / scale);
+  const head = pointAtDist(pts, headDist);
+  const tail = pointAtDist(pts, tailDist);
+  const angle = Math.atan2(head.y - tail.y, head.x - tail.x);
+  const len = link.kind === 'delegates' ? 9 / scale : 7 / scale;
+  const half = len * 0.48;
+  ctx.save();
+  ctx.translate(head.x, head.y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-len, -half);
+  ctx.lineTo(-len * 0.72, 0);
+  ctx.lineTo(-len, half);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
+function padiLinkLabelText(link, highlighted) {
+  const labels = {
+    'delegates': 'delegates',
+    'uses-bundle': 'uses bundle',
+    'listens': 'listens',
+    'wears': 'group',
+    'depends-on': 'credential',
+    'runs-in': 'runs in',
+    'runs-on': 'runs on',
+  };
+  if (labels[link.kind]) return labels[link.kind];
+  if (highlighted && link.kind === 'contains') return link.inactive ? 'inactive tool' : 'tool';
+  return '';
+}
+
+function drawPadiLinkLabel(link, pts, ctx, scale, color, highlighted) {
+  const text = padiLinkLabelText(link, highlighted);
+  if (!text) return;
+  const totalLen = pathLength(pts);
+  if (totalLen < 60 / scale && !highlighted) return;
+  const mid = pointAtDist(pts, totalLen * 0.5);
+  const fs = (highlighted ? 10 : 8.5) / scale;
+  ctx.save();
+  ctx.font = `700 ${fs}px ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace`;
+  const w = ctx.measureText(text).width + 8 / scale;
+  const h = fs + 5 / scale;
+  roundRectPath(ctx, mid.x - w / 2, mid.y - h / 2, w, h, 4 / scale);
+  ctx.fillStyle = highlighted ? '#111820e6' : '#0d1117b8';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.75 / scale;
+  ctx.stroke();
+  ctx.fillStyle = highlighted ? '#e6edf3' : rgba('#c9d1d9', 0.74);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, mid.x, mid.y + 0.4 / scale);
+  ctx.restore();
+}
+
+function paintPadiLinkHitArea(link, color, ctx, scale) {
+  const s = link.source, t = link.target;
+  if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
+  const pts = currentLens === 'padi' ? padiLinkPath(s, t) : clipSegment(s, t, nodeVisualRadius(s, 1), nodeVisualRadius(t, 1));
+  if (pts.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(8 / scale, 6);
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.stroke();
+}
+
+function setHoverNode(node) {
+  hoverNode = node || null;
+  hoverLink = null;
+  hoverNodeIds = new Set();
+  hoverLinks = new Set();
+  if (!node || !fg) return;
+  hoverNodeIds.add(node.id);
+  (fg.graphData().links || []).forEach(link => {
+    const s = lid(link.source), t = lid(link.target);
+    if (s === node.id || t === node.id) {
+      hoverLinks.add(link);
+      hoverNodeIds.add(s);
+      hoverNodeIds.add(t);
+    }
+  });
+}
+
+function setHoverLink(link) {
+  hoverLink = link || null;
+  hoverNode = null;
+  hoverNodeIds = new Set();
+  hoverLinks = new Set();
+  if (!link) return;
+  hoverLinks.add(link);
+  hoverNodeIds.add(lid(link.source));
+  hoverNodeIds.add(lid(link.target));
+}
+
 // ── Graph init ──
 let fg;
 function initGraph(data) {
@@ -1952,32 +2179,39 @@ function initGraph(data) {
       const r = nodeVisualRadius(node, globalScale);
       const color = COLORS[node.type] || '#8b949e';
       const isAgent = node.type === 'agent';
-      const state = node.state;
-      const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
-      const isSynthetic = !!node.synthetic;
+	      const state = node.state;
+	      const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
+	      const isSynthetic = !!node.synthetic;
+	      const highlighted = hoverNodeIds.has(node.id);
+	      const hoverDim = (hoverNode || hoverLink) && !highlighted;
 
-      // Alpha: dim for blank/building, extra-dim for shared and synthetic
-      let alpha = 1.0;
-      if (node.type === 'bundle') alpha = 0.95;   // bundle blobs read as solid, not "blank"
-      else if (state === 'blank') alpha = 0.35;
+	      // Alpha: dim for blank/building, extra-dim for shared and synthetic
+	      let alpha = 1.0;
+	      if (node.type === 'bundle') alpha = 0.95;   // bundle blobs read as solid, not "blank"
+	      else if (state === 'blank') alpha = 0.35;
       else if (state === 'building') alpha = 0.6;
       else if (state === 'error') alpha = 0.75;
-      if (node.shared) alpha *= 0.5;
-      if (isSynthetic) alpha *= 0.85;
-      if (node.rail) alpha *= 0.7; // Rail nodes are muted
+	      if (node.shared) alpha *= 0.5;
+	      if (isSynthetic) alpha *= 0.85;
+	      if (node.rail) alpha *= 0.7; // Rail nodes are muted
+	      if (hoverDim) alpha *= 0.22;
 
-      // ── Outer circle ──
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-      ctx.fillStyle = color + hexAlpha(alpha * 0.25);
-      ctx.fill();
-      ctx.strokeStyle = color + hexAlpha(alpha);
-      ctx.lineWidth = 1.5 / globalScale;
-      if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
-      if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
-      if (node.rail) ctx.setLineDash([2 / globalScale, 2 / globalScale]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+	      // ── Outer silhouette ──
+	      if (highlighted) {
+	        nodeShapePath(ctx, node, node.x, node.y, r + 5 / globalScale, globalScale);
+	        ctx.fillStyle = rgba(color, 0.1);
+	        ctx.fill();
+	      }
+	      nodeShapePath(ctx, node, node.x, node.y, r, globalScale);
+	      ctx.fillStyle = rgba(color, alpha * (node.type === 'bundle' ? 0.3 : 0.22));
+	      ctx.fill();
+	      ctx.strokeStyle = rgba(color, alpha);
+	      ctx.lineWidth = (highlighted ? 2.4 : 1.5) / globalScale;
+	      if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
+	      if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
+	      if (node.rail) ctx.setLineDash([2 / globalScale, 2 / globalScale]);
+	      ctx.stroke();
+	      ctx.setLineDash([]);
 
       // ── Fill arc (gate completion, agents only) ──
       if (isAgent && completion > 0) {
@@ -2008,46 +2242,50 @@ function initGraph(data) {
           ctx.strokeStyle = '#3fb950';
           ctx.lineWidth = 2 / globalScale;
           ctx.stroke();
-        }
-      }
+	        }
+	      }
+	      drawNodeBadges(node, ctx, r, globalScale, color);
 
-      // ── Label ── Tool names are hover-only (the halo would be an unreadable label
-      // pile-up); hover a tool for its name or click to inspect. Bundle names are
-      // emphasized — that's the label that matters at a glance.
-      if (node.type !== 'tool') {
-        const label = node.name;
-        const big = node.type === 'bundle' ? 1.3 : 1;
-        const fontSize = (padiScreenStableNodes() && !node.rail
-          ? 11 / globalScale
-          : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale))) * big;
-        ctx.font = `${node.type === 'bundle' ? '600 ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-        if (node.rail) {
-          // Rail nodes: label to the right, vertically centered
-          ctx.save();
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = color + hexAlpha(0.9);
-          ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
-          ctx.restore();
-        } else {
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          ctx.fillStyle = node.type === 'bundle' ? '#f0c890' : (node.shared ? '#8b949e' : '#c9d1d9');
-          ctx.fillText(label, node.x, node.y + r + 3 / globalScale);
-        }
-      }
+	      // ── Label ── Tool names are hover-only (the halo would be an unreadable label
+	      // pile-up); hover a tool for its name or click to inspect. Bundle names are
+	      // emphasized — that's the label that matters at a glance.
+	      if (node.type !== 'tool' || highlighted) {
+	        const rawLabel = node.name;
+	        const big = node.type === 'bundle' ? 1.08 : 1;
+	        const fontSize = (padiScreenStableNodes() && !node.rail
+	          ? 11 / globalScale
+	          : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale))) * big;
+	        ctx.font = `${node.type === 'bundle' ? '600 ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+	        const label = truncateLabel(ctx, rawLabel, (node.type === 'tool' ? 120 : node.type === 'bundle' ? 92 : 130) / globalScale);
+	        if (node.rail) {
+	          // Rail nodes: label to the right, vertically centered
+	          ctx.save();
+	          ctx.textAlign = 'left';
+	          ctx.textBaseline = 'middle';
+	          ctx.fillStyle = rgba(color, hoverDim ? 0.32 : 0.9);
+	          ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
+	          ctx.restore();
+	        } else {
+	          ctx.textAlign = 'center';
+	          ctx.textBaseline = 'top';
+	          ctx.fillStyle = hoverDim ? rgba('#8b949e', 0.38) : node.type === 'bundle' ? '#f0c890' : (node.shared ? '#8b949e' : '#c9d1d9');
+	          const labelY = node.type === 'bundle'
+	            ? node.y + Math.max(r, node.__toolHaloR || 0) + 5 / globalScale
+	            : node.y + r + 3 / globalScale;
+	          ctx.fillText(label, node.x, labelY);
+	        }
+	      }
     })
     .nodePointerAreaPaint((node, color, ctx, globalScale) => {
       if (node.padiControl) {
         paintPadiControlHitArea(node, color, ctx, globalScale);
         return;
-      }
-      const r = nodeVisualRadius(node, globalScale);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, r + 4 / globalScale, 0, 2 * Math.PI);
-      ctx.fill();
-    })
+	      }
+	      const r = nodeVisualRadius(node, globalScale);
+	      ctx.fillStyle = color;
+	      nodeShapePath(ctx, node, node.x, node.y, r + 5 / globalScale, globalScale);
+	      ctx.fill();
+	    })
     .linkColor(l => {
       if (l.kind === 'depends-on') return 'rgba(165,214,255,0.4)'; // dependency rail
       if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.4)'; // infra rail
@@ -2055,11 +2293,13 @@ function initGraph(data) {
     })
     .linkDirectionalArrowLength(() => currentLens === 'padi' ? 0 : 6)
     .linkDirectionalArrowRelPos(0.95)
-    .linkLabel(l => l.kind)
-    .linkWidth(1)
-    .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
-    .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
-    .linkDirectionalParticles(0)
+	    .linkLabel(l => l.kind)
+	    .linkWidth(l => (hoverLink === l || hoverLinks.has(l)) ? 2 : 1)
+	    .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
+	    .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
+	    .linkPointerAreaPaint((link, color, ctx, scale) => paintPadiLinkHitArea(link, color, ctx, scale))
+	    .linkDirectionalParticles(0)
+	    .autoPauseRedraw(false)
     .onRenderFramePre((ctx, scale) => {
       // PADI lanes and optional rail columns are graph-space surfaces, so they
       // zoom and pan with the live graph instead of fighting the camera.
@@ -2147,26 +2387,51 @@ function initGraph(data) {
       // Always open inspect panel on click
       openInspect(node);
     })
-    .onNodeHover(node => {
-      if (node) {
-        tooltip.style.display = 'block';
-        const extra = node.members ? `<br>channels: ${node.members.join(', ')}` : '';
-        const sharedTag = node.shared ? '<br><span style="color:#8b949e">shared component</span>' : '';
-        const cc = nodeMetrics.cc[node.id] || 0;
-        const gc = node.type === 'agent' ? Math.round((nodeMetrics.gc[node.id] || 0) * 100) : null;
-        const gcStr = gc !== null ? ` · gates: ${gc}%` : '';
-        tooltip.innerHTML = `
-          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span>${sharedTag}<br>
-          state: <b>${node.state}</b> · role: ${node.role} · links: ${cc}${gcStr}<br>
-          artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
-          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}${extra}
-        `;
-        tooltip.style.left = (node.x + nodeRadius(node) + 16) + 'px';
-        tooltip.style.top = (node.y - 10) + 'px';
-      } else {
-        tooltip.style.display = 'none';
-      }
-    })
+	    .onNodeHover(node => {
+	      setHoverNode(node);
+	      if (node) {
+	        tooltip.style.display = 'block';
+	        const extra = node.members ? `<br>channels: ${node.members.join(', ')}` : '';
+	        const sharedTag = node.shared ? '<br><span style="color:#8b949e">shared component</span>' : '';
+	        const nativeTag = node.native ? '<br><span style="color:#79c0ff">native bridge bot</span>' : '';
+	        const optionalTag = node.optional ? '<br><span style="color:#d29922">optional surface</span>' : '';
+	        const cc = nodeMetrics.cc[node.id] || 0;
+	        const gc = node.type === 'agent' ? Math.round((nodeMetrics.gc[node.id] || 0) * 100) : null;
+	        const gcStr = gc !== null ? ` · gates: ${gc}%` : '';
+	        tooltip.innerHTML = `
+	          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span>${sharedTag}${nativeTag}${optionalTag}<br>
+	          state: <b>${node.state}</b> · role: ${node.role} · links: ${cc}${gcStr}<br>
+	          artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
+	          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}${extra}
+	        `;
+	        const pt = fg?.graph2ScreenCoords ? fg.graph2ScreenCoords(node.x, node.y) : { x: node.x, y: node.y };
+	        tooltip.style.left = (pt.x + nodeRadius(node) + 16) + 'px';
+	        tooltip.style.top = (pt.y - 10) + 'px';
+	      } else {
+	        tooltip.style.display = 'none';
+	      }
+	    })
+	    .onLinkHover(link => {
+	      setHoverLink(link);
+	      if (link) {
+	        const s = lid(link.source), t = lid(link.target);
+	        const label = padiLinkLabelText(link, true) || (link.kind || 'link');
+	        tooltip.style.display = 'block';
+	        tooltip.innerHTML = `
+	          <strong>${label}</strong> <span style="color:${padiLinkColor(link, 1)}">${link.kind || 'link'}</span><br>
+	          source: <code style="font-size:10px">${s}</code><br>
+	          target: <code style="font-size:10px">${t}</code>${link.inactive ? '<br><span style="color:#d29922">inactive in this bundle</span>' : ''}
+	        `;
+	        const source = link.source, target = link.target;
+	        const mx = source && target ? (source.x + target.x) / 2 : 0;
+	        const my = source && target ? (source.y + target.y) / 2 : 0;
+	        const pt = fg?.graph2ScreenCoords ? fg.graph2ScreenCoords(mx, my) : { x: mx, y: my };
+	        tooltip.style.left = (pt.x + 12) + 'px';
+	        tooltip.style.top = (pt.y + 12) + 'px';
+	      } else if (!hoverNode) {
+	        tooltip.style.display = 'none';
+	      }
+	    })
     .dagMode('td')
     .dagLevelDistance(80)
     .cooldownTicks(100);
