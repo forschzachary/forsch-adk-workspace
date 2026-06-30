@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "agent_id": "brand",
+  "description": "Brand/profile voice and proof-boundary checks for Zach's LinkedIn go-live.",
+  "eval_cases": [
+    {
+      "eval_case_id": "approved_headline_scores_ready",
+      "tool_call": {
+        "name": "score_linkedin_draft",
+        "args": {
+          "draft_text": "Technical Support Leader | Practical AI for Support Ops | Building The Coordination Layer",
+          "content_type": "profile_headline"
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "manual_approval_required", "equals": true },
+        { "path": "pass", "equals": true },
+        { "path": "score", "min": 0.72 }
+      ]
+    },
+    {
+      "eval_case_id": "unproved_300k_claim_gets_flagged",
+      "tool_call": {
+        "name": "score_linkedin_draft",
+        "args": {
+          "draft_text": "I found $300k in savings and can guarantee the same result for any support team.",
+          "content_type": "profile_about"
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "manual_approval_required", "equals": true },
+        { "path": "pass", "equals": false },
+        { "path": "flags", "contains": "do not lead with the $300k claim until proof page exists" }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,17 @@ import os
 
 from google.adk import Agent
 from google.adk.models.lite_llm import LiteLlm
+from forsch.adk_components.tools import (
+    get_linkedin_brand_brief,
+    create_linkedin_draft,
+    list_linkedin_drafts,
+    score_linkedin_draft,
+    create_linkedin_go_live_plan,
+    record_linkedin_metric_snapshot,
+    get_linkedin_metric_dashboard,
+    run_linkedin_observability_cycle,
+    list_linkedin_autonomous_actions,
+)
 
 _LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 _LITELLM_API_KEY = (
@@ -26,9 +37,18 @@ social_model = LiteLlm(
 root_agent = Agent(
     name='social_agent',
     model=social_model,
-    description='Social media lead for Forsch.',
-    instruction='You are the social team lead for Forsch.',
+    description='LinkedIn content, engagement, and launch queue lead for Zach.',
+    instruction="You are Zach's LinkedIn content and engagement queue lead.\n\nYour job is to help grow Zach's LinkedIn by preparing useful drafts, weekly content batches, thoughtful comment/reply options, and morning go-live checklists grounded in his support-ops lane. Focus on support operations visibility, escalation context, QA, Product/Engineering handoffs, practical AI workflows, and The Coordination Layer.\n\nUse get_linkedin_brand_brief first. Use record_linkedin_metric_snapshot for manual or approved-export metrics. Use get_linkedin_metric_dashboard before choosing the next batch. Use run_linkedin_observability_cycle to queue safe local autonomous actions from those metrics. Use create_linkedin_draft to stage posts, comments, and replies. Use score_linkedin_draft to grade any draft before presenting it as ready. Use list_linkedin_drafts and list_linkedin_autonomous_actions to show the review queues. Use create_linkedin_go_live_plan for the morning handoff.\n\nHard boundary: LinkedIn is Zach's professional identity. You do not scrape, auto-post, comment, DM, accept connections, edit profile fields, or claim anything was published. Autonomous actions are limited to local metric logging, local drafts, local profile-review records, and local website tasks. All public output is staged-only and needs Zach's final manual approval.",
     tools=[
+        get_linkedin_brand_brief,
+        create_linkedin_draft,
+        list_linkedin_drafts,
+        score_linkedin_draft,
+        create_linkedin_go_live_plan,
+        record_linkedin_metric_snapshot,
+        get_linkedin_metric_dashboard,
+        run_linkedin_observability_cycle,
+        list_linkedin_autonomous_actions,
     ],
 )
 

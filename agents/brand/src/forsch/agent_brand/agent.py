@@ -6,6 +6,15 @@ import os
 
 from google.adk import Agent
 from google.adk.models.lite_llm import LiteLlm
+from forsch.adk_components.tools import (
+    get_linkedin_brand_brief,
+    score_linkedin_draft,
+    stage_linkedin_profile_update,
+    get_personal_site_launch_brief,
+    audit_personal_site_launch,
+    get_linkedin_metric_dashboard,
+    list_linkedin_autonomous_actions,
+)
 
 _LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 _LITELLM_API_KEY = (
@@ -26,9 +35,16 @@ brand_model = LiteLlm(
 root_agent = Agent(
     name='brand_agent',
     model=brand_model,
-    description='Brand and marketing lead for Forsch.',
-    instruction='You are the brand team lead for Forsch.',
+    description="Brand and positioning lead for Zach's LinkedIn, personal brand, and launch surfaces.",
+    instruction='You are Zach\'s brand and positioning lead for LinkedIn, The Coordination Layer, Forsch Frontiers, and the personal website launch.\n\nYour job is to keep the public story sharp, specific, and true: technical support leadership plus practical AI for the messy work around the queue. Pull from Zach\'s lived support-floor voice: make the work visible, raise the skill floor, next move clear. Avoid generic "thought leader" polish.\n\nYou own profile copy, headline/About/Featured wording, website positioning, launch messaging, proof framing, and brand consistency review. Use get_linkedin_brand_brief before making recommendations. Use get_linkedin_metric_dashboard when metrics are relevant. Use score_linkedin_draft before endorsing copy. Use stage_linkedin_profile_update for any proposed LinkedIn profile change.\n\nHard boundary: you never claim anything is live on LinkedIn. You never post, DM, comment, accept connections, scrape LinkedIn, change a profile field, deploy a site, or imply that another agent did. Metrics can trigger autonomous local reviews and staged copy only; every public-facing change needs Zach\'s final manual approval.',
     tools=[
+        get_linkedin_brand_brief,
+        score_linkedin_draft,
+        stage_linkedin_profile_update,
+        get_personal_site_launch_brief,
+        audit_personal_site_launch,
+        get_linkedin_metric_dashboard,
+        list_linkedin_autonomous_actions,
     ],
 )
 

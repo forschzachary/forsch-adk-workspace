@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "agent_id": "social",
+  "description": "LinkedIn metric observability and local-only autonomous action checks.",
+  "eval_cases": [
+    {
+      "eval_case_id": "record_metric_snapshot",
+      "tool_call": {
+        "name": "record_linkedin_metric_snapshot",
+        "args": {
+          "snapshot_date": "2026-06-30",
+          "source": "linkedin_export",
+          "followers": 510,
+          "profile_views_7d": 40,
+          "post_impressions_7d": 500,
+          "post_count_7d": 1,
+          "reactions_7d": 4,
+          "comments_7d": 1,
+          "link_clicks_7d": 0,
+          "website_sessions_7d": 7,
+          "newsletter_subscribers": 0,
+          "notes": "Morning manual/exported metrics baseline."
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "published", "equals": false },
+        { "path": "record.collection_boundary", "contains": "no scraping" },
+        { "path": "record.engagement_rate_7d", "equals": 0.01 }
+      ]
+    },
+    {
+      "eval_case_id": "dashboard_recommends_safe_actions",
+      "tool_call": {
+        "name": "get_linkedin_metric_dashboard",
+        "args": {
+          "window_days": 30
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "has_baseline", "equals": true },
+        { "path": "latest.engagement_rate_7d", "equals": 0.01 },
+        { "path": "recommended_autonomous_actions", "contains": "stage_profile_cta_review" },
+        { "path": "autonomy_boundary", "contains": "no LinkedIn scrape" }
+      ]
+    },
+    {
+      "eval_case_id": "autonomy_cycle_queues_local_actions_only",
+      "tool_call": {
+        "name": "run_linkedin_observability_cycle",
+        "args": {
+          "window_days": 30,
+          "max_actions": 3,
+          "create_artifacts": true
+        }
+      },
+      "assertions": [
+        { "path": "ok", "equals": true },
+        { "path": "published", "equals": false },
+        { "path": "record.publication_boundary", "equals": "manual_only" },
+        { "path": "record.autonomy_boundary", "contains": "Zach publishes" },
+        { "path": "record.actions", "contains": "public_side_effect" }
+      ]
+    }
+  ]
+}

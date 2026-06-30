@@ -14,6 +14,7 @@ allowlist:
   - bridge/
   - builder/
   - chat/
+  - web_agents/
   - factory/
   - scripts/
   - docs/

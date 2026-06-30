@@ -8,6 +8,7 @@ dependencies = [
     "forsch-agent-ops>=0.1.0",
     "forsch-agent-social>=0.1.0",
     "forsch-agent-brand>=0.1.0",
+    "forsch-agent-website>=0.1.0",
     "forsch-agent-assistant>=0.1.0",
     "forsch-agent-build>=0.1.0",
     "forsch-adk-components>=0.1.0",
