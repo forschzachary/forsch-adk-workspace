@@ -170,6 +170,12 @@ _rate_lock = threading.Lock()
 RATE_LIMIT = 30       # max requests
 RATE_WINDOW = 60.0    # per 60 seconds
 
+# ── Manifest writes ──
+# agents.yaml is the single writable source of truth. Two concurrent saves that
+# both see an agent as "not yet created" would each spawn it (lost-update / double
+# create). Serialize the whole check → spawn → update_agent path behind one lock.
+_save_lock = threading.Lock()
+
 # HTTP request body cap. 1 MiB is generous for JSON POSTs to /chat, /spawn,
 # /wire, /agent-config; anything larger is either a misuse or an attack.
 MAX_REQUEST_BYTES = 1 << 20
@@ -1500,54 +1506,58 @@ def _save_agent_config(params: dict) -> dict:
     if not patch:
         return {"ok": False, "error": "no fields to update"}
 
-    # Auto-spawn if the agent doesn't exist yet (first save = create)
-    mpath = WS / "agent_specs" / "agents.yaml"
-    agent_exists = False
-    if mpath.exists():
-        # Check via builder venv (has ruamel.yaml) — system Python doesn't
+    # Serialize the whole check → spawn → update path: concurrent first-saves must
+    # not both see "not created" and double-spawn, and concurrent updates must not
+    # race the manifest read-modify-write inside update_agent.
+    with _save_lock:
+        # Auto-spawn if the agent doesn't exist yet (first save = create)
+        mpath = WS / "agent_specs" / "agents.yaml"
+        agent_exists = False
+        if mpath.exists():
+            # Check via builder venv (has ruamel.yaml) — system Python doesn't
+            builder_py = str(WS / "builder" / ".venv" / "bin" / "python3")
+            if not Path(builder_py).exists():
+                builder_py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+            check = subprocess.run(
+                [builder_py, "-c",
+                 f"from ruamel.yaml import YAML; d=YAML().load(open({str(mpath)!r})); "
+                 f"print('yes' if {agent_id!r} in (d.get('agents') or {{}}) else 'no')"],
+                capture_output=True, text=True, cwd=str(WS), timeout=10,
+            )
+            agent_exists = (check.stdout.strip() == "yes")
+        if not agent_exists:
+            py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
+            spawn_result = subprocess.run(
+                [py, str(LAG_HOME / "spawn_agent.py"), agent_id,
+                 "--model", model or "gpt-5.5",
+                 "--description", description or f"{agent_id} agent"],
+                capture_output=True, text=True, cwd=str(WS), timeout=30,
+            )
+            if spawn_result.returncode != 0:
+                return {"ok": False, "error": f"spawn failed: {spawn_result.stderr[:500]}"}
+
+        builder_src = str(WS / "builder" / "src")
         builder_py = str(WS / "builder" / ".venv" / "bin" / "python3")
         if not Path(builder_py).exists():
             builder_py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
-        check = subprocess.run(
-            [builder_py, "-c",
-             f"from ruamel.yaml import YAML; d=YAML().load(open({str(mpath)!r})); "
-             f"print('yes' if {agent_id!r} in (d.get('agents') or {{}}) else 'no')"],
-            capture_output=True, text=True, cwd=str(WS), timeout=10,
+        script = (
+            f"import json, sys; sys.path.insert(0, {builder_src!r});"
+            "from forsch.adk_builder.editor import update_agent;"
+            f"r = update_agent({str(WS)!r}, {agent_id!r}, {patch!r});"
+            "print(json.dumps(r))"
         )
-        agent_exists = (check.stdout.strip() == "yes")
-    if not agent_exists:
-        py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
-        spawn_result = subprocess.run(
-            [py, str(LAG_HOME / "spawn_agent.py"), agent_id,
-             "--model", model or "gpt-5.5",
-             "--description", description or f"{agent_id} agent"],
-            capture_output=True, text=True, cwd=str(WS), timeout=30,
-        )
-        if spawn_result.returncode != 0:
-            return {"ok": False, "error": f"spawn failed: {spawn_result.stderr[:500]}"}
-
-    builder_src = str(WS / "builder" / "src")
-    builder_py = str(WS / "builder" / ".venv" / "bin" / "python3")
-    if not Path(builder_py).exists():
-        builder_py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
-    script = (
-        f"import json, sys; sys.path.insert(0, {builder_src!r});"
-        "from forsch.adk_builder.editor import update_agent;"
-        f"r = update_agent({str(WS)!r}, {agent_id!r}, {patch!r});"
-        "print(json.dumps(r))"
-    )
-    try:
-        r = subprocess.run(
-            [builder_py, "-c", script],
-            capture_output=True, text=True, cwd=str(WS), timeout=30,
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            return json.loads(r.stdout.strip())
-        return {"ok": False, "error": f"save failed: {r.stderr[:500]}"}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "save timed out (30s)"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+        try:
+            r = subprocess.run(
+                [builder_py, "-c", script],
+                capture_output=True, text=True, cwd=str(WS), timeout=30,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return json.loads(r.stdout.strip())
+            return {"ok": False, "error": f"save failed: {r.stderr[:500]}"}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "save timed out (30s)"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
 
 def _list_agent_tools() -> dict:

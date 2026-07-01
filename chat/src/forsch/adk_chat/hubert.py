@@ -29,3 +29,7 @@ async def stream_hubert(client: httpx.AsyncClient, base: str, key: str, model: s
                 line, buf = buf.split("\n", 1)
                 for tok in iter_sse_content([line]):
                     yield tok
+        # Flush a trailing SSE line if the stream ended without a final newline.
+        if buf:
+            for tok in iter_sse_content([buf]):
+                yield tok

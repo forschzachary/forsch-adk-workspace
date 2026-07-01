@@ -120,7 +120,7 @@ def build_view(workspace_root: str) -> dict:
                 "group": spec.get("group") or "",   # "" = no jacket
                 "safety": spec.get("safety_level", "read_only"),
                 "instruction": (spec.get("instruction", "") or "").strip(),
-                "tools": [t.rsplit(".", 1)[-1] for t in (spec.get("tools") or [])],
+                "tools": [t.rsplit(".", 1)[-1] for t in (spec.get("tools") or []) if isinstance(t, str)],
                 "channels": spec.get("discord_channels") or [],
                 "smoke_prompts": spec.get("smoke_prompts") or [],
                 "rendered_yaml": rendered,
