@@ -1,27 +1,11 @@
 # Datasources inventory — keyword + intention index for external system clients.
 
 datasources:
-  frappe_crm:
-    file: components/src/forsch/adk_components/tools/frappe_client.py
-    keywords: [frappe, crm, leads, erpnext, rest-client, authsome, customer-data]
-    intention: "Saves you from re-writing Frappe REST calls every time you need customer/lead data. One typed client, Authsome for credential safety, read-only by default."
-    function: "FrappeClient: read-only Frappe REST API client with Authsome-backed auth."
-    depends_on: [authsome_client]
-    used_by: [crm_tools, ops, brand]
-    example: "client = FrappeClient(); client.get_doc('Lead', name)"
-  crm_tools:
-    file: components/src/forsch/adk_components/tools/crm_tools.py
-    keywords: [crm, leads, health, snapshot, dashboard]
-    intention: "Saves you from re-implementing 'give me CRM health' / 'list recent leads' in every ops/brand agent. ADK-callable wrappers around FrappeClient."
-    function: "get_crm_health_snapshot + list_recent_crm_leads — ADK FunctionTools backed by FrappeClient."
-    depends_on: [frappe_crm]
-    used_by: [ops, brand, stability]
-    example: "@tool get_crm_health_snapshot() -> {'leads': int, 'health': str}"
   authsome_client:
     file: components/src/forsch/adk_components/tools/authsome_client.py
     keywords: [authsome, secret-store, encrypted, credential-vault, argon2]
     intention: "Saves you from hardcoding credentials in agent code. One HTTP client to the local Authsome vault; AES-256-GCM + Argon2id underneath."
     function: "AuthsomeHTTPClient — encrypted credential vault client at 127.0.0.1:7998."
     depends_on: []
-    used_by: [frappe_crm, crm_tools, oauth_client]
-    example: "AuthsomeHTTPClient().get('frappe-admin-api-key')"
+    used_by: [oauth_client]
+    example: "AuthsomeHTTPClient().get('some-api-key')"

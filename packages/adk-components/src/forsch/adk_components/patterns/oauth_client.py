@@ -5,7 +5,7 @@ keywords: [oauth, gmail, calendar, drive, imap, api, auth, refresh-token, google
 intention: "Saves you from re-implementing OAuth flows (token fetch, refresh, persistence, scope handling) for every new external service. Subclass it, declare scopes, ship a working integration."
 function: "Base OAuth2 client with auto-refresh, persistent token store, Authsome fallback for credential safety."
 depends_on: [jsonl_store]
-used_by: [crm_tools, email_groceries]
+used_by: [email_groceries]
 example: "client = GmailClient(scopes=['gmail.readonly']); msgs = client.fetch_recent()"
 ---
 

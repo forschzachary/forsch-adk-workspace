@@ -59,11 +59,6 @@ tool_bundles:
     - forsch.adk_components.tools.search_npcs
     - forsch.adk_components.tools.register_player
     - forsch.adk_components.tools.get_player
-  ops_telemetry:
-    description: 'Read-only CRM/business telemetry: health snapshot + recent leads.'
-    tools:
-    - forsch.adk_components.tools.get_crm_health_snapshot
-    - forsch.adk_components.tools.list_recent_crm_leads
 agents:
   stability:
     package: forsch.agent_stability.agent
@@ -276,15 +271,9 @@ agents:
       '
     instruction: 'You are the ops team lead for Forsch. Focus on infrastructure health,
 
-      deployment state, incident triage, and read-only business telemetry.
-
-      Use CRM tools for factual checks before making claims about leads or
-
-      newsletter subscriptions. Keep recommendations concise and operational.
+      deployment state, and incident triage. Keep recommendations concise and operational.
 
       '
-    bundles:
-    - ops_telemetry
     smoke_prompts:
     - Introduce yourself and describe your role for Forsch.
     role: builder
