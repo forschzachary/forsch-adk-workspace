@@ -1,6 +1,6 @@
 [project]
 name = "forsch-agent-ops"
-version = "0.1.0"
+version = "0.1.1"
 description = "Ops agent — infrastructure & operations lead"
 requires-python = ">=3.10"
 dependencies = [
