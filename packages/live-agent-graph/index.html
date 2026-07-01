@@ -8,7 +8,12 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
   #graph-wrap { width: 100vw; height: 100vh; position: relative; }
-  #graph { width: 100%; height: 100%; position: relative; z-index: 2; }
+  #graph { width: 100%; height: 100%; position: relative; z-index: 2; outline: none; }
+  #graph:focus-visible { box-shadow: inset 0 0 0 1px rgba(88,166,255,0.32); }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
   /* ── Swim-lane overlay: operator controls above the graph-space lane sheet ── */
   #swimlane-overlay {
     position: absolute; left: 0; top: 36px; right: 300px; bottom: 0;
@@ -54,13 +59,6 @@
     content: ''; width: 3px; height: 18px; border-radius: 2px;
     background: var(--lane-hue); opacity: 0.6;
   }
-  .lane-spawn-btn {
-    font-size: 11px; color: var(--lane-hue); background: transparent;
-    border: 1px dashed rgba(140,160,180,0.3); border-radius: 5px;
-    padding: 3px 9px; cursor: pointer; white-space: nowrap;
-  }
-  .lane-spawn-btn:hover:not(:disabled) { background: rgba(255,255,255,0.05); border-color: var(--lane-hue); }
-  .lane-spawn-btn:disabled { opacity: 0.4; cursor: default; border-style: dotted; }
   .lane-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .lane-form[hidden] { display: none; }
   .lane-form input {
@@ -125,12 +123,6 @@
   #tab-bar .tab:hover { color: #c9d1d9; }
   #tab-bar .tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
   #tab-bar .tab .pct { font-size: 10px; color: #3fb950; margin-left: 4px; }
-  #tab-bar .tab-new {
-    padding: 6px 10px; font-size: 14px; color: #3fb950;
-    background: transparent; border: 1px dashed #30363d; border-radius: 4px;
-    cursor: pointer; flex-shrink: 0; margin-left: 4px;
-  }
-  #tab-bar .tab-new:hover { background: #1a3a1a; border-color: #2ea043; }
   #tab-bar .tab-add-agent {
     padding: 4px 8px; font-size: 11px; color: #d2a8ff;
     background: transparent; border: 1px dashed #30363d; border-radius: 4px;
@@ -140,24 +132,41 @@
   /* ── Panel (shifted down for tab bar) ── */
   #panel {
     position: fixed; top: 48px; right: 16px; z-index: 10;
-    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-    padding: 12px 16px 16px; min-width: 220px; font-size: 13px; max-height: calc(100vh - 72px); overflow-y: auto;
+    background: rgba(16,22,30,0.94); border: 1px solid rgba(88,166,255,0.18); border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.34);
+    padding: 12px; width: 268px; font-size: 13px; max-height: calc(100vh - 72px); overflow-y: auto;
     scrollbar-gutter: stable;
   }
-  #panel h3 { margin: 12px 0 6px; color: #58a6ff; font-size: 14px; }
+  #panel h3 { margin: 12px 0 6px; color: #a5d6ff; font-size: 11px; text-transform: uppercase; letter-spacing: 1.8px; }
   #panel h3:first-child { margin-top: 0; }
-  #panel .lens-btn, #panel .action-btn {
-    display: block; width: 100%; margin: 4px 0; padding: 6px 10px;
-    background: #21262d; border: 1px solid #30363d; border-radius: 4px;
-    color: #c9d1d9; cursor: pointer; text-align: left; font-size: 12px;
+  #panel .panel-kicker {
+    font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: 1.7px; margin-bottom: 8px;
   }
-  #panel .lens-btn:hover, #panel .action-btn:hover { background: #30363d; }
-  #panel .lens-btn.active { background: #1f6feb; border-color: #1f6feb; }
+  #panel .panel-group {
+    display: grid; gap: 5px;
+  }
+  #panel .panel-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+  }
+  #panel .lens-btn, #panel .action-btn {
+    display: block; width: 100%; margin: 0; padding: 7px 9px;
+    background: rgba(255,255,255,0.035); border: 1px solid rgba(139,148,158,0.22); border-radius: 6px;
+    color: #c9d1d9; cursor: pointer; text-align: left; font-size: 11px;
+  }
+  #panel .lens-btn:hover, #panel .action-btn:hover { background: rgba(88,166,255,0.08); border-color: rgba(88,166,255,0.38); }
+  #panel .lens-btn.active { background: rgba(31,111,235,0.92); border-color: #58a6ff; color: #f0f6fc; }
+  #panel .action-btn.primary { background: rgba(46,160,67,0.14); border-color: rgba(63,185,80,0.46); color: #7ee787; }
+  #panel .action-btn.primary:hover { background: rgba(46,160,67,0.34); color: #f0fff4; }
+  #panel .action-btn:disabled {
+    opacity: 0.45; cursor: not-allowed; border-color: rgba(139,148,158,0.16);
+    background: rgba(255,255,255,0.025); color: #8b949e;
+  }
+  #panel .action-btn:disabled:hover { background: rgba(255,255,255,0.025); border-color: rgba(139,148,158,0.16); }
   #panel .action-btn.spawn { background: #1a3a1a; border-color: #2ea043; color: #3fb950; }
   #panel .action-btn.spawn:hover { background: #2ea043; color: #fff; }
-  #panel .action-btn.refresh { background: #1a2a3a; border-color: #1f6feb; color: #58a6ff; }
-  #panel .action-btn.refresh:hover { background: #1f6feb; color: #fff; }
-  #panel .action-btn.deps.on { background: #0f3a3d; border-color: #56d4dd; color: #56d4dd; }
+  #panel .action-btn.refresh { background: rgba(88,166,255,0.08); border-color: rgba(88,166,255,0.42); color: #a5d6ff; }
+  #panel .action-btn.refresh:hover { background: rgba(31,111,235,0.85); color: #fff; }
+  #panel .action-btn.deps.on, #panel .action-btn.infra.on { background: rgba(86,212,221,0.11); border-color: rgba(86,212,221,0.58); color: #56d4dd; }
   #panel .action-btn.shared.on { background: #1a2a1a; border-color: #3fb950; color: #3fb950; }
   #panel input, #panel select {
     width: 100%; margin: 4px 0; padding: 5px 8px;
@@ -165,15 +174,80 @@
     color: #c9d1d9; font-size: 12px;
   }
   #panel input:focus, #panel select:focus { outline: none; border-color: #58a6ff; }
-  #panel .legend { margin-top: 12px; }
+  #panel .legend { margin-top: 8px; }
   #panel .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
   #panel .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   #panel .legend-icon { width: 12px; height: 12px; flex-shrink: 0; font-size: 11px; text-align: center; line-height: 12px; }
   #panel .legend-note { font-size: 10px; color: #8b949e; margin-top: 4px; line-height: 1.35; max-width: 210px; white-space: normal; }
-  #panel .sep { border-top: 1px solid #30363d; margin: 10px 0; }
+  #panel .sep { border-top: 1px solid rgba(139,148,158,0.18); margin: 10px 0; }
   #panel .msg { font-size: 11px; margin-top: 4px; min-height: 16px; }
   #panel .msg.ok { color: #3fb950; }
   #panel .msg.err { color: #ff7b72; }
+  #panel .selection-card {
+    border: 1px solid rgba(139,148,158,0.2);
+    border-radius: 8px;
+    background: rgba(13,17,23,0.52);
+    padding: 9px;
+    min-height: 82px;
+  }
+  #selection-title {
+    color: #e6edf3;
+    font-weight: 750;
+    font-size: 12px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  #selection-meta {
+    margin-top: 4px;
+    color: #8b949e;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  #selection-list {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .selection-chip {
+    display: grid;
+    grid-template-columns: 7px minmax(0,1fr);
+    gap: 7px;
+    align-items: center;
+    border: 1px solid rgba(139,148,158,0.18);
+    border-radius: 6px;
+    padding: 5px 6px;
+    background: rgba(255,255,255,0.03);
+  }
+  .selection-chip .swatch {
+    width: 7px;
+    height: 22px;
+    border-radius: 999px;
+    background: #58a6ff;
+  }
+  .selection-chip .name {
+    color: #d8dee7;
+    font-size: 11px;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .selection-chip .meta {
+    margin-top: 1px;
+    color: #8b949e;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mimo-ready {
+    margin-top: 6px;
+    color: #7ee787;
+    font-size: 11px;
+    line-height: 1.35;
+  }
   #info { position: fixed; bottom: 16px; left: 16px; z-index: 10; font-size: 12px; color: #8b949e; }
   #tooltip {
     position: fixed; pointer-events: none; z-index: 20;
@@ -278,16 +352,36 @@
   .view-crumb {
     position: absolute; top: 48px; left: 16px; z-index: 5;
     display: flex; align-items: center; gap: 8px;
-    padding: 6px 10px; border: 1px solid rgba(139,148,158,0.25);
-    border-radius: 8px; background: rgba(13,17,23,0.82);
+    padding: 6px 8px; border: 1px solid rgba(139,148,158,0.25);
+    border-radius: 9px; background: rgba(13,17,23,0.84);
     color: #8b949e; font-size: 12px;
   }
+  #view-crumb-text { color: #c9d1d9; padding: 0 3px; white-space: nowrap; }
   .view-crumb button {
-    border: 1px solid #30363d; border-radius: 6px;
-    background: #161b22; color: #c9d1d9; cursor: pointer;
+    border: 1px solid rgba(139,148,158,0.28); border-radius: 6px;
+    background: rgba(22,27,34,0.9); color: #c9d1d9; cursor: pointer;
     padding: 3px 8px; font-size: 11px;
   }
   .view-crumb button:hover { border-color: #58a6ff; }
+  .cluster-mode-segment {
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 2px; border: 1px solid rgba(139,148,158,0.18);
+    border-radius: 8px; background: rgba(255,255,255,0.025);
+  }
+  .cluster-mode-segment button {
+    border: 0; background: transparent; color: #8b949e;
+    padding: 3px 7px; border-radius: 6px; font-size: 10px;
+  }
+  .cluster-mode-segment button.active {
+    color: #f0f6fc; background: rgba(88,166,255,0.18);
+    box-shadow: inset 0 0 0 1px rgba(88,166,255,0.28);
+  }
+  .cluster-mode-segment button[data-mode="active"].active { background: rgba(63,185,80,0.17); box-shadow: inset 0 0 0 1px rgba(63,185,80,0.34); }
+  .cluster-mode-segment button[data-mode="staging"].active { background: rgba(240,136,62,0.18); box-shadow: inset 0 0 0 1px rgba(240,136,62,0.34); }
+  .cluster-mode-segment button[data-mode="off"].active { background: rgba(139,148,158,0.14); box-shadow: inset 0 0 0 1px rgba(139,148,158,0.28); }
+  #cluster-restart-btn {
+    color: #a5d6ff; border-color: rgba(88,166,255,0.32);
+  }
   /* ── Focus workbench ── */
   .focus-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
   .focus-tab, .small-action {
@@ -593,54 +687,42 @@
 <body>
 <div id="tab-bar">
   <!-- Populated by loadClusters() -->
-  <button class="tab-new" id="new-tab-btn" title="New cluster">+</button>
 </div>
 <div id="graph-wrap">
   <div id="swimlane-overlay"></div>
-  <div id="graph"></div>
+  <div id="graph" tabindex="0" role="application" aria-label="Agent graph. Arrow keys move along connected nodes. Enter opens the inspector. Escape clears selection."></div>
   <div id="swimlane-controls"></div>
 </div>
 <div id="panel">
-  <div id="cluster-indicator" style="font-size:11px;color:#8b949e;margin-bottom:8px;padding:4px 8px;background:#0d1117;border-radius:4px;text-align:center;">— no cluster —</div>
-  <h3>Lens</h3>
-  <button class="lens-btn" data-lens="all">All nodes</button>
-  <button class="lens-btn" data-lens="tier">Tier (by type)</button>
-  <button class="lens-btn" data-lens="lineage">Lineage (click agent)</button>
-  <button class="lens-btn" data-lens="live">Live only</button>
-  <button class="lens-btn active" data-lens="padi">PADI (swim lanes)</button>
-  <button class="action-btn deps" id="deps-btn" style="margin-top:8px;">▸ Dependencies</button>
-  <button class="action-btn infra" id="infra-btn" style="margin-top:4px;">▸ Infrastructure</button>
-
-  <!-- Spawn / Add-agent controls now live in the Agent·Logic lane header (PADI). -->
-
+  <div class="panel-kicker">Vibe Console</div>
+  <h3>Useful Lens</h3>
+  <div class="panel-group">
+    <button class="lens-btn active" data-lens="padi">Project map</button>
+    <button class="lens-btn" data-lens="not-built">Not built</button>
+    <button class="lens-btn" data-lens="crossover">Crossover</button>
+    <button class="lens-btn" data-lens="dependencies">Dependencies</button>
+  </div>
+  <h3>Selection</h3>
+  <div class="selection-card" id="selection-card">
+    <div id="selection-title">Nothing selected</div>
+    <div id="selection-meta">Click a node. Shift-click to gather a build set.</div>
+    <div id="selection-list"></div>
+  </div>
+  <div class="panel-row">
+    <button class="action-btn" id="selection-focus-btn" disabled>Focus</button>
+    <button class="action-btn primary" id="selection-vibe-btn" disabled>@ MiMo</button>
+  </div>
+  <button class="action-btn" id="selection-clear-btn" disabled style="margin-top:5px;">Clear selection</button>
+  <div class="sep"></div>
+  <h3>MiMo</h3>
+  <button class="action-btn primary" id="chat-toggle">Open workspace chat</button>
+  <div id="mimo-ready-status" class="mimo-ready">Ready for graph context.</div>
+  <div id="edit-auth-status" class="unlocked">Authenticated via Cloudflare Access</div>
   <div class="sep"></div>
   <button class="action-btn refresh" id="refresh-btn">⟳ Refresh graph</button>
-  <div id="edit-auth-status" class="unlocked">Authenticated via Cloudflare Access</div>
-  <button class="action-btn" id="chat-toggle" style="margin-top:4px;background:#1a1a2e;border-color:#d29922;color:#d29922;">💬 MiMo chat</button>
-
-  <div class="sep"></div>
-  <div class="legend">
-    <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span> agent</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#f0883e"></span> tool</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span> logic (model)</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#d2a8ff"></span> interface</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#ff7b72"></span> router</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#a5d6ff"></span> database</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#f0c040"></span> ui</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#56d4dd"></span> capability (rail)</div>
-  </div>
-  <div class="sep"></div>
-  <div class="legend" style="margin-top:0;">
-    <div style="font-size:11px;color:#8b949e;margin-bottom:4px;">Agent status (at a glance)</div>
-    <div class="legend-item"><span class="legend-icon" style="color:#8b949e">○</span> blank — hollow, tiny dot</div>
-    <div class="legend-item"><span class="legend-icon" style="color:#d29922">⚠</span> building — yellow warning</div>
-    <div class="legend-item"><span class="legend-icon" style="color:#3fb950">◉</span> built — full arc</div>
-    <div class="legend-item"><span class="legend-icon" style="color:#3fb950">◎</span> live — green pulse ring</div>
-    <div class="legend-item"><span class="legend-icon" style="color:#ff7b72">✕</span> error — red cross</div>
-    <div class="legend-note">Size = connected nodes · Fill arc = gate progress</div>
-  </div>
 </div>
 <div id="info">Loading…</div>
+<div id="keyboard-status" class="sr-only" aria-live="polite"></div>
 <div id="tooltip"></div>
 <div id="inspect">
   <div id="inspect-header">
@@ -693,6 +775,12 @@
 <div id="wire-status">Select target node... <button class="cancel" id="wire-cancel">Cancel</button></div>
 <div id="view-crumb" class="view-crumb">
   <span id="view-crumb-text">Project view</span>
+  <div class="cluster-mode-segment" role="group" aria-label="Cluster mode">
+    <button type="button" class="cluster-mode-btn active" data-mode="active" aria-pressed="true">Active</button>
+    <button type="button" class="cluster-mode-btn" data-mode="staging" aria-pressed="false">Staging</button>
+    <button type="button" class="cluster-mode-btn" data-mode="off" aria-pressed="false">Off</button>
+  </div>
+  <button id="cluster-restart-btn" type="button" title="Restart cluster config once wired">Restart</button>
   <button id="back-project-btn" style="display:none">← Back to project</button>
 </div>
 
@@ -712,10 +800,36 @@ const COLORS = {
   network: '#56d4dd', tunnel: '#ffa198',
 };
 
+const TOOL_ROLE_COLORS = {
+  media: '#f0c040',
+  access: '#ff7b72',
+  queue: '#d2a8ff',
+  memory: '#7ee787',
+  comms: '#a5d6ff',
+  health: '#56d4dd',
+  action: '#ffa657',
+};
+
 // ── Helpers ──
 const hexAlpha = a => Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
 const lid = x => (x && typeof x === 'object') ? x.id : x;
 const rgba = (hex, alpha) => hex + hexAlpha(alpha);
+
+function toolRole(node) {
+  const text = [node?.id, node?.name, node?.artifact].filter(Boolean).join(' ').toLowerCase();
+  if (/(tv|playlist|movie|library|media|schedule|watched|jellyfin|pick)/.test(text)) return 'media';
+  if (/(access|invite|guest|activation|account|login|provision|offboard|suspend|resume)/.test(text)) return 'access';
+  if (/(queue|event|stage|request|retry|cancel|create|advance|bumps?)/.test(text)) return 'queue';
+  if (/(knowledge|remember|read|list_knowledge|memory)/.test(text)) return 'memory';
+  if (/(announce|dm|resend|friend|onboard|concierge)/.test(text)) return 'comms';
+  if (/(audit|health|diagnose|storage|counts|admin|verify)/.test(text)) return 'health';
+  return 'action';
+}
+
+function nodeColor(node) {
+  if (node?.type === 'tool') return TOOL_ROLE_COLORS[toolRole(node)] || COLORS.tool;
+  return COLORS[node?.type] || '#8b949e';
+}
 
 // ── Double-click detector (fallback for libraries without onNodeDoubleClick) ──
 let _lastClick = { id: null, ts: 0 };
@@ -751,17 +865,31 @@ function computeNodeMetrics(data) {
 
 let nodeMetrics = { cc: {}, gc: {} };
 
+const PADI_LIKE_LENSES = new Set(['padi', 'not-built', 'crossover', 'dependencies']);
+function isPadiLens(lens = currentLens) {
+  return PADI_LIKE_LENSES.has(lens);
+}
+
+function isPadiDataSourceNode(node) {
+  return isPadiLens() && node?.rail === 'dependency' && node.type === 'database';
+}
+
+function isPinnedRailNode(node) {
+  return !!node?.rail && !isPadiDataSourceNode(node);
+}
+
 function nodeRadius(node) {
-  if (node.rail) return 5; // Rail nodes are medium dots
+  if (isPinnedRailNode(node)) return 5; // Rail nodes are medium dots
   const count = nodeMetrics.cc[node.id] || 0;
   if (node.type === 'agent') return Math.max(7, Math.min(18, 6 + count * 1.45));
+  if (node.type === 'intake' || node.type === 'ui') return Math.max(10, Math.min(18, 8 + count * 1.4));
   // A bundle is a "blob" that grows with how many tools it holds — bloat at a glance.
   if (node.type === 'bundle') return Math.max(11, Math.min(28, 9 + (node.tools_count || count) * 1.8));
   return Math.max(4, Math.min(16, 4 + count * 1.3));
 }
 
 function padiScreenStableNodes() {
-  return currentLens === 'padi' && viewMode !== 'agent';
+  return isPadiLens() && viewMode !== 'agent';
 }
 
 function nodeVisualRadius(node, scale) {
@@ -771,30 +899,36 @@ function nodeVisualRadius(node, scale) {
   // grows past its fixed halo ring and swallows its own tools, collapsing the cluster into a
   // pile. Cap the world radius at 1.5× the base so zoom-out stays legible (below the cap the
   // nodes simply shrink on screen with the world, which is what you want for an overview).
-  return padiScreenStableNodes() && !node.rail ? Math.min(r / scale, r * 1.5) : r;
+  return padiScreenStableNodes() && !isPinnedRailNode(node) ? Math.min(r / scale, r * 1.5) : r;
 }
 
 // ── PADI swim-lane geometry ──
 const LANE_Y = {
   intake: -240, ui: -240,
-  router: -80,
-  agent: 80, logic: 80,
-  tool: 240, database: 240, bundle: 240,   // bundles live in the Tools · Data lane
+  agent: -80, logic: -80,
+  tool: 80, bundle: 80,
+  database: 240,
 };
 // Swim-lane sheet rows, top → bottom. The colored sheet is drawn in graph
 // coordinates so it scales and pans with the live graph; the DOM layer above it
 // is only the operator control surface.
 const PADI_LANES = [
   { key: 'interfaces', label: 'Interfaces',    hue: '210,168,255' },
-  { key: 'router',     label: 'Router',        hue: '255,123,114' },
   { key: 'agent',      label: 'Agent · Logic', hue: '88,166,255'  },
-  { key: 'tools',      label: 'Tools · Data',  hue: '240,136,62'  },
+  { key: 'tools',      label: 'Tools',         hue: '240,136,62'  },
+  { key: 'datasources', label: 'Data Sources', hue: '165,214,255' },
 ];
 // LANE_Y value → swim-lane row index
 const LANE_INDEX = { '-240': 0, '-80': 1, '80': 2, '240': 3 };
 const RAIL_X = 900;
-const PADI_LANE_HEIGHT = 320;
-const PADI_LANE_STEP = 320;
+const PADI_LANE_DEFAULT_HEIGHT = 320;
+const PADI_LANE_GAP = 0;
+const PADI_LANE_MIN_HEIGHT = {
+  interfaces: 270,
+  agent: 340,
+  tools: 620,
+  datasources: 270,
+};
 const PADI_WORLD_X_SHIFT = -80;
 const PADI_CONTROL_GAP = 6;
 const PADI_CONTROL_LEFT_PAD = 18;
@@ -804,9 +938,134 @@ const PADI_LIBRARY_COL_STEP = 86;
 const PADI_LIBRARY_ROW_STEP = 26;
 const PADI_LIBRARY_COLS = 3;
 const PADI_NODE_Y_OFFSET = 42;
+const PADI_TOOL_LABEL_ZOOM = 1.24;
+const PADI_TOOL_TOP_CORRIDOR = Math.PI * 0.42;
+const PADI_ROUTE_PIN_STORAGE_PREFIX = 'live-agent-graph:padi-route-pins:';
 
 function padiLaneCenter(laneIndex) {
-  return (laneIndex - (PADI_LANES.length - 1) / 2) * PADI_LANE_STEP;
+  const geometry = computePadiLaneGeometry(defaultPadiLaneHeights());
+  return geometry.y[laneIndex] || 0;
+}
+
+function defaultPadiLaneHeights() {
+  return PADI_LANES.map(lane => PADI_LANE_MIN_HEIGHT[lane.key] || PADI_LANE_DEFAULT_HEIGHT);
+}
+
+function computePadiLaneGeometry(heights) {
+  const safeHeights = PADI_LANES.map((lane, i) => Math.max(
+    PADI_LANE_MIN_HEIGHT[lane.key] || PADI_LANE_DEFAULT_HEIGHT,
+    heights[i] || PADI_LANE_DEFAULT_HEIGHT
+  ));
+  const totalHeight = safeHeights.reduce((sum, h) => sum + h, 0) + PADI_LANE_GAP * Math.max(0, safeHeights.length - 1);
+  let top = -totalHeight / 2;
+  const y = [];
+  const topY = [];
+  const bottomY = [];
+  safeHeights.forEach((height, i) => {
+    topY[i] = top;
+    y[i] = top + height / 2;
+    bottomY[i] = top + height;
+    top += height + PADI_LANE_GAP;
+  });
+  const bounds = bottomY.slice(0, -1).map((bottom, i) => bottom + PADI_LANE_GAP / 2);
+  return { y, topY, bottomY, bounds, heights: safeHeights };
+}
+
+function computePadiLaneHeights(buckets, nodes, links) {
+  const heights = PADI_LANES.map((lane, i) => {
+    const count = buckets[i]?.length || 0;
+    const base = PADI_LANE_MIN_HEIGHT[lane.key] || PADI_LANE_DEFAULT_HEIGHT;
+    if (count === 0) return base;
+    return base + Math.min(72, Math.max(0, count - 3) * 12);
+  });
+  const byId = {};
+  nodes.forEach(n => { byId[n.id] = n; });
+  let maxToolCount = 0;
+  const countsByBundle = {};
+  links.forEach(l => {
+    if (l.kind !== 'contains') return;
+    const s = byId[lid(l.source)];
+    const t = byId[lid(l.target)];
+    if (s?.type === 'bundle' && t?.type === 'tool') {
+      countsByBundle[s.id] = (countsByBundle[s.id] || 0) + 1;
+      maxToolCount = Math.max(maxToolCount, countsByBundle[s.id]);
+    }
+  });
+  const toolsLane = LANE_INDEX[String(LANE_Y.tool)];
+  if (maxToolCount) {
+    const haloR = 48 + maxToolCount * 4.7;
+    heights[toolsLane] = Math.max(heights[toolsLane], Math.ceil((PADI_NODE_Y_OFFSET + haloR + 72) * 2));
+  }
+  return heights;
+}
+
+function padiRoutePinStorageKey(cluster = currentCluster) {
+  return PADI_ROUTE_PIN_STORAGE_PREFIX + (cluster || 'workspace');
+}
+
+function loadPadiRoutePinOffsets(cluster = currentCluster) {
+  try {
+    const raw = localStorage.getItem(padiRoutePinStorageKey(cluster));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function savePadiRoutePinOffsets(cluster = currentCluster) {
+  try {
+    const entries = Object.entries(padiRoutePinOffsets)
+      .filter(([, value]) => Number.isFinite(value) && Math.abs(value) > 1);
+    if (!entries.length) {
+      localStorage.removeItem(padiRoutePinStorageKey(cluster));
+      return;
+    }
+    localStorage.setItem(padiRoutePinStorageKey(cluster), JSON.stringify(Object.fromEntries(entries)));
+  } catch (_) {
+    // localStorage can fail in restricted embeds; route handles still work for the session.
+  }
+}
+
+function routePinDefaultX(boundaryIndex, fallbackX = null) {
+  const x = padiRoutePinDefaults[boundaryIndex];
+  if (Number.isFinite(x)) return x;
+  if (Number.isFinite(fallbackX)) return fallbackX;
+  return (padiWorld.xLeft + padiWorld.xRight) / 2;
+}
+
+function routePinOffset(boundaryIndex) {
+  const value = Number(padiRoutePinOffsets[String(boundaryIndex)]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function padiRoutePinX(boundaryIndex, fallbackX = null) {
+  return routePinDefaultX(boundaryIndex, fallbackX) + routePinOffset(boundaryIndex);
+}
+
+function hasManualRoutePin(boundaryIndex) {
+  return Math.abs(routePinOffset(boundaryIndex)) > 1;
+}
+
+function clampPadiRouteX(x) {
+  const pad = 120;
+  return Math.max(padiWorld.xLeft + pad, Math.min(padiWorld.xRight - pad, x));
+}
+
+function padiRoutePinLabel(boundaryIndex) {
+  const upper = PADI_LANES[boundaryIndex]?.label || 'Lane';
+  const lower = PADI_LANES[boundaryIndex + 1]?.label || 'Lane';
+  return `${upper} pins`;
+}
+
+function isDataSourceBoundary(boundaryIndex) {
+  return boundaryIndex === LANE_INDEX[String(LANE_Y.tool)];
+}
+
+function shouldUseRoutePin(link, boundaryIndex) {
+  if (hasManualRoutePin(boundaryIndex)) return true;
+  return isDataSourceBoundary(boundaryIndex) && ['depends-on', 'authenticates-via'].includes(link?.kind || '');
 }
 
 function padiControlScale() {
@@ -819,10 +1078,29 @@ function padiControlLayoutUnits(px) {
   return px / padiControlScale();
 }
 
+function zoomedToolLabelsVisible(scale) {
+  return isPadiLens() && viewMode !== 'agent' && scale >= PADI_TOOL_LABEL_ZOOM;
+}
+
+function zoomedToolLabelAlpha(scale) {
+  if (scale >= PADI_TOOL_LABEL_ZOOM + 0.18) return 1;
+  return Math.max(0, Math.min(1, (scale - PADI_TOOL_LABEL_ZOOM) / 0.18));
+}
+
+function toolHaloAngle(index, count) {
+  if (count <= 1) return Math.PI / 2;
+  const start = -Math.PI / 2 + PADI_TOOL_TOP_CORRIDOR / 2;
+  const span = Math.PI * 2 - PADI_TOOL_TOP_CORRIDOR;
+  return start + ((index + 0.5) / count) * span;
+}
+
 // ── Interface abstraction ──
 const CHANNEL_LABEL = {
   discord: 'Discord', text: 'Text', sms: 'Text', email: 'Email',
+  phone: 'Phone', twilio: 'Phone', voice: 'Phone',
   telegram: 'Telegram', slack: 'Slack', web: 'Hosted Chat', hosted: 'Hosted Chat',
+  chainlit: 'Chainlit', api: 'API', webhook: 'Webhook', cli: 'CLI', terminal: 'Terminal',
+  github: 'GitHub', calendar: 'Calendar', form: 'Form',
 };
 function channelTypeOf(n) {
   if (n.channel) return n.channel;
@@ -830,6 +1108,26 @@ function channelTypeOf(n) {
   if (n.id.startsWith('iface:')) return n.id.split(':')[1];
   return (n.id.split(':')[1] || 'other');
 }
+
+function isDiscordChannelType(type) {
+  return type === 'discord' || String(type || '').startsWith('chan:');
+}
+
+function interfaceDisplayName(group) {
+  const type = String(group.type || '');
+  const firstName = group.members[0]?.name || type || 'Interface';
+  if (isDiscordChannelType(type)) {
+    const clean = firstName.replace(/^Discord\s*\((.*)\)$/i, '$1').trim();
+    return clean.toLowerCase().startsWith('discord') ? clean : `Discord · ${clean}`;
+  }
+  return CHANNEL_LABEL[type] || firstName;
+}
+
+function interfaceArtifact(group) {
+  if (isDiscordChannelType(group.type)) return 'Discord channels: ' + group.names.join(', ');
+  return group.members[0]?.artifact || '';
+}
+
 function collapseIntake(data) {
   const intakeNodes = data.nodes.filter(n => n.type === 'intake');
   if (!intakeNodes.length) return data;
@@ -847,9 +1145,9 @@ function collapseIntake(data) {
     const state = has('live') ? 'live' : has('built') ? 'built' : has('building') ? 'building' : 'blank';
     const gates = ['L0','L1','L2','L3'].reduce((o,k) => { o[k] = g.members.some(m => m.gates && m.gates[k]); return o; }, {});
     return {
-      id: 'iface:' + g.type, name: CHANNEL_LABEL[g.type] || g.members[0].name || g.type,
+      id: 'iface:' + g.type, name: interfaceDisplayName(g),
       kind: 'intake', type: 'intake', channel: g.type,
-      artifact: g.type === 'discord' ? ('Discord channels: ' + g.names.join(', ')) : (g.members[0].artifact || ''),
+      artifact: interfaceArtifact(g),
       gates, state, reachable: false,
       contract: { accepts: ['external_message'], emits: ['routed_message'] },
       role: 'plain', members: g.names,
@@ -900,16 +1198,22 @@ let currentCluster = null;
 let clusters = [];
 // PADI swim-lane geometry (world coords), shared between layout, forces, and
 // link routing. Lanes are held by gentle forces — nothing is hard-pinned.
-let padiLaneY = [], padiLaneBound = [], padiTick = 0, padiFitPending = true;
+let padiLaneY = [], padiLaneTop = [], padiLaneBottom = [], padiLaneHeight = [], padiLaneBound = [], padiTick = 0, padiFitPending = true;
+const initialPadiGeometry = computePadiLaneGeometry(defaultPadiLaneHeights());
 let padiWorld = {
   xLeft: -560,
   xRight: 400,
-  yTop: padiLaneCenter(0) - PADI_LANE_HEIGHT / 2,
-  yBottom: padiLaneCenter(PADI_LANES.length - 1) + PADI_LANE_HEIGHT / 2
+  yTop: initialPadiGeometry.topY[0],
+  yBottom: initialPadiGeometry.bottomY[initialPadiGeometry.bottomY.length - 1]
 };
+let padiContentBounds = null;
+let padiRoutePinDefaults = [];
+let padiRoutePinOffsets = {};
 // ── Focus mode state ──
 let viewMode = 'project'; // 'project' | 'agent'
 let focusedAgentId = null;
+const clusterModeByName = new Map();
+let clusterMode = 'active';
 let focusedAgentConfig = null;
 let focusedAgentTools = [];
 let focusedAgentModels = [];
@@ -923,6 +1227,10 @@ let registryAgentIds = [], dragItem = null;
 // Hover focus state. force-graph mutates link endpoints into node objects, so keep
 // object identity for links and ids for nodes.
 let hoverNode = null, hoverLink = null, hoverNodeIds = new Set(), hoverLinks = new Set();
+let keyboardNodeId = null;
+let selectedNodeIds = new Set();
+let primarySelectedNodeId = null;
+let padiDraggingRoutePin = null;
 
 // ── Cluster loading ──
 function loadClusters() {
@@ -931,9 +1239,10 @@ function loadClusters() {
     .then(data => {
       clusters = data;
       renderTabs();
-      // Auto-select first cluster
       if (clusters.length && !currentCluster) {
-        selectCluster(clusters[0].name);
+        const hash = parseHashState();
+        const requested = hash.cluster && clusters.some(c => c.name === hash.cluster) ? hash.cluster : null;
+        selectCluster(requested || clusters[0].name);
       }
     })
     .catch(err => { info.textContent = 'Failed to load clusters — ' + err.message; });
@@ -941,7 +1250,7 @@ function loadClusters() {
 
 function renderTabs() {
   const bar = document.getElementById('tab-bar');
-  // Clear existing tabs (keep the + button)
+  // Clear existing tabs and rebuild the read-only cluster switcher.
   bar.querySelectorAll('.tab').forEach(t => t.remove());
   clusters.forEach(c => {
     const btn = document.createElement('button');
@@ -952,23 +1261,20 @@ function renderTabs() {
     if (pct) btn.innerHTML += pct;
     btn.title = c.goal || c.name;
     btn.addEventListener('click', () => selectCluster(c.name));
-    bar.insertBefore(btn, document.getElementById('new-tab-btn'));
+    bar.appendChild(btn);
   });
 }
 
 function selectCluster(name) {
   if (currentCluster && currentCluster !== name) saveClusterChat(currentCluster);
   currentCluster = name;
+  padiRoutePinOffsets = loadPadiRoutePinOffsets(name);
+  clusterMode = clusterModeByName.get(name) || 'active';
   renderTabs();
-  // Update panel indicator
-  const ci = document.getElementById('cluster-indicator');
-  const c = clusters.find(x => x.name === name);
-  const pct = c && c.handoff_pct ? ` · ${c.handoff_pct}%` : '';
-  ci.textContent = c ? `📋 ${c.name}${pct}` : '— no cluster —';
-  ci.style.color = c ? '#58a6ff' : '#8b949e';
   loadGraph(name);
   writeHashState();
   loadClusterChat(name);
+  updateViewCrumb();
 }
 
 function loadGraph(clusterName) {
@@ -1001,7 +1307,7 @@ function loadGraph(clusterName) {
 // ── Lens logic ──
 function applyLens(lens) {
   currentLens = lens;
-  if (lens === 'padi') {
+  if (isPadiLens(lens)) {
     padiFitPending = true;
   }
   if (lens !== 'lineage') lineageRoot = null;
@@ -1119,11 +1425,12 @@ function buildAgentFocusData() {
 function padiControlWidth(kind, label) {
   if (kind === 'label') return Math.max(120, label.length * 9 + 28);
   if (kind === 'spawn') return Math.max(88, label.length * 7 + 26);
+  if (kind === 'route') return 78;
   return 90;
 }
 
 function buildPadiControlNodes() {
-  if (currentLens !== 'padi' || viewMode === 'agent') return [];
+  if (!isPadiLens() || viewMode === 'agent') return [];
   const nodes = [];
   PADI_LANES.forEach((lane, laneIndex) => {
     const sk = LANE_KEY_TO_SPAWNER[lane.key];
@@ -1141,22 +1448,6 @@ function buildPadiControlNodes() {
       padiHue: lane.hue,
       padiWidth: padiControlWidth('label', lane.label),
       padiHeight: 22,
-    });
-    nodes.push({
-      id: `padi:spawn:${lane.key}`,
-      name: `+ ${sp.blankLabel || ('New ' + sk)}`,
-      type: 'capability',
-      state: sp.disabled ? 'blank' : 'built',
-      synthetic: true,
-      padiControl: true,
-      padiControlKind: 'spawn',
-      padiDisabled: !!sp.disabled,
-      padiSpawner: sk,
-      padiLaneKey: lane.key,
-      padiLaneIndex: laneIndex,
-      padiHue: lane.hue,
-      padiWidth: padiControlWidth('spawn', sp.blankLabel || ('New ' + sk)),
-      padiHeight: 24,
     });
     if (sp.library && !sp.hideCanvasLibrary) {
       sp.library().forEach((agent, order) => {
@@ -1181,7 +1472,102 @@ function buildPadiControlNodes() {
       });
     }
   });
+  for (let boundaryIndex = 0; boundaryIndex < PADI_LANES.length - 1; boundaryIndex += 1) {
+    nodes.push({
+      id: `padi:route:${boundaryIndex}`,
+      name: padiRoutePinLabel(boundaryIndex),
+      type: 'capability',
+      state: hasManualRoutePin(boundaryIndex) ? 'live' : 'built',
+      synthetic: true,
+      padiControl: true,
+      padiControlKind: 'route',
+      padiBoundaryIndex: boundaryIndex,
+      padiLaneIndex: boundaryIndex,
+      padiHue: PADI_LANES[boundaryIndex + 1]?.hue || PADI_LANES[boundaryIndex]?.hue || '88,166,255',
+      padiWidth: padiControlWidth('route', ''),
+      padiHeight: 20,
+    });
+  }
   return nodes;
+}
+
+function filterGraphBySeeds(base, seedIds, linkPredicate = null, includeNeighbors = true) {
+  const visibleIds = new Set(seedIds);
+  if (includeNeighbors) {
+    base.links.forEach(l => {
+      const s = lid(l.source);
+      const t = lid(l.target);
+      if (visibleIds.has(s)) visibleIds.add(t);
+      if (visibleIds.has(t)) visibleIds.add(s);
+    });
+  }
+  return {
+    nodes: base.nodes.filter(n => visibleIds.has(n.id)),
+    links: base.links.filter(l => {
+      const s = lid(l.source);
+      const t = lid(l.target);
+      if (!visibleIds.has(s) || !visibleIds.has(t)) return false;
+      return linkPredicate ? linkPredicate(l) || seedIds.has(s) || seedIds.has(t) : true;
+    }),
+  };
+}
+
+function filterNotBuiltGraph(base) {
+  const builtStates = new Set(['built', 'live']);
+  const seedIds = new Set(base.nodes.filter(n => {
+    if (n.synthetic || n.padiControl) return false;
+    if (n.type === 'agent') return !builtStates.has(n.state) || (nodeMetrics.gc[n.id] || 0) < 1;
+    if (n.state === 'error' || n.state === 'building' || n.state === 'blank') return true;
+    if (n.inactive) return true;
+    return false;
+  }).map(n => n.id));
+  return filterGraphBySeeds(base, seedIds);
+}
+
+function filterDependencyGraph(base) {
+  const depKinds = new Set(['depends-on', 'authenticates-via']);
+  const seedIds = new Set(base.nodes.filter(n =>
+    n.rail === 'dependency' || n.type === 'database' || /credential|vault|source/i.test([n.id, n.name, n.type].join(' '))
+  ).map(n => n.id));
+  base.links.forEach(l => {
+    if (depKinds.has(l.kind || '')) {
+      seedIds.add(lid(l.source));
+      seedIds.add(lid(l.target));
+    }
+  });
+  return filterGraphBySeeds(base, seedIds, l => depKinds.has(l.kind || ''));
+}
+
+function filterCrossoverGraph(base) {
+  const usesByBundle = {};
+  base.links.forEach(l => {
+    if (l.kind === 'uses-bundle') {
+      const target = lid(l.target);
+      usesByBundle[target] = (usesByBundle[target] || 0) + 1;
+    }
+  });
+  const seedIds = new Set(base.nodes.filter(n =>
+    n.shared && (n.type === 'agent' || n.type === 'bundle' || n.type === 'intake')
+  ).map(n => n.id));
+  base.links.forEach(l => {
+    const kind = l.kind || '';
+    const s = lid(l.source);
+    const t = lid(l.target);
+    if (kind === 'delegates') {
+      seedIds.add(s);
+      seedIds.add(t);
+    }
+    if (kind === 'uses-bundle' && usesByBundle[t] > 1) {
+      seedIds.add(s);
+      seedIds.add(t);
+    }
+  });
+  return filterGraphBySeeds(base, seedIds, l => {
+    const kind = l.kind || '';
+    if (kind === 'delegates') return true;
+    if (kind === 'contains') return true;
+    return kind === 'uses-bundle' && usesByBundle[lid(l.target)] > 1;
+  }, false);
 }
 
 function getVisibleData() {
@@ -1191,7 +1577,7 @@ function getVisibleData() {
   }
 
   let base;
-  if (currentLens === 'all' || currentLens === 'padi' || currentLens === 'tier') {
+  if (currentLens === 'all' || isPadiLens() || currentLens === 'tier') {
     base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
   } else if (currentLens === 'live') {
     const liveIds = new Set(graphData.nodes.filter(n => n.state === 'live').map(n => n.id));
@@ -1218,8 +1604,56 @@ function getVisibleData() {
     base = { nodes: graphData.nodes.slice(), links: graphData.links.slice() };
   }
 
-  // Filter by rail visibility
-  if (!showDepRail) {
+  if (isPadiLens()) {
+    const internalUiIds = new Set(base.nodes.filter(n => n.type === 'ui').map(n => n.id));
+    if (internalUiIds.size) {
+      base = {
+        nodes: base.nodes.filter(n => !internalUiIds.has(n.id)),
+        links: base.links.filter(l => !internalUiIds.has(lid(l.source)) && !internalUiIds.has(lid(l.target))),
+      };
+    }
+
+    const routerIds = new Set(base.nodes.filter(n => n.type === 'router').map(n => n.id));
+    if (routerIds.size) {
+      base = {
+        nodes: base.nodes.filter(n => !routerIds.has(n.id)),
+        links: base.links.filter(l => !routerIds.has(lid(l.source)) && !routerIds.has(lid(l.target))),
+      };
+    }
+
+    const dataSourceIds = new Set(base.nodes.filter(isPadiDataSourceNode).map(n => n.id));
+    if (dataSourceIds.size) {
+      const visibleNonDataIds = new Set(base.nodes.filter(n => !dataSourceIds.has(n.id)).map(n => n.id));
+      const linkedDataSourceIds = new Set();
+      base.links.forEach(l => {
+        const s = lid(l.source);
+        const t = lid(l.target);
+        if (dataSourceIds.has(s) && visibleNonDataIds.has(t)) linkedDataSourceIds.add(s);
+        if (dataSourceIds.has(t) && visibleNonDataIds.has(s)) linkedDataSourceIds.add(t);
+      });
+      base = {
+        nodes: base.nodes.filter(n => !dataSourceIds.has(n.id) || linkedDataSourceIds.has(n.id)),
+        links: base.links.filter(l => {
+          const s = lid(l.source);
+          const t = lid(l.target);
+          return (!dataSourceIds.has(s) || linkedDataSourceIds.has(s))
+            && (!dataSourceIds.has(t) || linkedDataSourceIds.has(t));
+        }),
+      };
+    }
+  }
+
+  if (currentLens === 'not-built') {
+    base = filterNotBuiltGraph(base);
+  } else if (currentLens === 'dependencies') {
+    base = filterDependencyGraph(base);
+  } else if (currentLens === 'crossover') {
+    base = filterCrossoverGraph(base);
+  }
+
+  // Filter by rail visibility. In the PADI lens, dependency rail nodes become
+  // first-class data sources, so they stay visible in the Data Sources row.
+  if (!showDepRail && !isPadiLens()) {
     const depIds = new Set(base.nodes.filter(n => n.rail === 'dependency').map(n => n.id));
     if (depIds.size) {
       base = {
@@ -1238,7 +1672,7 @@ function getVisibleData() {
     }
   }
 
-  if (currentLens === 'padi') {
+  if (isPadiLens()) {
     base = { nodes: base.nodes.concat(buildPadiControlNodes()), links: base.links };
   }
 
@@ -1284,7 +1718,7 @@ function applyLayout(vd) {
   }
 
   // Pin rail nodes in a column on the left edge
-  const depNodes = vd.nodes.filter(n => n.rail === 'dependency');
+  const depNodes = vd.nodes.filter(n => n.rail === 'dependency' && !isPadiDataSourceNode(n));
   const infraNodes = vd.nodes.filter(n => n.rail === 'infrastructure');
   const railOffset = 90;
   // Infra sort order: top-down logical stack
@@ -1305,9 +1739,9 @@ function applyLayout(vd) {
 
   // PADI swim-lane positions are computed in layoutPadi() so the graph lands
   // on a graph-space factory floor that can zoom and pan.
-  if (currentLens !== 'padi') {
+  if (!isPadiLens()) {
     vd.nodes.forEach(n => {
-      if (n.rail) return; // rail nodes stay pinned
+      if (isPinnedRailNode(n)) return; // rail nodes stay pinned
       n.fx = null;
       n.fy = null;
     });
@@ -1335,7 +1769,9 @@ function layoutPadiControlShelf(laneIndex, controls) {
   const y = padiLaneY[laneIndex];
   if (!Number.isFinite(y)) return;
 
-  const laneTop = y - PADI_LANE_HEIGHT / 2;
+  const laneTop = Number.isFinite(padiLaneTop[laneIndex])
+    ? padiLaneTop[laneIndex]
+    : y - (padiLaneHeight[laneIndex] || PADI_LANE_DEFAULT_HEIGHT) / 2;
   const order = { label: 0, spawn: 1, library: 2 };
   const sorted = controls.slice().sort((a, b) => {
     return (order[a.padiControlKind] ?? 9) - (order[b.padiControlKind] ?? 9)
@@ -1384,12 +1820,143 @@ function layoutPadiControlShelf(laneIndex, controls) {
 }
 
 function snapPadiControlNode(node) {
-  if (!node?.padiControl || !fg || currentLens !== 'padi' || viewMode === 'agent') return false;
+  if (!node?.padiControl || !fg || !isPadiLens() || viewMode === 'agent') return false;
+  if (node.padiControlKind === 'route') {
+    const boundaryIndex = Number(node.padiBoundaryIndex);
+    const boundY = padiLaneBound[boundaryIndex];
+    if (!Number.isFinite(boundaryIndex) || !Number.isFinite(boundY)) return false;
+    const defaultX = routePinDefaultX(boundaryIndex, node.__tx ?? node.x);
+    const x = clampPadiRouteX(node.x ?? defaultX);
+    const offset = x - defaultX;
+    if (Math.abs(offset) > 1) padiRoutePinOffsets[String(boundaryIndex)] = offset;
+    else delete padiRoutePinOffsets[String(boundaryIndex)];
+    savePadiRoutePinOffsets();
+    node.__tx = x;
+    node.__ty = boundY;
+    node.x = x;
+    node.y = boundY;
+    node.fx = x;
+    node.fy = boundY;
+    return true;
+  }
   const controls = fg.graphData().nodes
-    .filter(n => n.padiControl && n.padiLaneIndex === node.padiLaneIndex);
+    .filter(n => n.padiControl && n.padiControlKind !== 'route' && n.padiLaneIndex === node.padiLaneIndex);
   layoutPadiControlShelf(node.padiLaneIndex, controls);
   positionSwimlaneControls();
   return true;
+}
+
+function computePadiRoutePinDefaults(graphNodes, graphLinks) {
+  const byId = {};
+  graphNodes.forEach(n => { byId[n.id] = n; });
+  const buckets = Array.from({ length: PADI_LANES.length - 1 }, () => []);
+  graphLinks.forEach(link => {
+    const s = byId[lid(link.source)];
+    const t = byId[lid(link.target)];
+    if (!s || !t || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) return;
+    const upper = s.__lane < t.__lane ? s : t;
+    const lower = s.__lane < t.__lane ? t : s;
+    const boundaryIndex = upper.__lane;
+    if (boundaryIndex < 0 || boundaryIndex >= PADI_LANES.length - 1) return;
+    const lowerX = lower.__tx ?? lower.x;
+    if (!Number.isFinite(lowerX)) return;
+    const weight = isDataSourceBoundary(boundaryIndex) && ['depends-on', 'authenticates-via'].includes(link.kind || '') ? 4 : 1;
+    buckets[boundaryIndex].push([lowerX, weight]);
+  });
+  padiRoutePinDefaults = buckets.map((pairs, i) => {
+    let total = 0;
+    let weight = 0;
+    pairs.forEach(([x, w]) => {
+      total += x * w;
+      weight += w;
+    });
+    const fallback = padiWorld.xLeft + (padiWorld.xRight - padiWorld.xLeft) * ((i + 1) / PADI_LANES.length);
+    return clampPadiRouteX(weight ? total / weight : fallback);
+  });
+}
+
+function layoutPadiRoutePins(graphNodes) {
+  graphNodes
+    .filter(n => n.padiControl && n.padiControlKind === 'route')
+    .forEach(node => {
+      const boundaryIndex = Number(node.padiBoundaryIndex);
+      const y = padiLaneBound[boundaryIndex];
+      if (!Number.isFinite(boundaryIndex) || !Number.isFinite(y)) return;
+      const x = clampPadiRouteX(padiRoutePinX(boundaryIndex));
+      node.__lane = undefined;
+      node.__tx = x;
+      node.__ty = y;
+      node.x = x;
+      node.y = y;
+      node.fx = x;
+      node.fy = y;
+      node.padiDisabled = false;
+      node.state = hasManualRoutePin(boundaryIndex) ? 'live' : 'built';
+    });
+}
+
+function padiRouteControlAtScreen(clientX, clientY) {
+  if (!fg || !isPadiLens() || viewMode === 'agent') return null;
+  const routes = (fg.graphData().nodes || []).filter(n => n.padiControlKind === 'route');
+  let best = null;
+  routes.forEach(node => {
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+    const pt = fg.graph2ScreenCoords(node.x, node.y);
+    const dx = Math.abs(clientX - pt.x);
+    const dy = Math.abs(clientY - pt.y);
+    const halfW = Math.max(34, (node.padiWidth || 78) / 2);
+    const halfH = Math.max(16, (node.padiHeight || 20) / 2 + 8);
+    if (dx <= halfW && dy <= halfH) {
+      const score = dx + dy;
+      if (!best || score < best.score) best = { node, score };
+    }
+  });
+  return best?.node || null;
+}
+
+function movePadiRoutePin(boundaryIndex, graphX) {
+  const defaultX = routePinDefaultX(boundaryIndex, graphX);
+  const x = clampPadiRouteX(graphX);
+  const offset = x - defaultX;
+  if (Math.abs(offset) > 1) padiRoutePinOffsets[String(boundaryIndex)] = offset;
+  else delete padiRoutePinOffsets[String(boundaryIndex)];
+  savePadiRoutePinOffsets();
+  layoutPadiRoutePins(fg.graphData().nodes || []);
+  if (typeof fg.d3ReheatSimulation === 'function') fg.d3ReheatSimulation();
+}
+
+function installPadiRoutePinDragging(elem) {
+  elem.addEventListener('pointerdown', event => {
+    const node = padiRouteControlAtScreen(event.clientX, event.clientY);
+    if (!node) return;
+    padiDraggingRoutePin = {
+      boundaryIndex: Number(node.padiBoundaryIndex),
+      pointerId: event.pointerId,
+    };
+    elem.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+
+  elem.addEventListener('pointermove', event => {
+    if (!padiDraggingRoutePin || padiDraggingRoutePin.pointerId !== event.pointerId) return;
+    const graphPoint = fg?.screen2GraphCoords ? fg.screen2GraphCoords(event.clientX, event.clientY) : null;
+    if (graphPoint && Number.isFinite(graphPoint.x)) {
+      movePadiRoutePin(padiDraggingRoutePin.boundaryIndex, graphPoint.x);
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+
+  const stopDrag = event => {
+    if (!padiDraggingRoutePin || padiDraggingRoutePin.pointerId !== event.pointerId) return;
+    elem.releasePointerCapture?.(event.pointerId);
+    padiDraggingRoutePin = null;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  elem.addEventListener('pointerup', stopDrag, true);
+  elem.addEventListener('pointercancel', stopDrag, true);
 }
 
 // Pin every visible node onto its swim-lane row, spread evenly across the
@@ -1400,7 +1967,7 @@ function layoutPadi() {
   const wrap = document.getElementById('graph-wrap');
   if (!fg || !overlay || !wrap) return;
   const controls = document.getElementById('swimlane-controls');
-  if (currentLens !== 'padi' || viewMode === 'agent') {
+  if (!isPadiLens() || viewMode === 'agent') {
     overlay.classList.remove('on');
     if (controls) controls.classList.remove('on');
     return;
@@ -1408,31 +1975,50 @@ function layoutPadi() {
   overlay.classList.remove('on');
   if (controls) controls.classList.add('on');
 
-  const laneY = PADI_LANES.map((_, laneIndex) => padiLaneCenter(laneIndex));
-  const bounds = laneY.slice(0, -1).map((y, i) => (y + laneY[i + 1]) / 2);
-  padiLaneY = laneY;
-  padiLaneBound = bounds;
-
   // Bucket visible non-rail nodes by lane, then give each a floaty *target*
   // (forces pull toward it — nothing is hard-pinned, so the sheet stays alive).
+  const graph = fg.graphData();
+  const graphNodes = graph.nodes || [];
+  const graphLinks = graph.links || [];
   const buckets = [[], [], [], []];
-  fg.graphData().nodes.forEach(n => {
-    if (n.padiControl) { n.__lane = n.padiLaneIndex; return; }
-    if (n.rail) { n.__lane = undefined; return; }
-    if (n.type === 'tool') { n.__lane = 3; return; }   // tools float around their bundle (physics), not bucketed into the row
+  graphNodes.forEach(n => {
+    if (n.padiControl) {
+      n.__lane = n.padiControlKind === 'route' ? undefined : n.padiLaneIndex;
+      return;
+    }
+    if (isPinnedRailNode(n)) { n.__lane = undefined; return; }
+    if (n.type === 'tool') { n.__lane = LANE_INDEX[String(LANE_Y.tool)]; return; }   // tools float around their bundle (physics), not bucketed into the row
     const li = LANE_INDEX[String(LANE_Y[n.type])] ?? 2;
     n.__lane = li;
     buckets[li].push(n);
   });
+  const laneGeometry = computePadiLaneGeometry(computePadiLaneHeights(buckets, graphNodes, graphLinks));
+  const laneY = laneGeometry.y;
+  padiLaneY = laneY;
+  padiLaneTop = laneGeometry.topY;
+  padiLaneBottom = laneGeometry.bottomY;
+  padiLaneHeight = laneGeometry.heights;
+  padiLaneBound = laneGeometry.bounds;
+
   const maxBucket = Math.max(1, ...buckets.map(arr => arr.length));
-  const laneWidth = Math.max(1300, Math.min(2600, maxBucket * 230));
+  const agentCount = buckets[LANE_INDEX[String(LANE_Y.agent)]]?.length || 0;
+  const bundleCount = buckets[LANE_INDEX[String(LANE_Y.bundle)]]?.filter(n => n.type === 'bundle').length || 0;
+  const contentCount = graphNodes.filter(n => !n.padiControl && !isPinnedRailNode(n)).length;
+  const laneWidth = Math.max(
+    1850,
+    Math.min(3900, Math.max(
+      maxBucket * 335,
+      bundleCount * 285 + agentCount * 180,
+      contentCount * 44
+    ))
+  );
   const xLeft = PADI_WORLD_X_SHIFT - laneWidth / 2;
   const xRight = PADI_WORLD_X_SHIFT + laneWidth / 2;
   padiWorld = {
     xLeft,
     xRight,
-    yTop: Math.min(...laneY) - PADI_LANE_HEIGHT / 2,
-    yBottom: Math.max(...laneY) + PADI_LANE_HEIGHT / 2
+    yTop: laneGeometry.topY[0],
+    yBottom: laneGeometry.bottomY[laneGeometry.bottomY.length - 1]
   };
   buckets.forEach((arr, li) => {
     arr.sort((a, b) => a.id.localeCompare(b.id));
@@ -1452,12 +2038,105 @@ function layoutPadi() {
     });
   });
 
-  // ── Clean-line layout: order agents under their interface/router (barycenter),
-  //    place each bundle directly under its agent, and halo each bundle's tools —
-  //    so the tool → bundle → agent → router → interface chains run vertically.
+  // ── Clean-line layout: derive lane ordering from graph relationships. This is
+  // a small layered barycenter pass (interfaces ⇄ agents ⇄ bundles ⇄ data
+  // sources), so dense clusters reduce crossings without saved/manual coords.
   {
-    const byId = {}; fg.graphData().nodes.forEach(n => byId[n.id] = n);
-    const links = fg.graphData().links;
+    const byId = {}; graphNodes.forEach(n => byId[n.id] = n);
+    const links = graphLinks;
+    const nodeX = node => node?.__tx ?? node?.x ?? 0;
+    const clampX = (x, pad = 80) => Math.max(padiWorld.xLeft + pad, Math.min(padiWorld.xRight - pad, x));
+    const weightedMean = pairs => {
+      let total = 0;
+      let weight = 0;
+      pairs.forEach(([x, w = 1]) => {
+        if (!Number.isFinite(x)) return;
+        total += x * w;
+        weight += w;
+      });
+      return weight ? total / weight : null;
+    };
+    const projectedToolX = node => {
+      if (node?.type === 'tool' && node.__bundle) {
+        return nodeX(node.__bundle) + Math.cos(node.__ang || 0) * (node.__rad || 0);
+      }
+      return nodeX(node);
+    };
+    const placeNearBary = (nodes, bary, minGap = 180, pad = 80) => {
+      if (!nodes.length) return;
+      const span = Math.max(1, padiWorld.xRight - padiWorld.xLeft - pad * 2);
+      const gap = nodes.length > 1 ? Math.min(minGap, span / (nodes.length - 1)) : minGap;
+      const sorted = nodes.slice().sort((a, b) => {
+        const ax = bary.get(a) ?? nodeX(a);
+        const bx = bary.get(b) ?? nodeX(b);
+        return ax - bx || a.id.localeCompare(b.id);
+      });
+      const xs = [];
+      sorted.forEach((node, i) => {
+        const desired = clampX(bary.get(node) ?? nodeX(node), pad);
+        xs[i] = i === 0 ? desired : Math.max(desired, xs[i - 1] + gap);
+      });
+      const overflow = xs[xs.length - 1] - (padiWorld.xRight - pad);
+      if (overflow > 0) {
+        for (let i = 0; i < xs.length; i += 1) xs[i] -= overflow;
+      }
+      const underflow = (padiWorld.xLeft + pad) - xs[0];
+      if (underflow > 0) {
+        for (let i = 0; i < xs.length; i += 1) xs[i] += underflow;
+      }
+      sorted.forEach((node, i) => { node.__tx = xs[i]; });
+    };
+    const placeInOrderNearBary = (ordered, bary, minGap = 180, pad = 80) => {
+      if (!ordered.length) return;
+      const span = Math.max(1, padiWorld.xRight - padiWorld.xLeft - pad * 2);
+      const gap = ordered.length > 1 ? Math.min(minGap, span / (ordered.length - 1)) : minGap;
+      const xs = [];
+      ordered.forEach((node, i) => {
+        const desired = clampX(bary.get(node) ?? nodeX(node), pad);
+        xs[i] = i === 0 ? desired : Math.max(desired, xs[i - 1] + gap);
+      });
+      const overflow = xs[xs.length - 1] - (padiWorld.xRight - pad);
+      if (overflow > 0) {
+        for (let i = 0; i < xs.length; i += 1) xs[i] -= overflow;
+      }
+      const underflow = (padiWorld.xLeft + pad) - xs[0];
+      if (underflow > 0) {
+        for (let i = 0; i < xs.length; i += 1) xs[i] += underflow;
+      }
+      ordered.forEach((node, i) => { node.__tx = xs[i]; });
+    };
+    const placeOrderedGroupsLeft = (groups, minGap = 180, pad = 170, groupGap = 70) => {
+      const ordered = [];
+      const steps = [];
+      groups.forEach((group, groupIndex) => {
+        group.nodes.forEach((node, nodeIndex) => {
+          if (ordered.length) steps.push(minGap + (nodeIndex === 0 && groupIndex > 0 ? groupGap : 0));
+          ordered.push(node);
+        });
+      });
+      if (!ordered.length) return;
+      const span = Math.max(1, padiWorld.xRight - padiWorld.xLeft - pad * 2);
+      const total = steps.reduce((sum, step) => sum + step, 0);
+      const scale = total > span ? span / total : 1;
+      let x = padiWorld.xLeft + pad;
+      ordered[0].__tx = x;
+      for (let i = 1; i < ordered.length; i += 1) {
+        x += steps[i - 1] * scale;
+        ordered[i].__tx = clampX(x, pad);
+      }
+    };
+    const placeNodesLeftByBary = (nodes, bary, minGap = 180, pad = 170) => {
+      if (!nodes.length) return;
+      const groups = nodes.slice().sort((a, b) => {
+        const ax = bary.get(a) ?? nodeX(a);
+        const bx = bary.get(b) ?? nodeX(b);
+        return ax - bx || a.id.localeCompare(b.id);
+      }).map(node => ({
+        nodes: [node],
+        bary: bary.get(node) ?? nodeX(node),
+      }));
+      placeOrderedGroupsLeft(groups, minGap, pad, 0);
+    };
     const neighborTx = (node, kinds) => {
       const xs = [];
       for (const l of links) {
@@ -1468,58 +2147,218 @@ function layoutPadi() {
       }
       return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     };
-    // 1. re-order agents into their lane slots by the barycenter of their interfaces/routers
-    const agents = fg.graphData().nodes.filter(n => n.type === 'agent' && n.__tx != null && !n.padiControl);
-    if (agents.length) {
+    const agents = graphNodes.filter(n => n.type === 'agent' && n.__tx != null && !n.padiControl);
+    const bundles = graphNodes.filter(n => n.type === 'bundle' && n.__tx != null && !n.padiControl);
+    const ifaces = graphNodes.filter(n => n.type === 'intake' && n.__tx != null);
+    const dataSources = graphNodes.filter(n => n.type === 'database' && n.__tx != null && !n.padiControl);
+    const bundleToAgents = new Map();
+    const agentToBundles = new Map();
+    const agentsByBundleIdentity = new Map();
+    const bundleIdentityByAgent = new Map();
+    const delegationNeighbors = new Map();
+    const bundleIdentity = bundle => String(bundle?.bundle_key || bundle?.name || bundle?.id || '');
+    const pushMap = (map, key, value) => (map.get(key) || map.set(key, []).get(key)).push(value);
+    const addSetMap = (map, key, value) => {
+      const set = map.get(key) || new Set();
+      set.add(value);
+      map.set(key, set);
+    };
+    links.forEach(l => {
+      if (l.kind !== 'uses-bundle') return;
+      const a = byId[lid(l.source)];
+      const b = byId[lid(l.target)];
+      if (!a || !b || a.type !== 'agent' || b.type !== 'bundle') return;
+      pushMap(bundleToAgents, b, a);
+      pushMap(agentToBundles, a, b);
+      const key = bundleIdentity(b);
+      if (key) {
+        addSetMap(agentsByBundleIdentity, key, a);
+        addSetMap(bundleIdentityByAgent, a, key);
+      }
+    });
+    links.forEach(l => {
+      if (l.kind !== 'delegates') return;
+      const s = byId[lid(l.source)];
+      const t = byId[lid(l.target)];
+      if (!s || !t || s.type !== 'agent' || t.type !== 'agent') return;
+      addSetMap(delegationNeighbors, s, t);
+      addSetMap(delegationNeighbors, t, s);
+    });
+    const orderedDelegationComponent = (component, bary) => {
+      if (component.length <= 2) {
+        return component.slice().sort((a, b) => {
+          const ax = bary.get(a) ?? nodeX(a);
+          const bx = bary.get(b) ?? nodeX(b);
+          return ax - bx || a.id.localeCompare(b.id);
+        });
+      }
+      const score = node => (delegationNeighbors.get(node)?.size || 0);
+      const hub = component.slice().sort((a, b) => {
+        return score(b) - score(a)
+          || (bary.get(a) ?? nodeX(a)) - (bary.get(b) ?? nodeX(b))
+          || a.id.localeCompare(b.id);
+      })[0];
+      const peers = component
+        .filter(node => node !== hub)
+        .sort((a, b) => {
+          const aAnchored = neighborTx(a, ['listens', 'wears']) != null ? 0 : 1;
+          const bAnchored = neighborTx(b, ['listens', 'wears']) != null ? 0 : 1;
+          if (aAnchored !== bAnchored) return aAnchored - bAnchored;
+          const ax = bary.get(a) ?? nodeX(a);
+          const bx = bary.get(b) ?? nodeX(b);
+          return ax - bx || a.id.localeCompare(b.id);
+        });
+      const anchoredCount = peers.filter(node => neighborTx(node, ['listens', 'wears']) != null).length;
+      const leftCount = Math.max(1, anchoredCount || Math.floor(peers.length / 2));
+      return [...peers.slice(0, leftCount), hub, ...peers.slice(leftCount)];
+    };
+    const placeAgentBary = (bary, minGap = 230, pad = 120) => {
+      if (!agents.length) return;
+      const seen = new Set();
+      const groups = [];
+      agents.forEach(agent => {
+        if (seen.has(agent)) return;
+        const stack = [agent];
+        const component = [];
+        seen.add(agent);
+        while (stack.length) {
+          const node = stack.pop();
+          component.push(node);
+          (delegationNeighbors.get(node) || new Set()).forEach(next => {
+            if (seen.has(next)) return;
+            seen.add(next);
+            stack.push(next);
+          });
+        }
+        const groupBary = weightedMean(component.map(node => [bary.get(node) ?? nodeX(node), 1])) ?? nodeX(component[0]);
+        groups.push({
+          nodes: orderedDelegationComponent(component, bary),
+          bary: groupBary,
+          hasDelegation: component.some(node => (delegationNeighbors.get(node)?.size || 0) > 0),
+        });
+      });
+      groups.sort((a, b) => {
+        if (a.hasDelegation !== b.hasDelegation) return a.hasDelegation ? -1 : 1;
+        return a.bary - b.bary || a.nodes[0].id.localeCompare(b.nodes[0].id);
+      });
+      placeOrderedGroupsLeft(groups, minGap, pad, 80);
+    };
+    const sharedBundlePeerPairs = agent => {
+      const peerWeights = new Map();
+      (bundleIdentityByAgent.get(agent) || new Set()).forEach(key => {
+        const members = agentsByBundleIdentity.get(key);
+        if (!members || members.size < 2) return;
+        const perBundleWeight = Math.min(7, 3 + members.size);
+        members.forEach(peer => {
+          if (peer === agent) return;
+          peerWeights.set(peer, (peerWeights.get(peer) || 0) + perBundleWeight);
+        });
+      });
+      return [...peerWeights.entries()].map(([peer, weight]) => [nodeX(peer), weight]);
+    };
+    const agentGraphPairs = (agent, { includeBundles = false, includeSharedBundles = false } = {}) => {
+      const pairs = [];
+      const interfaceX = neighborTx(agent, ['listens', 'wears']);
+      if (interfaceX != null) pairs.push([interfaceX, includeBundles ? 4 : 6]);
+      links.forEach(l => {
+        if (l.kind !== 'delegates') return;
+        const s = byId[lid(l.source)];
+        const t = byId[lid(l.target)];
+        if (s === agent && t) pairs.push([nodeX(t), 8]);
+        if (t === agent && s) pairs.push([nodeX(s), 8]);
+      });
+      if (includeBundles) {
+        (agentToBundles.get(agent) || []).forEach(bundle => pairs.push([nodeX(bundle), 6]));
+      }
+      if (includeSharedBundles) {
+        sharedBundlePeerPairs(agent).forEach(pair => pairs.push(pair));
+      }
+      return pairs;
+    };
+    const placeAgentsFromGraph = (options = {}, iterations = 1) => {
+      if (!agents.length) return;
+      for (let i = 0; i < iterations; i += 1) {
+        const bary = new Map();
+        agents.forEach(agent => {
+          const pairs = agentGraphPairs(agent, options);
+          bary.set(agent, weightedMean(pairs) ?? nodeX(agent));
+        });
+        placeAgentBary(bary, 300, 120);
+      }
+    };
+    const bundleGraphPairs = bundle => {
+      const directAgents = bundleToAgents.get(bundle) || [];
+      const identityAgents = [...(agentsByBundleIdentity.get(bundleIdentity(bundle)) || new Set())];
+      const pairs = [];
+      directAgents.forEach(agent => pairs.push([nodeX(agent), 2.6]));
+      identityAgents.forEach(agent => pairs.push([nodeX(agent), directAgents.includes(agent) ? 1.4 : 1.1]));
+      return pairs;
+    };
+    const bundlePlacementGap = () => {
+      const longestLabel = bundles.reduce((max, bundle) => {
+        return Math.max(max, String(bundle.name || bundle.bundle_key || bundle.id || '').length);
+      }, 0);
+      return Math.min(245, Math.max(205, 76 + longestLabel * 9));
+    };
+    const placeBundlesFromGraph = () => {
+      if (!bundles.length) return;
       const bary = new Map();
-      // pass 1: interface/router barycenter for ordinary (non-delegating) agents. An agent with NO
-      //   interface (e.g. a built-but-channel-less bot like the curator) keeps its seed x so it still
-      //   has a real position instead of a null that would collapse the ordering.
-      agents.forEach(a => {
-        const isHub = links.some(l => l.kind === 'delegates' && byId[lid(l.source)] === a);
-        if (!isHub) bary.set(a, neighborTx(a, ['listens', 'wears']) ?? a.__tx);
+      bundles.forEach(bundle => {
+        bary.set(bundle, weightedMean(bundleGraphPairs(bundle)) ?? nodeX(bundle));
       });
-      // pass 2: a hub that delegates to OTHER agents centers among its targets' barycenters, so it
-      //   sits strictly BETWEEN them and its delegation edges radiate symmetrically.
-      agents.forEach(a => {
-        if (bary.has(a)) return;
-        const xs = links.filter(l => l.kind === 'delegates' && byId[lid(l.source)] === a)
-                        .map(l => bary.get(byId[lid(l.target)])).filter(v => v != null);
-        bary.set(a, xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : (neighborTx(a, ['listens', 'wears']) ?? a.__tx));
-      });
-      // Place agents at EVENLY-SPACED lane positions in barycenter order. Robust spacing (computed from
-      //   the lane width, not sorted prior __tx 'slots' which drift across re-layouts) — so bundles and
-      //   their halos always get the full lane gap between them and never collide, however many tools.
-      const _xL = padiWorld.xLeft, _xR = padiWorld.xRight, _n = agents.length;
-      agents.slice().sort((a, b) => bary.get(a) - bary.get(b))
-            .forEach((a, i) => { a.__tx = _xL + (_xR - _xL) * (i + 0.5) / _n; });
-    }
-    // 1b. re-order interfaces above the agent that listens to them, so the interface → agent
-    //     chains don't cross after a hub agent re-centers (no-agent interfaces keep to the right).
-    const ifaces = fg.graphData().nodes.filter(n => n.type === 'intake' && n.__tx != null);
+      placeNearBary(bundles, bary, bundlePlacementGap(), 90);
+    };
+
+    // 1. seed agents from their channel/delegation relationships.
+    placeAgentsFromGraph({ includeSharedBundles: true }, 2);
+
+    // 2. place bundles by the average of every agent that uses them. Shared
+    // bundle identities also pull their generated per-agent bundle nodes into
+    // one neighborhood, without saving manual coordinates.
+    placeBundlesFromGraph();
+
+    // 3. refine agent order from the generated bundle positions as well as
+    // interfaces/delegations. This is still entirely graph-derived.
+    placeAgentsFromGraph({ includeBundles: true, includeSharedBundles: true }, 3);
+
+    // 4. re-run bundle placement after agent refinement.
+    placeBundlesFromGraph();
+    placeAgentsFromGraph({ includeBundles: true, includeSharedBundles: true }, 2);
+    placeBundlesFromGraph();
+
+    // 5. re-order interfaces above the agent that listens to them.
     if (ifaces.length) {
       const ibary = new Map(ifaces.map(n => [n, neighborTx(n, ['listens'])]));
-      const islots = ifaces.map(n => n.__tx).sort((x, y) => x - y);
-      ifaces.slice().sort((a, b) => {
-        const ba = ibary.get(a), bb = ibary.get(b);
-        if (ba == null && bb == null) return a.__tx - b.__tx;
-        if (ba == null) return 1;
-        if (bb == null) return -1;
-        return ba - bb;
-      }).forEach((n, i) => { n.__tx = islots[i]; });
+      placeNodesLeftByBary(ifaces, ibary, 330, 170);
     }
-    // 2. place each bundle directly under its agent (multiples spread around it)
-    const byAgent = {};
-    for (const l of links) {
-      if (l.kind !== 'uses-bundle') continue;
-      const a = byId[lid(l.source)], b = byId[lid(l.target)];
-      if (a && b && a.type === 'agent' && b.type === 'bundle') (byAgent[a.id] = byAgent[a.id] || { a, bs: [] }).bs.push(b);
-    }
-    Object.values(byAgent).forEach(({ a, bs }) => {
-      bs.forEach((b, i) => { b.__tx = a.__tx + (i - (bs.length - 1) / 2) * 110; });
-    });
-    // 3. halo each bundle's tools around it (seeded near the bundle's lane slot)
+    const positionDataSources = (getOtherX, minGap = 260) => {
+      if (!dataSources.length) return;
+      const bary = new Map();
+      dataSources.forEach(ds => {
+        const pairs = [];
+        links.forEach(l => {
+          if (!['authenticates-via', 'depends-on'].includes(l.kind)) return;
+          const s = byId[lid(l.source)];
+          const t = byId[lid(l.target)];
+          const other = s === ds ? t : t === ds ? s : null;
+          if (!other) return;
+          pairs.push([getOtherX(other), other.type === 'tool' ? 2 : 1]);
+        });
+        bary.set(ds, weightedMean(pairs) ?? nodeX(ds));
+      });
+      placeNodesLeftByBary(dataSources, bary, minGap, 170);
+    };
+
+    // 6. halo each bundle's tools around it (seeded near the bundle's lane slot)
     const groups = {};
+    const credentialTargetForTool = new Map();
+    links.forEach(l => {
+      if (!['authenticates-via', 'depends-on'].includes(l.kind)) return;
+      const s = byId[lid(l.source)];
+      const t = byId[lid(l.target)];
+      if (s?.type === 'tool' && t?.type === 'database') credentialTargetForTool.set(s, t);
+      if (t?.type === 'tool' && s?.type === 'database') credentialTargetForTool.set(t, s);
+    });
     for (const l of links) {
       if (l.kind !== 'contains') continue;
       const s = byId[lid(l.source)], t = byId[lid(l.target)];
@@ -1528,11 +2367,36 @@ function layoutPadi() {
         (groups[s.id] = groups[s.id] || []).push(t);
       }
     }
+    positionDataSources(other => other?.type === 'tool' && other.__bundle ? nodeX(other.__bundle) : nodeX(other), 260);
     Object.values(groups).forEach(arr => {
-      const haloR = 24 + arr.length * 2.4;
-      if (arr[0]?.__bundle) arr[0].__bundle.__toolHaloR = haloR;
-      arr.forEach((t, i) => {
-        t.__ang = (i + 0.5) / arr.length * Math.PI * 2;
+      const haloR = 48 + arr.length * 4.7;
+      const bundle = arr[0]?.__bundle;
+      if (bundle) bundle.__toolHaloR = haloR;
+      const start = -Math.PI / 2 + PADI_TOOL_TOP_CORRIDOR / 2;
+      const span = Math.PI * 2 - PADI_TOOL_TOP_CORRIDOR;
+      const angleOnArc = angle => {
+        let a = angle;
+        while (a < start) a += Math.PI * 2;
+        while (a > start + span) a -= Math.PI * 2;
+        if (a < start) a = start;
+        if (a > start + span) a = start + span;
+        return a;
+      };
+      const desiredToolAngle = tool => {
+        const target = credentialTargetForTool.get(tool);
+        if (target && bundle) {
+          const tx = nodeX(target) - nodeX(bundle);
+          const ty = (target.__ty ?? target.y ?? laneY[LANE_INDEX[String(LANE_Y.database)]]) - (bundle.__ty ?? bundle.y ?? laneY[LANE_INDEX[String(LANE_Y.bundle)]]);
+          return Math.atan2(ty, tx);
+        }
+        const h = tool.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+        return start + ((h % 1000) / 1000) * span;
+      };
+      const ordered = arr.slice().sort((a, b) => {
+        return angleOnArc(desiredToolAngle(a)) - angleOnArc(desiredToolAngle(b)) || a.id.localeCompare(b.id);
+      });
+      ordered.forEach((t, i) => {
+        t.__ang = toolHaloAngle(i, arr.length);
         t.__rad = haloR;
         if (!Number.isFinite(t.x)) {
           t.x = (t.__bundle.__tx || 0) + Math.cos(t.__ang) * t.__rad;
@@ -1540,11 +2404,41 @@ function layoutPadi() {
         }
       });
     });
+
+    // 7. refine data sources from the actual projected halo positions.
+    positionDataSources(projectedToolX, 260);
+    computePadiRoutePinDefaults(graphNodes, graphLinks);
+    layoutPadiRoutePins(graphNodes);
+    const visibleTargets = graphNodes.filter(n => !n.padiControl && !isPinnedRailNode(n));
+    const content = visibleTargets.reduce((bounds, node) => {
+      let x = node.__tx ?? node.x;
+      let y = node.__ty ?? node.y;
+      let extentX = nodeRadius(node) + 22;
+      let extentY = nodeRadius(node) + 22;
+      if (node.type === 'tool' && node.__bundle) {
+        x = nodeX(node.__bundle) + Math.cos(node.__ang || 0) * (node.__rad || 0);
+        y = (node.__bundle.__ty ?? node.__bundle.y ?? laneY[LANE_INDEX[String(LANE_Y.bundle)]])
+          + Math.sin(node.__ang || 0) * (node.__rad || 0);
+        extentX = Math.max(extentX, 46);
+        extentY = Math.max(extentY, 34);
+      }
+      if (node.type === 'bundle') {
+        extentX = Math.max(extentX, 74);
+        extentY = Math.max(extentY, (node.__toolHaloR || 0) + 38);
+      }
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return bounds;
+      bounds.xLeft = Math.min(bounds.xLeft, x - extentX);
+      bounds.xRight = Math.max(bounds.xRight, x + extentX);
+      bounds.yTop = Math.min(bounds.yTop, y - extentY);
+      bounds.yBottom = Math.max(bounds.yBottom, y + extentY);
+      return bounds;
+    }, { xLeft: Infinity, xRight: -Infinity, yTop: Infinity, yBottom: -Infinity });
+    padiContentBounds = Number.isFinite(content.xLeft) ? content : null;
   }
 
   PADI_LANES.forEach((lane, li) => {
-    const controls = fg.graphData().nodes
-      .filter(n => n.padiControl && n.padiLaneIndex === li);
+    const controls = graphNodes
+      .filter(n => n.padiControl && n.padiControlKind !== 'route' && n.padiLaneIndex === li);
     layoutPadiControlShelf(li, controls);
   });
 
@@ -1553,7 +2447,7 @@ function layoutPadi() {
 }
 
 function fitPadiToViewport(ms = 650) {
-  if (!fg || currentLens !== 'padi' || viewMode === 'agent') return;
+  if (!fg || !isPadiLens() || viewMode === 'agent') return;
   const wrap = document.getElementById('graph-wrap');
   const panel = document.getElementById('panel');
   if (!wrap) return;
@@ -1564,18 +2458,19 @@ function fitPadiToViewport(ms = 650) {
   const usableW = Math.max(320, panelLeft - 24);
   const usableH = Math.max(320, H - 72);
 
-  const xMin = padiWorld.xLeft - 64;
-  const xMax = padiWorld.xRight + 64;
+  const fitBounds = padiContentBounds || padiWorld;
+  const xMin = Math.min(fitBounds.xLeft, padiWorld.xLeft + 28) - 96;
+  const xMax = fitBounds.xRight + 132;
   const yMin = padiWorld.yTop - 44;
   const yMax = padiWorld.yBottom + 88;
   const boundsW = Math.max(1, xMax - xMin);
   const boundsH = Math.max(1, yMax - yMin);
-  const zoom = Math.max(0.46, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
-  const cx = (xMin + xMax) / 2;
+  const zoom = Math.max(0.36, Math.min(2.1, Math.min(usableW / boundsW, usableH / boundsH)));
+  const leftMargin = 36;
+  const cx = xMin + (W / 2 - leftMargin) / zoom;
   const cy = (yMin + yMax) / 2;
 
-  const panelOffset = Math.max(0, W - usableW) / 2;
-  fg.centerAt(cx + panelOffset / zoom, cy, ms);
+  fg.centerAt(cx, cy, ms);
   fg.zoom(zoom, ms);
   window.setTimeout(() => {
     layoutPadi();
@@ -1584,19 +2479,20 @@ function fitPadiToViewport(ms = 650) {
 }
 
 function drawPadiLaneSheet(ctx, scale) {
-  if (currentLens !== 'padi' || viewMode === 'agent') return;
+  if (!isPadiLens() || viewMode === 'agent') return;
   const x = padiWorld.xLeft;
   const w = padiWorld.xRight - padiWorld.xLeft;
   PADI_LANES.forEach((lane, i) => {
     const y = padiLaneY[i];
     if (!Number.isFinite(y)) return;
-    const top = y - PADI_LANE_HEIGHT / 2;
+    const top = Number.isFinite(padiLaneTop[i]) ? padiLaneTop[i] : y - (padiLaneHeight[i] || PADI_LANE_DEFAULT_HEIGHT) / 2;
+    const height = padiLaneHeight[i] || PADI_LANE_DEFAULT_HEIGHT;
     const grad = ctx.createLinearGradient(x, 0, padiWorld.xRight, 0);
     grad.addColorStop(0, `rgba(${lane.hue},0.12)`);
     grad.addColorStop(0.35, `rgba(${lane.hue},0.055)`);
     grad.addColorStop(1, `rgba(${lane.hue},0.022)`);
     ctx.fillStyle = grad;
-    ctx.fillRect(x, top, w, PADI_LANE_HEIGHT);
+    ctx.fillRect(x, top, w, height);
     ctx.strokeStyle = 'rgba(255,255,255,0.055)';
     ctx.lineWidth = 1 / scale;
     ctx.beginPath();
@@ -1608,15 +2504,17 @@ function drawPadiLaneSheet(ctx, scale) {
 
 function positionSwimlaneControls() {
   const layer = document.getElementById('swimlane-controls');
-  if (!fg || !layer || currentLens !== 'padi' || viewMode === 'agent') return;
+  if (!fg || !layer || !isPadiLens() || viewMode === 'agent') return;
   if (typeof fg.graph2ScreenCoords !== 'function') return;
   const rows = layer.querySelectorAll('.swimlane-ctrl-row');
   rows.forEach(row => {
     const laneIndex = Number(row.dataset.laneIndex);
     const y = padiLaneY[laneIndex];
     if (!Number.isFinite(y)) return;
-    const topLeft = fg.graph2ScreenCoords(padiWorld.xLeft, y - PADI_LANE_HEIGHT / 2);
-    const bottomRight = fg.graph2ScreenCoords(padiWorld.xRight, y + PADI_LANE_HEIGHT / 2);
+    const top = Number.isFinite(padiLaneTop[laneIndex]) ? padiLaneTop[laneIndex] : y - (padiLaneHeight[laneIndex] || PADI_LANE_DEFAULT_HEIGHT) / 2;
+    const bottom = Number.isFinite(padiLaneBottom[laneIndex]) ? padiLaneBottom[laneIndex] : y + (padiLaneHeight[laneIndex] || PADI_LANE_DEFAULT_HEIGHT) / 2;
+    const topLeft = fg.graph2ScreenCoords(padiWorld.xLeft, top);
+    const bottomRight = fg.graph2ScreenCoords(padiWorld.xRight, bottom);
     const w = Math.max(0, bottomRight.x - topLeft.x);
     const h = Math.max(0, bottomRight.y - topLeft.y);
     row.style.transform = `translate(${topLeft.x}px, ${topLeft.y}px)`;
@@ -1633,7 +2531,7 @@ function padiLaneForce() {
   padiTick++;
   const nodes = padiLaneForce._nodes || [];
   for (const n of nodes) {
-    if (n.rail) continue;
+    if (isPinnedRailNode(n)) continue;
     if (n.type === 'tool') {
       // tool → its slot in the halo around its bundle (one-sided: the bundle is never moved)
       const b = n.__bundle;
@@ -1670,7 +2568,7 @@ function drawPadiLink(link, ctx, scale) {
   ctx.strokeStyle = col;
   if (delegates) ctx.setLineDash([6 / scale, 4 / scale]);   // dashed: a relationship, not structural plumbing
   if (inactive) ctx.setLineDash([2 / scale, 5 / scale]);
-  const pts = padiLinkPath(s, t);
+  const pts = padiLinkPath(s, t, link);
   if (pts.length < 2) return;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
@@ -1678,8 +2576,8 @@ function drawPadiLink(link, ctx, scale) {
   ctx.stroke();
   if (!inactive && !hoverDim && link.kind !== 'contains') drawPadiArrow(link, pts, ctx, scale, col);
   if (highlighted && link.kind === 'contains') drawPadiArrow(link, pts, ctx, scale, col);
-  if (pts.length === 3) {
-    const pin = pts[1];
+  if (pts.length > 2) {
+    pts.slice(1, -1).forEach(pin => {
     ctx.beginPath();
     ctx.arc(pin.x, pin.y, (highlighted ? 3.4 : 2.6) / scale, 0, 2 * Math.PI);
     ctx.fillStyle = col;
@@ -1687,25 +2585,24 @@ function drawPadiLink(link, ctx, scale) {
     ctx.lineWidth = 1.5 / scale;
     ctx.strokeStyle = '#0d1117';
     ctx.stroke();
+    });
   }
   ctx.setLineDash([]);
   drawPadiLinkLabel(link, pts, ctx, scale, col, highlighted);
 }
 function padiLinkColor(l, alphaScale = 1) {
-  if (l.kind === 'delegates') return rgba('#d4a574', 0.9 * alphaScale);   // delegation: warm + visible (Huberto → Ops over A2A)
-  if (l.kind === 'depends-on') return rgba('#a5d6ff', 0.48 * alphaScale);
-  if (l.kind === 'runs-on' || l.kind === 'runs-in') return rgba('#c8a0ff', 0.5 * alphaScale);
-  if (l.kind === 'listens') return rgba('#d2a8ff', 0.56 * alphaScale);
-  if (l.kind === 'uses-bundle') return rgba('#d4a574', 0.72 * alphaScale);
-  if (l.kind === 'contains') return rgba('#f0883e', (l.inactive ? 0.2 : 0.38) * alphaScale);
-  return rgba('#8ba0b8', 0.5 * alphaScale);
+  if (l.kind === 'contains') return rgba('#8b949e', (l.inactive ? 0.18 : 0.32) * alphaScale);
+  if (l.kind === 'delegates') return rgba('#8b949e', 0.62 * alphaScale);
+  if (l.kind === 'depends-on') return rgba('#8b949e', 0.36 * alphaScale);
+  if (l.kind === 'runs-on' || l.kind === 'runs-in') return rgba('#8b949e', 0.34 * alphaScale);
+  return rgba('#8b949e', 0.44 * alphaScale);
 }
 
 function applyForces() {
   const charge = fg.d3Force('charge');
   const link = fg.d3Force('link');
   const center = fg.d3Force('center');
-  if (currentLens === 'padi') {
+  if (isPadiLens()) {
     // No charge/link tug — they'd shove nodes off their even spread (and behind
     // the panel). Positioning + the floaty bob are entirely the lane force's job.
     // Tools float in an organic blob around their bundle — only tools get charge
@@ -1772,23 +2669,285 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function folderPath(ctx, x, y, r, scale) {
+  const rr = Math.max(2 / scale, Math.min(5 / scale, r * 0.28));
+  const left = x - r * 1.12;
+  const right = x + r * 1.12;
+  const top = y - r * 0.58;
+  const bottom = y + r * 0.76;
+  const tabLeft = left + r * 0.2;
+  const tabRight = left + r * 0.92;
+  const tabTop = y - r * 0.88;
+  ctx.beginPath();
+  ctx.moveTo(left + rr, top);
+  ctx.lineTo(tabLeft, top);
+  ctx.lineTo(tabLeft + r * 0.14, tabTop);
+  ctx.lineTo(tabRight, tabTop);
+  ctx.lineTo(tabRight + r * 0.24, top);
+  ctx.lineTo(right - rr, top);
+  ctx.quadraticCurveTo(right, top, right, top + rr);
+  ctx.lineTo(right, bottom - rr);
+  ctx.quadraticCurveTo(right, bottom, right - rr, bottom);
+  ctx.lineTo(left + rr, bottom);
+  ctx.quadraticCurveTo(left, bottom, left, bottom - rr);
+  ctx.lineTo(left, top + rr);
+  ctx.quadraticCurveTo(left, top, left + rr, top);
+  ctx.closePath();
+}
+
+function inboxPath(ctx, x, y, r, scale) {
+  const rr = Math.max(2 / scale, Math.min(5 / scale, r * 0.25));
+  const left = x - r * 1.08;
+  const right = x + r * 1.08;
+  const top = y - r * 0.74;
+  const bottom = y + r * 0.72;
+  ctx.beginPath();
+  ctx.moveTo(left + rr, top);
+  ctx.lineTo(right - rr, top);
+  ctx.quadraticCurveTo(right, top, right, top + rr);
+  ctx.lineTo(right, bottom - rr);
+  ctx.quadraticCurveTo(right, bottom, right - rr, bottom);
+  ctx.lineTo(x + r * 0.4, bottom);
+  ctx.lineTo(x + r * 0.2, y + r * 0.34);
+  ctx.lineTo(x - r * 0.2, y + r * 0.34);
+  ctx.lineTo(x - r * 0.4, bottom);
+  ctx.lineTo(left + rr, bottom);
+  ctx.quadraticCurveTo(left, bottom, left, bottom - rr);
+  ctx.lineTo(left, top + rr);
+  ctx.quadraticCurveTo(left, top, left + rr, top);
+  ctx.closePath();
+}
+
+function interfaceGlyphKind(node) {
+  const pieces = [
+    node.id, node.name, node.channel, node.artifact,
+    ...(Array.isArray(node.members) ? node.members : []),
+  ].filter(Boolean).map(v => String(v).toLowerCase());
+  const text = pieces.join(' ');
+  if (text.includes('discord') || text.includes('chan:') || text.includes('#')) return 'discord';
+  if (text.includes('phone') || text.includes('sms') || text.includes('text') || text.includes('twilio') || text.includes('call') || text.includes('voice') || text.includes('whatsapp')) return 'phone';
+  if (text.includes('email') || text.includes('mail') || text.includes('resend')) return 'email';
+  if (text.includes('slack')) return 'slack';
+  if (text.includes('telegram')) return 'telegram';
+  if (text.includes('chainlit') || text.includes('chat')) return 'chat';
+  if (text.includes('github') || text.includes('gitlab') || text.includes('git ')) return 'code';
+  if (text.includes('calendar') || text.includes('calendly') || text.includes('meeting')) return 'calendar';
+  if (text.includes('form') || text.includes('survey') || text.includes('typeform')) return 'form';
+  if (text.includes('cli') || text.includes('terminal') || text.includes('shell')) return 'terminal';
+  if (text.includes('api') || text.includes('webhook') || text.includes('rest') || text.includes('graphql')) return 'api';
+  if (text.includes('web') || text.includes('hosted') || text.includes('http') || text.includes('browser') || text.includes('cockpit') || text.includes('builder')) return 'web';
+  return 'inbox';
+}
+
+function drawInterfaceGlyph(node, ctx, r, scale, color, alpha) {
+  const x = node.x;
+  const y = node.y;
+  const kind = interfaceGlyphKind(node);
+  const ink = rgba(color, Math.min(0.86, alpha * 0.86));
+  const fill = rgba(color, Math.min(0.18, alpha * 0.2));
+  const line = Math.max(1 / scale, 1.25 / scale);
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = ink;
+  ctx.lineWidth = line;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (kind === 'discord') {
+    roundRectPath(ctx, x - r * 0.48, y - r * 0.2, r * 0.96, r * 0.5, r * 0.17);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.arc(x - r * 0.2, y + r * 0.04, Math.max(1.1 / scale, r * 0.055), 0, 2 * Math.PI);
+    ctx.arc(x + r * 0.2, y + r * 0.04, Math.max(1.1 / scale, r * 0.055), 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x - r * 0.44, y - r * 0.05, r * 0.16, Math.PI * 1.2, Math.PI * 1.75);
+    ctx.arc(x + r * 0.44, y - r * 0.05, r * 0.16, Math.PI * 1.25, Math.PI * 1.8);
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'phone') {
+    ctx.beginPath();
+    ctx.arc(x, y + r * 0.02, r * 0.42, Math.PI * 0.75, Math.PI * 1.82);
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    roundRectPath(ctx, x - r * 0.47, y + r * 0.16, r * 0.22, r * 0.14, r * 0.05);
+    ctx.fill();
+    roundRectPath(ctx, x + r * 0.22, y - r * 0.34, r * 0.22, r * 0.14, r * 0.05);
+    ctx.fill();
+    return;
+  }
+
+  if (kind === 'email') {
+    roundRectPath(ctx, x - r * 0.5, y - r * 0.25, r, r * 0.62, r * 0.08);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.46, y - r * 0.2);
+    ctx.lineTo(x, y + r * 0.09);
+    ctx.lineTo(x + r * 0.46, y - r * 0.2);
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'slack') {
+    const w = r * 0.16;
+    const h = r * 0.48;
+    roundRectPath(ctx, x - r * 0.26, y - r * 0.32, w, h, w / 2);
+    ctx.fill();
+    roundRectPath(ctx, x + r * 0.1, y - r * 0.16, h, w, w / 2);
+    ctx.fill();
+    roundRectPath(ctx, x + r * 0.1, y - r * 0.32, w, h, w / 2);
+    ctx.fill();
+    roundRectPath(ctx, x - r * 0.42, y + r * 0.1, h, w, w / 2);
+    ctx.fill();
+    return;
+  }
+
+  if (kind === 'telegram') {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.5, y - r * 0.05);
+    ctx.lineTo(x + r * 0.48, y - r * 0.38);
+    ctx.lineTo(x + r * 0.15, y + r * 0.42);
+    ctx.lineTo(x - r * 0.05, y + r * 0.14);
+    ctx.closePath();
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'chat') {
+    roundRectPath(ctx, x - r * 0.52, y - r * 0.28, r * 1.04, r * 0.58, r * 0.16);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.18, y + r * 0.3);
+    ctx.lineTo(x - r * 0.32, y + r * 0.47);
+    ctx.lineTo(x + r * 0.04, y + r * 0.3);
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'web') {
+    ctx.beginPath();
+    ctx.arc(x, y + r * 0.04, r * 0.38, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.38, y + r * 0.04);
+    ctx.lineTo(x + r * 0.38, y + r * 0.04);
+    ctx.moveTo(x, y - r * 0.34);
+    ctx.quadraticCurveTo(x - r * 0.24, y + r * 0.04, x, y + r * 0.42);
+    ctx.quadraticCurveTo(x + r * 0.24, y + r * 0.04, x, y - r * 0.34);
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'api') {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.16, y - r * 0.36);
+    ctx.lineTo(x - r * 0.46, y);
+    ctx.lineTo(x - r * 0.16, y + r * 0.36);
+    ctx.moveTo(x + r * 0.16, y - r * 0.36);
+    ctx.lineTo(x + r * 0.46, y);
+    ctx.lineTo(x + r * 0.16, y + r * 0.36);
+    ctx.moveTo(x - r * 0.02, y + r * 0.34);
+    ctx.lineTo(x + r * 0.12, y - r * 0.34);
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'terminal') {
+    roundRectPath(ctx, x - r * 0.5, y - r * 0.32, r, r * 0.68, r * 0.1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.3, y - r * 0.1);
+    ctx.lineTo(x - r * 0.14, y + r * 0.03);
+    ctx.lineTo(x - r * 0.3, y + r * 0.16);
+    ctx.moveTo(x - r * 0.02, y + r * 0.17);
+    ctx.lineTo(x + r * 0.26, y + r * 0.17);
+    ctx.stroke();
+    return;
+  }
+
+  if (kind === 'code') {
+    const dotR = Math.max(1.2 / scale, r * 0.075);
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.28, y - r * 0.26);
+    ctx.lineTo(x - r * 0.28, y + r * 0.3);
+    ctx.lineTo(x + r * 0.28, y + r * 0.3);
+    ctx.moveTo(x - r * 0.28, y);
+    ctx.lineTo(x + r * 0.22, y - r * 0.24);
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    [
+      [x - r * 0.28, y - r * 0.26],
+      [x - r * 0.28, y + r * 0.3],
+      [x + r * 0.28, y + r * 0.3],
+      [x + r * 0.22, y - r * 0.24],
+    ].forEach(([px, py]) => {
+      ctx.beginPath();
+      ctx.arc(px, py, dotR, 0, 2 * Math.PI);
+      ctx.fill();
+    });
+    return;
+  }
+
+  if (kind === 'calendar') {
+    roundRectPath(ctx, x - r * 0.46, y - r * 0.36, r * 0.92, r * 0.76, r * 0.08);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.46, y - r * 0.14);
+    ctx.lineTo(x + r * 0.46, y - r * 0.14);
+    ctx.moveTo(x - r * 0.24, y - r * 0.44);
+    ctx.lineTo(x - r * 0.24, y - r * 0.26);
+    ctx.moveTo(x + r * 0.24, y - r * 0.44);
+    ctx.lineTo(x + r * 0.24, y - r * 0.26);
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.arc(x, y + r * 0.12, Math.max(1.4 / scale, r * 0.08), 0, 2 * Math.PI);
+    ctx.fill();
+    return;
+  }
+
+  if (kind === 'form') {
+    roundRectPath(ctx, x - r * 0.42, y - r * 0.38, r * 0.84, r * 0.82, r * 0.08);
+    ctx.stroke();
+    [-0.14, 0.1, 0.32].forEach(offset => {
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.22, y + r * offset);
+      ctx.lineTo(x + r * 0.26, y + r * offset);
+      ctx.stroke();
+    });
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.28, y - r * 0.18);
+    ctx.lineTo(x - r * 0.22, y - r * 0.1);
+    ctx.lineTo(x - r * 0.12, y - r * 0.25);
+    ctx.stroke();
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.78, y - r * 0.08);
+  ctx.lineTo(x - r * 0.36, y + r * 0.28);
+  ctx.lineTo(x + r * 0.36, y + r * 0.28);
+  ctx.lineTo(x + r * 0.78, y - r * 0.08);
+  ctx.stroke();
+}
+
 function nodeShapePath(ctx, node, x, y, r, scale) {
   const rr = Math.max(2 / scale, Math.min(7 / scale, r * 0.45));
   if (node.type === 'agent') {
-    const k = 0.38;
-    ctx.beginPath();
-    ctx.moveTo(x - r * k, y - r);
-    ctx.lineTo(x + r * k, y - r);
-    ctx.lineTo(x + r, y - r * k);
-    ctx.lineTo(x + r, y + r * k);
-    ctx.lineTo(x + r * k, y + r);
-    ctx.lineTo(x - r * k, y + r);
-    ctx.lineTo(x - r, y + r * k);
-    ctx.lineTo(x - r, y - r * k);
-    ctx.closePath();
+    roundRectPath(ctx, x - r * 0.9, y - r * 0.76, r * 1.8, r * 1.52, rr);
     return;
   }
-  if (node.type === 'tool' || node.type === 'network') {
+  if (node.type === 'tool') {
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.78, 0, 2 * Math.PI);
+    return;
+  }
+  if (node.type === 'network') {
     ctx.beginPath();
     ctx.moveTo(x, y - r);
     ctx.lineTo(x + r, y);
@@ -1798,7 +2957,7 @@ function nodeShapePath(ctx, node, x, y, r, scale) {
     return;
   }
   if (node.type === 'bundle') {
-    roundRectPath(ctx, x - r * 1.28, y - r * 0.76, r * 2.56, r * 1.52, rr);
+    folderPath(ctx, x, y, r, scale);
     return;
   }
   if (node.type === 'router') {
@@ -1810,21 +2969,15 @@ function nodeShapePath(ctx, node, x, y, r, scale) {
     return;
   }
   if (node.type === 'intake') {
-    ctx.beginPath();
-    ctx.moveTo(x - r * 0.9, y - r * 0.65);
-    ctx.lineTo(x + r * 0.5, y - r * 0.65);
-    ctx.lineTo(x + r, y);
-    ctx.lineTo(x + r * 0.5, y + r * 0.65);
-    ctx.lineTo(x - r * 0.9, y + r * 0.65);
-    ctx.closePath();
+    inboxPath(ctx, x, y, r, scale);
     return;
   }
   if (node.type === 'ui') {
-    roundRectPath(ctx, x - r * 1.18, y - r * 0.72, r * 2.36, r * 1.44, rr);
+    inboxPath(ctx, x, y, r, scale);
     return;
   }
   if (node.type === 'database') {
-    roundRectPath(ctx, x - r * 0.9, y - r * 1.05, r * 1.8, r * 2.1, rr);
+    roundRectPath(ctx, x - r * 0.94, y - r * 0.94, r * 1.88, r * 1.88, rr);
     return;
   }
   if (node.type === 'service' || node.type === 'container' || node.type === 'host') {
@@ -1841,6 +2994,87 @@ function nodeShapePath(ctx, node, x, y, r, scale) {
   }
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
+}
+
+function drawNodeInteriorGlyph(node, ctx, r, scale, color, alpha) {
+  const line = Math.max(1 / scale, 1.35 / scale);
+  const x = node.x;
+  const y = node.y;
+  ctx.save();
+  ctx.lineWidth = line;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (node.type === 'agent') {
+    const faceInk = rgba('#f0f6fc', Math.min(0.9, alpha * 0.88));
+    const detailInk = rgba(color, Math.min(0.82, alpha * 0.82));
+    const earW = r * 0.16;
+    const earH = r * 0.44;
+    ctx.fillStyle = rgba(color, Math.min(0.32, alpha * 0.35));
+    roundRectPath(ctx, x - r * 1.02, y - earH / 2, earW, earH, 2 / scale);
+    ctx.fill();
+    roundRectPath(ctx, x + r * 0.86, y - earH / 2, earW, earH, 2 / scale);
+    ctx.fill();
+
+    ctx.strokeStyle = detailInk;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 0.76);
+    ctx.lineTo(x, y - r * 1.02);
+    ctx.stroke();
+    ctx.fillStyle = detailInk;
+    ctx.beginPath();
+    ctx.arc(x, y - r * 1.08, Math.max(1.5 / scale, r * 0.11), 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = faceInk;
+    roundRectPath(ctx, x - r * 0.42, y - r * 0.22, r * 0.22, r * 0.22, 2 / scale);
+    ctx.fill();
+    roundRectPath(ctx, x + r * 0.2, y - r * 0.22, r * 0.22, r * 0.22, 2 / scale);
+    ctx.fill();
+    ctx.strokeStyle = faceInk;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.33, y + r * 0.32);
+    ctx.lineTo(x + r * 0.33, y + r * 0.32);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (node.type === 'bundle') {
+    ctx.strokeStyle = rgba(color, Math.min(0.72, alpha * 0.72));
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.92, y - r * 0.2);
+    ctx.lineTo(x + r * 0.92, y - r * 0.2);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (node.type === 'database') {
+    ctx.strokeStyle = rgba(color, Math.min(0.78, alpha * 0.78));
+    roundRectPath(ctx, x - r * 0.54, y - r * 0.52, r * 1.08, r * 1.04, 3 / scale);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(2.2 / scale, r * 0.2), 0, 2 * Math.PI);
+    ctx.stroke();
+    for (let i = 0; i < 4; i += 1) {
+      const a = Math.PI / 4 + i * Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * r * 0.08, y + Math.sin(a) * r * 0.08);
+      ctx.lineTo(x + Math.cos(a) * r * 0.23, y + Math.sin(a) * r * 0.23);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  if (node.type === 'intake' || node.type === 'ui') {
+    drawInterfaceGlyph(node, ctx, r, scale, color, alpha);
+    ctx.restore();
+    return;
+  }
+
+  ctx.restore();
 }
 
 function drawMiniBadge(ctx, x, y, text, color, scale) {
@@ -1862,8 +3096,6 @@ function drawMiniBadge(ctx, x, y, text, color, scale) {
 
 function drawNodeBadges(node, ctx, r, scale, color) {
   const badges = [];
-  if (node.native && ['agent', 'bundle', 'intake', 'ui'].includes(node.type)) badges.push('N');
-  if (node.optional && ['agent', 'bundle', 'intake', 'ui'].includes(node.type)) badges.push('opt');
   if (node.role === 'builder') badges.push('B');
   if (node.role === 'orchestrator') badges.push('O');
   if (node.type === 'bundle' && (node.inactive_tools || []).length) badges.push('-' + node.inactive_tools.length);
@@ -1911,6 +3143,29 @@ function drawPadiControlNode(node, ctx, scale) {
     return;
   }
 
+  if (node.padiControlKind === 'route') {
+    const active = hasManualRoutePin(Number(node.padiBoundaryIndex));
+    ctx.beginPath();
+    ctx.moveTo(node.x, node.y - 34 / scale);
+    ctx.lineTo(node.x, node.y + 34 / scale);
+    ctx.strokeStyle = active ? `rgba(${hue},0.62)` : `rgba(${hue},0.28)`;
+    ctx.lineWidth = active ? 1.6 / scale : 1 / scale;
+    ctx.setLineDash(active ? [] : [3 / scale, 4 / scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    roundRectPath(ctx, x, y, w, h, h / 2);
+    ctx.fillStyle = active ? `rgba(${hue},0.18)` : 'rgba(13,17,23,0.82)';
+    ctx.fill();
+    ctx.strokeStyle = active ? `rgba(${hue},0.86)` : `rgba(${hue},0.48)`;
+    ctx.lineWidth = 1 / scale;
+    ctx.stroke();
+    ctx.fillStyle = active ? '#e6edf3' : 'rgba(201,209,217,0.72)';
+    ctx.font = `700 ${9.5 / scale}px ui-monospace, 'SF Mono', monospace`;
+    ctx.fillText('pins', node.x, node.y + 0.5 / scale);
+    ctx.restore();
+    return;
+  }
+
   if (node.padiControlKind === 'spawn') {
     roundRectPath(ctx, x, y, w, h, 5 / scale);
     ctx.fillStyle = 'rgba(255,255,255,0.025)';
@@ -1952,6 +3207,7 @@ function paintPadiControlHitArea(node, color, ctx, scale) {
 
 function handlePadiControlClick(node) {
   if (!node || node.padiDisabled) return;
+  if (node.padiControlKind === 'route') return;
   if (node.padiControlKind === 'spawn' && node.padiSpawner === 'agent') {
     const id = prompt('New agent id (a-z, 0-9, _)');
     if (!id) return;
@@ -1973,7 +3229,7 @@ let liveNodeIds = new Set();
 let particlePhase = 0;
 
 function drawLiveParticles(ctx, scale) {
-  if (!liveNodeIds.size || currentLens !== 'padi') return;
+  if (!liveNodeIds.size || !isPadiLens()) return;
   const gLinks = fg.graphData().links || [];
   const now = Date.now();
   particlePhase = (now % 4000) / 4000;
@@ -1981,7 +3237,7 @@ function drawLiveParticles(ctx, scale) {
     const s = link.source, t = link.target;
     if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
     if (!liveNodeIds.has(s.id) && !liveNodeIds.has(t.id)) return;
-    const pts = padiLinkPath(s, t);
+    const pts = padiLinkPath(s, t, link);
     if (pts.length < 2) return;
     const totalLen = pathLength(pts);
     if (totalLen < 1) return;
@@ -1998,17 +3254,33 @@ function drawLiveParticles(ctx, scale) {
   });
 }
 
-function padiLinkPath(s, t) {
+function padiLinkPath(s, t, link = null) {
   const rS = nodeVisualRadius(s, 1) + 2;
   const rT = nodeVisualRadius(t, 1) + 2;
-  if (s.rail || t.rail || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
+  if (isPinnedRailNode(s) || isPinnedRailNode(t) || s.__lane === undefined || t.__lane === undefined || s.__lane === t.__lane) {
     return clipSegment(s, t, rS, rT);
   }
   const upper = s.__lane < t.__lane ? s : t;   // smaller index = higher row
   const lower = s.__lane < t.__lane ? t : s;
-  const boundY = padiLaneBound[upper.__lane];
+  const boundaryIndex = upper.__lane;
+  const boundY = padiLaneBound[boundaryIndex];
   const px = lower.__tx;
   if (!Number.isFinite(boundY) || !Number.isFinite(px)) return clipSegment(s, t, rS, rT);
+  if (shouldUseRoutePin(link, boundaryIndex)) {
+    const pin = { x: clampPadiRouteX(padiRoutePinX(boundaryIndex, px)), y: boundY };
+    const seg1 = clipSegment(s, pin, rS, 0);
+    const seg2 = clipSegment(pin, t, 0, rT);
+    return [seg1[0], seg1[1], seg2[1]];
+  }
+  if (link?.kind === 'uses-bundle' && upper.type === 'agent' && lower.type === 'bundle') {
+    const upperX = upper.__tx ?? upper.x;
+    const lowerX = lower.__tx ?? lower.x;
+    if (!Number.isFinite(upperX) || !Number.isFinite(lowerX)) return clipSegment(s, t, rS, rT);
+    const pin = { x: (upperX + lowerX) / 2, y: boundY };
+    const seg1 = clipSegment(s, pin, rS, 0);
+    const seg2 = clipSegment(pin, t, 0, rT);
+    return [seg1[0], seg1[1], seg2[1]];
+  }
   const pin = { x: px, y: boundY };
   const seg1 = clipSegment(s, pin, rS, 0);
   const seg2 = clipSegment(pin, t, 0, rT);
@@ -2076,7 +3348,6 @@ function drawPadiArrow(link, pts, ctx, scale, color) {
 function padiLinkLabelText(link, highlighted) {
   const labels = {
     'delegates': 'delegates',
-    'uses-bundle': 'uses bundle',
     'listens': 'listens',
     'wears': 'group',
     'depends-on': 'credential',
@@ -2084,7 +3355,6 @@ function padiLinkLabelText(link, highlighted) {
     'runs-on': 'runs on',
   };
   if (labels[link.kind]) return labels[link.kind];
-  if (highlighted && link.kind === 'contains') return link.inactive ? 'inactive tool' : 'tool';
   return '';
 }
 
@@ -2115,7 +3385,7 @@ function drawPadiLinkLabel(link, pts, ctx, scale, color, highlighted) {
 function paintPadiLinkHitArea(link, color, ctx, scale) {
   const s = link.source, t = link.target;
   if (!s || !t || !Number.isFinite(s.x) || !Number.isFinite(t.x)) return;
-  const pts = currentLens === 'padi' ? padiLinkPath(s, t) : clipSegment(s, t, nodeVisualRadius(s, 1), nodeVisualRadius(t, 1));
+  const pts = isPadiLens() ? padiLinkPath(s, t, link) : clipSegment(s, t, nodeVisualRadius(s, 1), nodeVisualRadius(t, 1));
   if (pts.length < 2) return;
   ctx.strokeStyle = color;
   ctx.lineWidth = Math.max(8 / scale, 6);
@@ -2153,6 +3423,295 @@ function setHoverLink(link) {
   hoverNodeIds.add(lid(link.target));
 }
 
+function keyboardGraphNodes() {
+  return (fg?.graphData().nodes || []).filter(n => !n.padiControl);
+}
+
+function keyboardNodeById(id) {
+  return keyboardGraphNodes().find(n => n.id === id) || null;
+}
+
+function updateKeyboardStatus(node, suffix = '') {
+  const el = document.getElementById('keyboard-status');
+  if (!el) return;
+  if (!node) {
+    el.textContent = 'Graph keyboard selection cleared.';
+    return;
+  }
+  const count = keyboardNeighbors(node).length;
+  el.textContent = `Selected ${node.name || node.id}, ${node.type || 'node'}, ${count} connected node${count === 1 ? '' : 's'}.${suffix ? ' ' + suffix : ''}`;
+}
+
+function clearKeyboardNode() {
+  keyboardNodeId = null;
+  setHoverNode(null);
+  updateKeyboardStatus(null);
+  updateSelectionPanel();
+}
+
+function selectKeyboardNode(node, opts = {}) {
+  if (!node || node.padiControl) return false;
+  keyboardNodeId = node.id;
+  setHoverNode(node);
+  updateKeyboardStatus(node);
+  updateSelectionPanel();
+  if (opts.center !== false) centerKeyboardNode(node);
+  const graphEl = document.getElementById('graph');
+  if (graphEl && document.activeElement !== graphEl) graphEl.focus({ preventScroll: true });
+  return true;
+}
+
+function visibleNodeById(id) {
+  return keyboardGraphNodes().find(n => n.id === id) || getNodeById(id);
+}
+
+function explicitSelectionNodes() {
+  return [...selectedNodeIds].map(visibleNodeById).filter(Boolean);
+}
+
+function activeSelectionNodes() {
+  const explicit = explicitSelectionNodes();
+  if (explicit.length) return explicit;
+  const current = keyboardNodeById(keyboardNodeId);
+  return current ? [current] : [];
+}
+
+function selectionPrimaryNode() {
+  return visibleNodeById(primarySelectedNodeId) || activeSelectionNodes()[0] || null;
+}
+
+function setGraphSelection(ids, primaryId = null) {
+  selectedNodeIds = new Set(ids.filter(Boolean));
+  primarySelectedNodeId = primaryId || ids[ids.length - 1] || null;
+  updateSelectionPanel();
+  renderHubertContext();
+  if (fg && typeof fg.refresh === 'function') fg.refresh();
+}
+
+function setSingleGraphSelection(node) {
+  if (!node || node.padiControl) return;
+  setGraphSelection([node.id], node.id);
+}
+
+function toggleGraphSelection(node) {
+  if (!node || node.padiControl) return;
+  const next = new Set(selectedNodeIds);
+  if (next.has(node.id)) next.delete(node.id);
+  else next.add(node.id);
+  setGraphSelection([...next], next.has(node.id) ? node.id : [...next].at(-1));
+}
+
+function clearGraphSelection() {
+  selectedNodeIds = new Set();
+  primarySelectedNodeId = null;
+  keyboardNodeId = null;
+  setHoverNode(null);
+  updateKeyboardStatus(null);
+  updateSelectionPanel();
+  renderHubertContext();
+  if (fg && typeof fg.refresh === 'function') fg.refresh();
+}
+
+function selectionDetail(node) {
+  const state = node.state ? `state:${node.state}` : '';
+  const artifact = node.artifact ? `artifact:${node.artifact}` : '';
+  return [node.type || 'node', state, artifact].filter(Boolean).join(' · ');
+}
+
+function selectionContextLines(nodes = activeSelectionNodes()) {
+  return nodes.map(n => {
+    const name = n.name || n.id;
+    const type = n.type || 'node';
+    const artifact = n.artifact ? ` artifact=${n.artifact}` : '';
+    const state = n.state ? ` state=${n.state}` : '';
+    return `@${name} (${type}) id=${n.id}${state}${artifact}`;
+  });
+}
+
+function updateSelectionPanel() {
+  const title = document.getElementById('selection-title');
+  const meta = document.getElementById('selection-meta');
+  const list = document.getElementById('selection-list');
+  const focusBtn = document.getElementById('selection-focus-btn');
+  const vibeBtn = document.getElementById('selection-vibe-btn');
+  const clearBtn = document.getElementById('selection-clear-btn');
+  if (!title || !meta || !list) return;
+  const nodes = activeSelectionNodes();
+  const explicit = selectedNodeIds.size > 0;
+  title.textContent = nodes.length
+    ? (nodes.length === 1 ? (nodes[0].name || nodes[0].id) : `${nodes.length} selected`)
+    : 'Nothing selected';
+  meta.textContent = nodes.length
+    ? (explicit ? 'Shift-click adds or removes nodes from this build set.' : 'Current node. Shift-click to build a multi-node set.')
+    : 'Click a node. Shift-click to gather a build set.';
+  list.innerHTML = nodes.map(n => `
+    <div class="selection-chip" title="${esc(n.id)}">
+      <span class="swatch" style="background:${esc(nodeColor(n))}"></span>
+      <div>
+        <div class="name">${esc(n.name || n.id)}</div>
+        <div class="meta">${esc(selectionDetail(n))}</div>
+      </div>
+    </div>
+  `).join('');
+  const enabled = nodes.length > 0;
+  if (focusBtn) focusBtn.disabled = !enabled;
+  if (vibeBtn) vibeBtn.disabled = !enabled;
+  if (clearBtn) clearBtn.disabled = !enabled;
+  const status = document.getElementById('mimo-ready-status');
+  if (status) {
+    status.textContent = enabled
+      ? `Ready to send ${nodes.length} selected node${nodes.length === 1 ? '' : 's'} to MiMo.`
+      : 'Ready for graph context.';
+  }
+}
+
+function focusGraphSelection() {
+  const nodes = activeSelectionNodes();
+  if (!nodes.length) return;
+  const primary = selectionPrimaryNode() || nodes[0];
+  if (nodes.length === 1 && primary.type === 'agent' && primary.id.startsWith('agent:')) {
+    enterAgentFocus(primary.id);
+    return;
+  }
+  if (nodes.length > 1 && fg && typeof fg.zoomToFit === 'function') {
+    const ids = new Set(nodes.map(n => n.id));
+    fg.zoomToFit(420, 120, n => ids.has(n.id));
+    selectKeyboardNode(primary, { center: false });
+    return;
+  }
+  selectKeyboardNode(primary, { center: true });
+  openInspect(primary);
+}
+
+function pipeSelectionToMimo() {
+  const nodes = activeSelectionNodes();
+  if (!nodes.length) return;
+  const detail = {
+    cluster: currentCluster,
+    lens: currentLens,
+    nodes: nodes.map(n => ({
+      id: n.id,
+      name: n.name || n.id,
+      type: n.type || 'node',
+      state: n.state || '',
+      artifact: n.artifact || '',
+    })),
+  };
+  window.__lastVibeSelection = detail;
+  window.dispatchEvent(new CustomEvent('vibe-selection-requested', { detail }));
+  openSidecar(sidecarAgentId || '', 'hubert');
+  const input = document.getElementById('hubert-input');
+  if (!input) return;
+  const header = `Focus ${currentCluster || 'this project'} in ${currentLens} lens.`;
+  const prompt = `${header}\n${selectionContextLines(nodes).join('\n')}\n\nHelp me build this out from the configuration and call out the safest next edit.`;
+  input.value = input.value.trim() ? `${input.value.trim()}\n\n${prompt}` : prompt;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+  const status = document.getElementById('mimo-ready-status');
+  if (status) status.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} piped into MiMo.`;
+  renderHubertContext();
+}
+
+function centerKeyboardNode(node) {
+  if (!fg || !node || !Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+  const currentZoom = typeof fg.zoom === 'function' ? fg.zoom() : 1;
+  let targetZoom = currentZoom;
+  if (isPadiLens() && viewMode !== 'agent' && node.type === 'tool' && currentZoom < PADI_TOOL_LABEL_ZOOM) {
+    targetZoom = PADI_TOOL_LABEL_ZOOM + 0.08;
+  }
+  fg.centerAt(node.x, node.y, 320);
+  if (Math.abs(targetZoom - currentZoom) > 0.01) fg.zoom(targetZoom, 320);
+}
+
+function keyboardSeedNode() {
+  const nodes = keyboardGraphNodes().filter(n => Number.isFinite(n.x) && Number.isFinite(n.y));
+  if (!nodes.length) return null;
+  if (hoverNode && nodes.some(n => n.id === hoverNode.id)) return hoverNode;
+  if (typeof inspectedNode !== 'undefined' && inspectedNode && nodes.some(n => n.id === inspectedNode.id)) return keyboardNodeById(inspectedNode.id);
+  const wrap = document.getElementById('graph-wrap');
+  let center = { x: 0, y: 0 };
+  if (fg?.screen2GraphCoords && wrap) {
+    center = fg.screen2GraphCoords(Math.max(1, wrap.clientWidth) / 2, Math.max(1, wrap.clientHeight) / 2);
+  }
+  return nodes.slice().sort((a, b) => {
+    const da = (a.x - center.x) ** 2 + (a.y - center.y) ** 2;
+    const db = (b.x - center.x) ** 2 + (b.y - center.y) ** 2;
+    return da - db;
+  })[0];
+}
+
+function keyboardNeighbors(node) {
+  if (!node || !fg) return [];
+  const byId = {};
+  keyboardGraphNodes().forEach(n => { byId[n.id] = n; });
+  const out = [];
+  (fg.graphData().links || []).forEach(link => {
+    const s = lid(link.source);
+    const t = lid(link.target);
+    if (s !== node.id && t !== node.id) return;
+    const nextId = s === node.id ? t : s;
+    const next = byId[nextId];
+    if (!next || next.padiControl) return;
+    out.push({ node: next, link });
+  });
+  return out;
+}
+
+function arrowVector(key) {
+  if (key === 'ArrowLeft') return { x: -1, y: 0 };
+  if (key === 'ArrowRight') return { x: 1, y: 0 };
+  if (key === 'ArrowUp') return { x: 0, y: -1 };
+  if (key === 'ArrowDown') return { x: 0, y: 1 };
+  return null;
+}
+
+function pickKeyboardNeighbor(node, key) {
+  const dir = arrowVector(key);
+  if (!dir) return null;
+  const candidates = keyboardNeighbors(node).map(({ node: next, link }) => {
+    const dx = (next.__tx ?? next.x) - (node.__tx ?? node.x);
+    const dy = (next.__ty ?? next.y) - (node.__ty ?? node.y);
+    const dist = Math.max(1, Math.hypot(dx, dy));
+    const align = (dx * dir.x + dy * dir.y) / dist;
+    const lateral = Math.abs(dx * dir.y - dy * dir.x) / dist;
+    const laneDelta = (next.__lane ?? node.__lane ?? 0) - (node.__lane ?? next.__lane ?? 0);
+    const verticalIntent = key === 'ArrowUp' || key === 'ArrowDown';
+    const crossLaneBonus = verticalIntent && ((key === 'ArrowUp' && laneDelta < 0) || (key === 'ArrowDown' && laneDelta > 0)) ? 2.4 : 0;
+    const sameLaneToolPenalty = verticalIntent && link.kind === 'contains' && laneDelta === 0 ? 1.4 : 0;
+    return {
+      next, link, dist, align, lateral,
+      score: align * 4 + crossLaneBonus - sameLaneToolPenalty - lateral - Math.min(dist / 1200, 0.8)
+    };
+  }).filter(c => Number.isFinite(c.score));
+  const directional = candidates.filter(c => c.align > 0.18);
+  const pool = directional.length ? directional : candidates;
+  return pool.sort((a, b) => b.score - a.score || a.dist - b.dist)[0] || null;
+}
+
+function handleGraphArrowKey(key) {
+  let current = keyboardNodeById(keyboardNodeId);
+  if (!current) {
+    current = keyboardSeedNode();
+    return selectKeyboardNode(current);
+  }
+  const picked = pickKeyboardNeighbor(current, key);
+  if (!picked) {
+    updateKeyboardStatus(current, 'No connected node in that direction.');
+    return true;
+  }
+  return selectKeyboardNode(picked.next);
+}
+
+function ensureKeyboardNodeVisible() {
+  if (!keyboardNodeId) return;
+  const node = keyboardNodeById(keyboardNodeId);
+  if (!node) {
+    clearKeyboardNode();
+    return;
+  }
+  setHoverNode(node);
+}
+
 // ── Graph init ──
 let fg;
 function initGraph(data) {
@@ -2160,13 +3719,7 @@ function initGraph(data) {
   fg = ForceGraph()(elem)
     .graphData(data)
     .nodeId('id')
-    .nodeLabel(node => {
-      if (node.padiControl) return node.name;
-      const g = node.gates || {};
-      const gateStr = `L0:${g.L0?'✓':'✗'} L1:${g.L1?'✓':'✗'} L2:${g.L2?'✓':'✗'} L3:${g.L3?'✓':'✗'}`;
-      const sharedTag = node.shared ? ' [shared]' : '';
-      return `${node.name} (${node.type}) · ${node.state} · ${gateStr}${sharedTag}`;
-    })
+    .nodeLabel(() => '')
     .nodeCanvasObjectMode(() => 'replace')
     .nodeCanvasObject((node, ctx, globalScale) => {
       if (isNaN(node.x) || isNaN(node.y)) return;
@@ -2177,52 +3730,75 @@ function initGraph(data) {
 
       const baseR = nodeRadius(node);
       const r = nodeVisualRadius(node, globalScale);
-      const color = COLORS[node.type] || '#8b949e';
+      const color = nodeColor(node);
       const isAgent = node.type === 'agent';
-	      const state = node.state;
-	      const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
-	      const isSynthetic = !!node.synthetic;
-	      const highlighted = hoverNodeIds.has(node.id);
-	      const hoverDim = (hoverNode || hoverLink) && !highlighted;
+      const state = node.state;
+      const completion = isAgent ? (nodeMetrics.gc[node.id] || 0) : 0;
+      const isSynthetic = !!node.synthetic;
+      const keyboardSelected = keyboardNodeId === node.id;
+      const multiSelected = selectedNodeIds.has(node.id);
+      const highlighted = hoverNodeIds.has(node.id) || keyboardSelected || multiSelected;
+      const hoverDim = (hoverNode || hoverLink || keyboardNodeId) && !highlighted;
 
-	      // Alpha: dim for blank/building, extra-dim for shared and synthetic
-	      let alpha = 1.0;
-	      if (node.type === 'bundle') alpha = 0.95;   // bundle blobs read as solid, not "blank"
-	      else if (state === 'blank') alpha = 0.35;
+      // Alpha: dim for blank/building, extra-dim for shared and synthetic
+      let alpha = 1.0;
+      if (node.type === 'bundle') alpha = 0.95;   // bundle blobs read as solid, not "blank"
+      else if (state === 'blank') alpha = 0.35;
       else if (state === 'building') alpha = 0.6;
       else if (state === 'error') alpha = 0.75;
-	      if (node.shared) alpha *= 0.5;
-	      if (isSynthetic) alpha *= 0.85;
-	      if (node.rail) alpha *= 0.7; // Rail nodes are muted
-	      if (hoverDim) alpha *= 0.22;
+      if (node.shared) alpha *= 0.5;
+      if (isSynthetic) alpha *= 0.85;
+      if (isPinnedRailNode(node)) alpha *= 0.7; // Rail nodes are muted
+      if (hoverDim) alpha *= 0.22;
 
-	      // ── Outer silhouette ──
-	      if (highlighted) {
-	        nodeShapePath(ctx, node, node.x, node.y, r + 5 / globalScale, globalScale);
-	        ctx.fillStyle = rgba(color, 0.1);
-	        ctx.fill();
-	      }
-	      nodeShapePath(ctx, node, node.x, node.y, r, globalScale);
-	      ctx.fillStyle = rgba(color, alpha * (node.type === 'bundle' ? 0.3 : 0.22));
-	      ctx.fill();
-	      ctx.strokeStyle = rgba(color, alpha);
-	      ctx.lineWidth = (highlighted ? 2.4 : 1.5) / globalScale;
-	      if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
-	      if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
-	      if (node.rail) ctx.setLineDash([2 / globalScale, 2 / globalScale]);
-	      ctx.stroke();
-	      ctx.setLineDash([]);
+      // ── Outer silhouette ──
+      if (highlighted) {
+        nodeShapePath(ctx, node, node.x, node.y, r + 5 / globalScale, globalScale);
+        ctx.fillStyle = rgba(color, 0.1);
+        ctx.fill();
+      }
+      if (keyboardSelected) {
+        nodeShapePath(ctx, node, node.x, node.y, r + 8 / globalScale, globalScale);
+        ctx.strokeStyle = rgba('#e6edf3', 0.95);
+        ctx.lineWidth = 1.35 / globalScale;
+        ctx.setLineDash([4 / globalScale, 3 / globalScale]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (multiSelected && !keyboardSelected) {
+        nodeShapePath(ctx, node, node.x, node.y, r + 8 / globalScale, globalScale);
+        ctx.strokeStyle = rgba('#7ee787', 0.92);
+        ctx.lineWidth = 1.4 / globalScale;
+        ctx.setLineDash([2 / globalScale, 2 / globalScale]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      nodeShapePath(ctx, node, node.x, node.y, r, globalScale);
+      ctx.fillStyle = rgba(color, alpha * (node.type === 'bundle' ? 0.3 : 0.22));
+      ctx.fill();
+      ctx.strokeStyle = rgba(color, alpha);
+      ctx.lineWidth = (highlighted ? 2.4 : 1.5) / globalScale;
+      if (node.shared) ctx.setLineDash([3 / globalScale, 3 / globalScale]);
+      if (isSynthetic) ctx.setLineDash([4 / globalScale, 3 / globalScale]);
+      if (isPinnedRailNode(node)) ctx.setLineDash([2 / globalScale, 2 / globalScale]);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
       // ── Fill arc (gate completion, agents only) ──
       if (isAgent && completion > 0) {
         const innerR = r - 1.5 / globalScale;
+        ctx.save();
+        nodeShapePath(ctx, node, node.x, node.y, r - 0.5 / globalScale, globalScale);
+        ctx.clip();
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
         ctx.arc(node.x, node.y, innerR, -Math.PI / 2, -Math.PI / 2 + completion * 2 * Math.PI);
         ctx.closePath();
         ctx.fillStyle = color + hexAlpha(0.55 * (node.shared ? 0.5 : 1));
         ctx.fill();
+        ctx.restore();
       }
+      drawNodeInteriorGlyph(node, ctx, r, globalScale, color, alpha);
 
       // ── Status symbol (agents only) ──
       if (isAgent) {
@@ -2242,39 +3818,60 @@ function initGraph(data) {
           ctx.strokeStyle = '#3fb950';
           ctx.lineWidth = 2 / globalScale;
           ctx.stroke();
-	        }
-	      }
-	      drawNodeBadges(node, ctx, r, globalScale, color);
+        }
+      }
+      drawNodeBadges(node, ctx, r, globalScale, color);
 
-	      // ── Label ── Tool names are hover-only (the halo would be an unreadable label
-	      // pile-up); hover a tool for its name or click to inspect. Bundle names are
-	      // emphasized — that's the label that matters at a glance.
-	      if (node.type !== 'tool' || highlighted) {
-	        const rawLabel = node.name;
-	        const big = node.type === 'bundle' ? 1.08 : 1;
-	        const fontSize = (padiScreenStableNodes() && !node.rail
-	          ? 11 / globalScale
-	          : (node.rail ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale))) * big;
-	        ctx.font = `${node.type === 'bundle' ? '600 ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-	        const label = truncateLabel(ctx, rawLabel, (node.type === 'tool' ? 120 : node.type === 'bundle' ? 92 : 130) / globalScale);
-	        if (node.rail) {
-	          // Rail nodes: label to the right, vertically centered
-	          ctx.save();
-	          ctx.textAlign = 'left';
-	          ctx.textBaseline = 'middle';
-	          ctx.fillStyle = rgba(color, hoverDim ? 0.32 : 0.9);
-	          ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
-	          ctx.restore();
-	        } else {
-	          ctx.textAlign = 'center';
-	          ctx.textBaseline = 'top';
-	          ctx.fillStyle = hoverDim ? rgba('#8b949e', 0.38) : node.type === 'bundle' ? '#f0c890' : (node.shared ? '#8b949e' : '#c9d1d9');
-	          const labelY = node.type === 'bundle'
-	            ? node.y + Math.max(r, node.__toolHaloR || 0) + 5 / globalScale
-	            : node.y + r + 3 / globalScale;
-	          ctx.fillText(label, node.x, labelY);
-	        }
-	      }
+      // ── Label ── Tool names stay quiet in overview, then appear as you zoom
+      // into the tool row. Bundle names are emphasized — that's the label that
+      // matters at a glance.
+      const showZoomedToolLabel = node.type === 'tool' && zoomedToolLabelsVisible(globalScale);
+      if (node.type !== 'tool' || highlighted || showZoomedToolLabel) {
+        const rawLabel = node.name;
+        const big = node.type === 'bundle' ? 1.08 : 1;
+        const baseFontSize = (padiScreenStableNodes() && !isPinnedRailNode(node)
+          ? 11 / globalScale
+          : (isPinnedRailNode(node) ? Math.max(10, 11 / globalScale) : Math.max(9, 11 / globalScale))) * big;
+        const fontSize = node.type === 'tool' ? baseFontSize * 0.82 : baseFontSize;
+        ctx.font = `${node.type === 'bundle' ? '600 ' : ''}${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        const toolLabelMaxPx = highlighted ? 140 : Math.min(132, 64 + globalScale * 56);
+        const label = truncateLabel(ctx, rawLabel, (node.type === 'tool' ? toolLabelMaxPx : node.type === 'bundle' ? 92 : 130) / globalScale);
+        if (isPinnedRailNode(node)) {
+          // Rail nodes: label to the right, vertically centered
+          ctx.save();
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = rgba(color, hoverDim ? 0.32 : 0.9);
+          ctx.fillText(label, node.x + r + 5 / globalScale, node.y);
+          ctx.restore();
+        } else {
+          ctx.textAlign = 'center';
+          const labelY = node.type === 'bundle'
+            ? node.y + Math.max(r, node.__toolHaloR || 0) + 5 / globalScale
+            : node.y + r + 3 / globalScale;
+          if (node.type === 'tool') {
+            const labelAlpha = highlighted ? 1 : zoomedToolLabelAlpha(globalScale);
+            const w = ctx.measureText(label).width + 6 / globalScale;
+            const h = fontSize + 4 / globalScale;
+            const midY = labelY + h / 2;
+            ctx.save();
+            roundRectPath(ctx, node.x - w / 2, midY - h / 2, w, h, 4 / globalScale);
+            ctx.fillStyle = rgba('#0d1117', (hoverDim ? 0.42 : 0.72) * labelAlpha);
+            ctx.fill();
+            ctx.strokeStyle = rgba(color, (hoverDim ? 0.24 : 0.48) * labelAlpha);
+            ctx.lineWidth = 0.75 / globalScale;
+            ctx.stroke();
+            ctx.fillStyle = rgba('#e6edf3', (hoverDim ? 0.38 : 0.9) * labelAlpha);
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, node.x, midY + 0.2 / globalScale);
+            ctx.restore();
+          } else {
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = hoverDim ? rgba('#8b949e', 0.38) : node.type === 'bundle' ? '#f0c890' : (node.shared ? '#8b949e' : '#c9d1d9');
+            ctx.fillText(label, node.x, labelY);
+          }
+        }
+      }
     })
     .nodePointerAreaPaint((node, color, ctx, globalScale) => {
       if (node.padiControl) {
@@ -2291,12 +3888,12 @@ function initGraph(data) {
       if (l.kind === 'runs-on' || l.kind === 'runs-in') return 'rgba(200,160,255,0.4)'; // infra rail
       return '#30363d';
     })
-    .linkDirectionalArrowLength(() => currentLens === 'padi' ? 0 : 6)
+    .linkDirectionalArrowLength(() => isPadiLens() ? 0 : 6)
     .linkDirectionalArrowRelPos(0.95)
 	    .linkLabel(l => l.kind)
 	    .linkWidth(l => (hoverLink === l || hoverLinks.has(l)) ? 2 : 1)
-	    .linkCanvasObjectMode(() => currentLens === 'padi' ? 'replace' : undefined)
-	    .linkCanvasObject((link, ctx, scale) => { if (currentLens === 'padi') drawPadiLink(link, ctx, scale); })
+	    .linkCanvasObjectMode(() => isPadiLens() ? 'replace' : undefined)
+	    .linkCanvasObject((link, ctx, scale) => { if (isPadiLens()) drawPadiLink(link, ctx, scale); })
 	    .linkPointerAreaPaint((link, color, ctx, scale) => paintPadiLinkHitArea(link, color, ctx, scale))
 	    .linkDirectionalParticles(0)
 	    .autoPauseRedraw(false)
@@ -2307,7 +3904,7 @@ function initGraph(data) {
         drawPadiLaneSheet(ctx, scale);
         const gNodes = fg.graphData().nodes;
         if (showDepRail) {
-          const dn = gNodes.filter(n => n.rail === 'dependency');
+          const dn = gNodes.filter(n => n.rail === 'dependency' && !isPadiDataSourceNode(n));
           if (dn.length) {
             const cx = dn.reduce((s,n) => s + n.x, 0) / dn.length;
             const cy = dn.reduce((s,n) => s + n.y, 0) / dn.length;
@@ -2347,7 +3944,7 @@ function initGraph(data) {
       positionSwimlaneControls();
     })
     .onZoom(() => {
-      if (currentLens === 'padi' && viewMode !== 'agent') layoutPadi();
+      if (isPadiLens() && viewMode !== 'agent') layoutPadi();
       positionSwimlaneControls();
     })
     .onNodeDrag(node => {
@@ -2358,7 +3955,7 @@ function initGraph(data) {
         fg.d3ReheatSimulation();
       }
     })
-    .onNodeClick(node => {
+    .onNodeClick((node, event) => {
       if (node?.padiControl) { handlePadiControlClick(node); return; }
       // Wire mode: handle wire target click
       if (wireMode) { handleWireClick(node); return; }
@@ -2374,6 +3971,12 @@ function initGraph(data) {
         openAgentWorkbench(focusedAgentId, section);
         return;
       }
+      if (event?.shiftKey) {
+        _lastClick = { id: null, ts: 0 };
+        toggleGraphSelection(node);
+        selectKeyboardNode(node, { center: false });
+        return;
+      }
       // Double-click detector for agent focus
       if (node.type === 'agent' && _maybeDoubleClick(node)) {
         enterAgentFocus(node.id);
@@ -2384,22 +3987,24 @@ function initGraph(data) {
         lineageRoot = node.id;
         renderLens();
       }
+      setSingleGraphSelection(node);
+      selectKeyboardNode(node, { center: false });
       // Always open inspect panel on click
       openInspect(node);
     })
 	    .onNodeHover(node => {
-	      setHoverNode(node);
+	      if (node) setHoverNode(node);
+	      else if (keyboardNodeId) ensureKeyboardNodeVisible();
+	      else setHoverNode(null);
 	      if (node) {
 	        tooltip.style.display = 'block';
 	        const extra = node.members ? `<br>channels: ${node.members.join(', ')}` : '';
 	        const sharedTag = node.shared ? '<br><span style="color:#8b949e">shared component</span>' : '';
-	        const nativeTag = node.native ? '<br><span style="color:#79c0ff">native bridge bot</span>' : '';
-	        const optionalTag = node.optional ? '<br><span style="color:#d29922">optional surface</span>' : '';
 	        const cc = nodeMetrics.cc[node.id] || 0;
 	        const gc = node.type === 'agent' ? Math.round((nodeMetrics.gc[node.id] || 0) * 100) : null;
 	        const gcStr = gc !== null ? ` · gates: ${gc}%` : '';
 	        tooltip.innerHTML = `
-	          <strong>${node.name}</strong> <span style="color:${COLORS[node.type]}">${node.type}</span>${sharedTag}${nativeTag}${optionalTag}<br>
+	          <strong>${node.name}</strong> <span style="color:${nodeColor(node)}">${node.type}</span>${sharedTag}<br>
 	          state: <b>${node.state}</b> · role: ${node.role} · links: ${cc}${gcStr}<br>
 	          artifact: <code style="font-size:10px">${node.artifact || '—'}</code><br>
 	          gates: L0:${node.gates?.L0?'✓':'✗'} L1:${node.gates?.L1?'✓':'✗'} L2:${node.gates?.L2?'✓':'✗'} L3:${node.gates?.L3?'✓':'✗'}${extra}
@@ -2436,6 +4041,7 @@ function initGraph(data) {
     .dagLevelDistance(80)
     .cooldownTicks(100);
   window.fg = fg; // expose for debugging
+  installPadiRoutePinDragging(elem);
 
   // Build the swim-lane controls and keep the canvas, sheet, and node targets
   // in sync with the container size (force-graph auto-sizing is unreliable
@@ -2445,7 +4051,7 @@ function initGraph(data) {
   const wrapEl = document.getElementById('graph-wrap');
   const syncSize = () => {
     fg.width(wrapEl.clientWidth).height(wrapEl.clientHeight);
-    if (currentLens === 'padi' && viewMode !== 'agent') {
+    if (isPadiLens() && viewMode !== 'agent') {
       layoutPadi();
       fitPadiToViewport(0);
     }
@@ -2457,12 +4063,13 @@ function initGraph(data) {
 function renderLens() {
   const vd = getVisibleData();
   fg.graphData(vd);
+  ensureKeyboardNodeVisible();
   if (currentLens === 'tier') fg.dagMode('td').dagLevelDistance(80);
   else fg.dagMode(null);
   applyLayout(vd);
   applyForces();
   // In PADI mode, hold nodes on the graph-space factory floor.
-  if (currentLens === 'padi') {
+  if (isPadiLens()) {
     layoutPadi();
     fg.cooldownTicks(Infinity);   // keep the sheet alive (floaty)…
     fg.cooldownTime(Infinity);    // …the engine also stops after cooldownTime (15s default)
@@ -2479,7 +4086,7 @@ function renderLens() {
     fg.cooldownTime(15000);
   }
   fg.d3ReheatSimulation();
-  const tag = currentLens === 'padi' ? ' · swim lanes' : '';
+  const tag = isPadiLens() ? ' · swim lanes' : '';
   const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
   if (viewMode === 'agent' && focusedAgentId) {
     info.textContent = `${vd.nodes.length} focused nodes · agent: ${cleanAgentId(focusedAgentId)} · project: ${currentCluster || '—'}`;
@@ -2488,6 +4095,7 @@ function renderLens() {
     info.textContent = `${displayNodeCount} nodes · ${vd.links.length} links · lens: ${currentLens}${tag}${clusterTag}`;
   }
   updateViewCrumb();
+  updateSelectionPanel();
 }
 
 // ── Lens buttons ──
@@ -2496,40 +4104,30 @@ document.querySelectorAll('.lens-btn').forEach(btn => {
 });
 
 // ── Dependency rail toggle ──
-document.getElementById('deps-btn').addEventListener('click', () => {
-  showDepRail = !showDepRail;
-  const b = document.getElementById('deps-btn');
-  b.textContent = (showDepRail ? '▾' : '▸') + ' Dependencies';
-  b.classList.toggle('on', showDepRail);
-  renderLens();
-});
+const depsBtn = document.getElementById('deps-btn');
+if (depsBtn) {
+  depsBtn.addEventListener('click', () => {
+    showDepRail = !showDepRail;
+    depsBtn.textContent = (showDepRail ? '▾' : '▸') + ' Dependencies';
+    depsBtn.classList.toggle('on', showDepRail);
+    renderLens();
+  });
+}
 
 // ── Infrastructure rail toggle ──
-document.getElementById('infra-btn').addEventListener('click', () => {
-  showInfraRail = !showInfraRail;
-  const b = document.getElementById('infra-btn');
-  b.textContent = (showInfraRail ? '▾' : '▸') + ' Infrastructure';
-  b.classList.toggle('on', showInfraRail);
-  renderLens();
-});
+const infraBtn = document.getElementById('infra-btn');
+if (infraBtn) {
+  infraBtn.addEventListener('click', () => {
+    showInfraRail = !showInfraRail;
+    infraBtn.textContent = (showInfraRail ? '▾' : '▸') + ' Infrastructure';
+    infraBtn.classList.toggle('on', showInfraRail);
+    renderLens();
+  });
+}
 
-// ── New cluster tab ──
-document.getElementById('new-tab-btn').addEventListener('click', async () => {
-  const name = prompt('New cluster name (a-z, 0-9, -, _):');
-  if (!name) return;
-  if (!(await ensureGraphSecret())) return;
-  const body = `name=${encodeURIComponent(name)}`;
-  fetch(apiUrl('/new-cluster'), { method: 'POST', headers: mutationHeaders(), body })
-    .then(r => r.json())
-    .then(data => {
-      if (data.ok) {
-        loadClusters();
-      } else {
-        alert(data.error || 'Failed to create cluster');
-      }
-    })
-    .catch(err => alert('Server error: ' + err.message));
-});
+document.getElementById('selection-focus-btn')?.addEventListener('click', focusGraphSelection);
+document.getElementById('selection-vibe-btn')?.addEventListener('click', pipeSelectionToMimo);
+document.getElementById('selection-clear-btn')?.addEventListener('click', clearGraphSelection);
 
 // ── Lane spawn / library (controls live in the swim-lane headers) ──
 
@@ -2548,7 +4146,7 @@ function loadRegistryAgents() {
       }
       registryAgentIds = ids;
       renderLaneLibraries();
-      if (fg && currentLens === 'padi' && viewMode !== 'agent') renderLens();
+      if (fg && isPadiLens() && viewMode !== 'agent') renderLens();
     })
     .catch(() => {});
 }
@@ -2654,8 +4252,8 @@ async function addAgentToCluster(agentId, msgEl) {
     .catch(err => setLaneMsg(msgEl, 'err', 'Server error: ' + err.message));
 }
 
-// Per-lane spawner adapter. Only `agent` is wired this round; the rest are stubs
-// that follow-on specs (Tools / Interfaces / Router) fill in — no UI rework.
+// Per-lane library adapter. Lanes are read-only in this view; the adapters keep
+// existing picker/inspect code available without showing "new" affordances.
 const LANE_SPAWNERS = {
   agent: {
     blankLabel: 'New agent',
@@ -2669,23 +4267,25 @@ const LANE_SPAWNERS = {
     blankLabel: 'New bundle',
     disabled: true,
     isBundle: true,                                  // picker is restricted to bundles, not loose tools
+    hideCanvasLibrary: true,
+    hideLaneLibrary: true,
     library() { return graphBundleLibrary(); },
     onDrop(item, msg) { inspectBundle(item.id); },
   },
   interface: {
     blankLabel: 'New interface',
     disabled: true,
+    hideCanvasLibrary: true,
+    hideLaneLibrary: true,
     library() { return graphNodeLibrary('intake'); },
     onDrop(item, msg) { inspectGraphNode('interface', item.id); },
   },
-  router: {
-    blankLabel: 'New router',
+  datasource: {
+    blankLabel: 'New data source',
     disabled: true,
-    library() { return graphNodeLibrary('router'); },
-    onDrop(item, msg) { inspectGraphNode('router', item.id); },
   },
 };
-const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', router: 'router', agent: 'agent', tools: 'tool' };
+const LANE_KEY_TO_SPAWNER = { interfaces: 'interface', agent: 'agent', tools: 'tool', datasources: 'datasource' };
 
 // Build the per-lane header controls once (above the canvas).
 function buildSwimlaneControls() {
@@ -2709,12 +4309,6 @@ function buildSwimlaneControls() {
     label.textContent = lane.label;
     header.appendChild(label);
 
-    const btn = document.createElement('button');
-    btn.className = 'lane-spawn-btn';
-    btn.textContent = '＋ ' + (sp.blankLabel || ('New ' + sk));
-    if (sp.disabled) { btn.disabled = true; btn.title = 'not wired yet'; }
-    header.appendChild(btn);
-
     const form = document.createElement('div');
     form.className = 'lane-form';
     form.hidden = true;
@@ -2727,7 +4321,6 @@ function buildSwimlaneControls() {
       go.textContent = 'Spawn';
       go.addEventListener('click', () => sp.spawnBlank(inputs.map(i => i.value), msg));
       form.appendChild(go);
-      btn.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) inputs[0].focus(); });
     }
     header.appendChild(form);
     header.appendChild(msg);
@@ -2823,6 +4416,7 @@ function renderLaneLibraries() {
     const lib = layer.querySelector(`.lane-lib[data-lib="${sk}"]`);
     if (!lib) return;
     lib.innerHTML = '';
+    if (sp.hideLaneLibrary) return;
     if (!sp.library) return;
     const items = sp.library();
     if (!items.length) {
@@ -2879,9 +4473,9 @@ function startPulse() {
           const llmStr = p.litellm_alive ? '🧠' : '';
           const liveStr = [pulseStr, authStr, llmStr].filter(Boolean).join(' ');
           const clusterTag = currentCluster ? ` · ${currentCluster}` : '';
-          if (currentLens === 'padi' && viewMode !== 'agent') {
+          if (isPadiLens() && viewMode !== 'agent') {
             const displayNodeCount = fg.graphData().nodes.filter(n => !n.padiControl).length;
-            info.textContent = `${displayNodeCount} nodes · ${fg.graphData().links.length} links · lens: padi · swim lanes${clusterTag}`;
+            info.textContent = `${displayNodeCount} nodes · ${fg.graphData().links.length} links · lens: ${currentLens} · swim lanes${clusterTag}`;
           } else {
             info.textContent = `${graphData.node_count} nodes · ${graphData.link_count} links · ${p.active_edges.length} live edges ${liveStr}${clusterTag}`;
           }
@@ -2906,7 +4500,7 @@ function openInspect(node) {
   saveMsg.textContent = '';
 
   title.textContent = node.name;
-  title.style.color = COLORS[node.type] || '#c9d1d9';
+  title.style.color = nodeColor(node);
 
   let html = '';
 
@@ -3175,7 +4769,33 @@ function updateViewCrumb() {
     text.textContent = currentCluster ? `Project: ${currentCluster}` : 'Project view';
     back.style.display = 'none';
   }
+  updateClusterModeButtons();
 }
+function updateClusterModeButtons() {
+  document.querySelectorAll('.cluster-mode-btn').forEach(btn => {
+    const active = btn.dataset.mode === clusterMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+document.querySelectorAll('.cluster-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    clusterMode = btn.dataset.mode || 'active';
+    if (currentCluster) clusterModeByName.set(currentCluster, clusterMode);
+    updateClusterModeButtons();
+    window.dispatchEvent(new CustomEvent('cluster-mode-change', {
+      detail: { cluster: currentCluster, mode: clusterMode }
+    }));
+  });
+});
+document.getElementById('cluster-restart-btn').addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('cluster-restart-requested', {
+    detail: { cluster: currentCluster, mode: clusterMode }
+  }));
+  info.textContent = currentCluster
+    ? `Restart requested for ${currentCluster} (wire endpoint later)`
+    : 'Restart requested (no cluster selected)';
+});
 document.getElementById('back-project-btn').addEventListener('click', exitAgentFocus);
 
 document.getElementById('inspect-close').addEventListener('click', () => {
@@ -3616,7 +5236,12 @@ document.getElementById('chat-model-select')?.addEventListener('change', (ev) =>
 function renderHubertContext() {
   const el = document.getElementById('hubert-context-line');
   if (!el) return;
-  const selected = inspectedNode ? `${inspectedNode.name || inspectedNode.id} (${inspectedNode.type || 'node'})` : 'nothing selected';
+  const nodes = activeSelectionNodes();
+  const selected = nodes.length
+    ? (nodes.length === 1
+      ? `${nodes[0].name || nodes[0].id} (${nodes[0].type || 'node'})`
+      : `${nodes.length} selected`)
+    : 'nothing selected';
   const graph = graphData ? `${graphData.node_count || 0} nodes, ${graphData.link_count || 0} links` : 'graph loading';
   const cluster = currentCluster || 'no cluster';
   el.innerHTML = `<strong>${esc(cluster)}</strong> · ${esc(selected)} · ${esc(graph)}`;
@@ -3794,7 +5419,8 @@ async function sendHubertMessage() {
   // Build context
   let context = '';
   if (currentCluster) context += '[cluster: ' + currentCluster + '] ';
-  if (inspectedNode) context += '[selected: ' + inspectedNode.name + ' (' + inspectedNode.type + ')] ';
+  const selectedContext = selectionContextLines(activeSelectionNodes());
+  if (selectedContext.length) context += '[selected: ' + selectedContext.join('; ') + '] ';
   if (graphData) context += '[graph: ' + graphData.node_count + ' nodes, ' + graphData.link_count + ' links] ';
 
   const modelSel = document.getElementById('chat-model-select');
@@ -4077,6 +5703,22 @@ function writeHashState() {
 // ── Keyboard shortcuts ──
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    if (handleGraphArrowKey(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
+  if ((e.key === 'Enter' || e.key === ' ') && keyboardNodeId) {
+    const node = keyboardNodeById(keyboardNodeId);
+    if (node) {
+      e.preventDefault();
+      e.stopPropagation();
+      openInspect(node);
+    }
+    return;
+  }
   if (e.key === 'Escape') {
     if (sidecarOpen) { closeSidecar(); return; }
     if (wireMode) { document.getElementById('wire-cancel').click(); return; }
@@ -4084,6 +5726,8 @@ document.addEventListener('keydown', e => {
     if (document.getElementById('inspect').classList.contains('open')) {
       document.getElementById('inspect-close').click(); return;
     }
+    if (selectedNodeIds.size) { clearGraphSelection(); return; }
+    if (keyboardNodeId) { clearKeyboardNode(); return; }
   }
   if (e.key === 'i' || e.key === 'I') { toggleSidecar(); }
 });
