@@ -7,19 +7,29 @@ back what was stored. Queries return lists of dicts. Errors surface as
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DB_PATH = Path("/opt/data/shelby.db")
-SCHEMA_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "shelby_schema.sql"
 
-# Fall back to relative path if schema isn't beside data/
-if not SCHEMA_PATH.exists():
-    _alt = Path("/root/.hermes/workspace/adk/data/shelby_schema.sql")
-    if _alt.exists():
-        SCHEMA_PATH = _alt
+def _data_dir() -> Path:
+    """Resolve the repo's data/ dir without hardcoding a box path.
+
+    Prefer FORSCH_ADK_WORKSPACE (the repo root, set in every runtime context);
+    fall back to the repo root derived from this file's location (used in CI /
+    tests, where the env var is unset). No filesystem probe at import time — a
+    module-level ``.exists()`` on an inaccessible path (e.g. /root on a CI
+    runner) raises PermissionError during test collection.
+    """
+    root = os.environ.get("FORSCH_ADK_WORKSPACE")
+    base = Path(root) if root else Path(__file__).resolve().parents[6]
+    return base / "data"
+
+
+DB_PATH = _data_dir() / "shelby.db"
+SCHEMA_PATH = _data_dir() / "shelby_schema.sql"
 
 
 def get_db() -> sqlite3.Connection:

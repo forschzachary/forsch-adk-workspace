@@ -36,10 +36,8 @@ def _fresh_db():
     # Ensure DB_PATH is always our temp db (migration test may have changed it)
     store_mod.DB_PATH = _tmp_db
     _tmp_db.unlink(missing_ok=True)
-    # Also patch the schema path to use the real schema
-    schema = Path("/root/.hermes/workspace/adk/data/shelby_schema.sql")
-    if schema.exists():
-        store_mod.SCHEMA_PATH = schema
+    # init_db() creates tables from its inline DDL when no schema file is present,
+    # so the temp DB is self-contained — no hardcoded host schema path needed.
     init_db()
     yield
     _tmp_db.unlink(missing_ok=True)
