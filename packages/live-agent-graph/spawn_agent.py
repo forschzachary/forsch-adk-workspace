@@ -349,31 +349,6 @@ def main():
     else:
         print(f"  profile:  {phome} (exists — not clobbered)")
 
-    # ── Record workspace on FF Agent in CRM ──
-    try:
-        import urllib.request
-        crm_api_key = (Path(os.environ.get("HERMES_HOME", "/opt/data")) / "secrets" / "frappe-admin-api-key").read_text().strip()
-        payload = json.dumps({
-            "agent_id": agent_id,
-            "workspace": str(profile_home),
-        }).encode()
-        req = urllib.request.Request(
-            "https://crm.forschfrontiers.com/api/method/forsch_frontiers.sync.agent_graph.update_agent",
-            data=payload,
-            headers={
-                "Authorization": f"token {crm_api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read())
-            if result.get("message", {}).get("ok"):
-                print(f"  recorded: workspace on FF Agent '{agent_id}'")
-            else:
-                print(f"  record:   CRM returned {result.get('message', {}).get('error', 'unknown')}", file=sys.stderr)
-    except Exception as e:
-        print(f"  record:   CRM unreachable — {e}", file=sys.stderr)
-
     print(f"✓ Spawned agent '{agent_id}'")
     print(f"  package:  {agent_dir}")
     print(f"  web:      {web_dir}")

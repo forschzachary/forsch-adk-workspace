@@ -7,8 +7,8 @@
 #           -> cloudflared named tunnel (token mode, PID-managed on box)
 #           -> 127.0.0.1:8888 (serve.py, localhost-only bind)
 #   The tunnel is the SOLE inbound path. No Cloudflare Worker, no public port
-#   on serve.py, no CRM graph_embed secret-injection proxy. Auth is X-Graph-Secret
-#   on mutating endpoints; reads are unauthed with CORS pinned to CRM_ORIGIN.
+#   on serve.py, no secret-injection proxy. Auth is X-Graph-Secret on mutating
+#   endpoints; reads are unauthed with CORS pinned to the graph origin.
 
 hosts:
   - id: hetzner-vps
@@ -35,13 +35,7 @@ services:
     host: hetzner-vps
     port: 7998
     role: credential_broker
-    brokers: [github, resend, cloudflare-global, frappe-crm]
-
-  - id: frappe-crm
-    name: "Frappe CRM (ff-ops-prod)"
-    host: railway
-    url: crm.forschfrontiers.com
-    role: crm_backend
+    brokers: [github, resend, cloudflare-global]
 
   - id: serve-py
     name: "Live Agent Graph server (serve.py)"

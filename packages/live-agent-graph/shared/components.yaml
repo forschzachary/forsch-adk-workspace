@@ -16,9 +16,6 @@ tool_families:
     - execute_bash_command
     - read_host_file
     - write_host_file
-  crm:
-    - get_crm_health_snapshot
-    - list_recent_crm_leads
   household:
     - log_groceries
     - get_grocery_log
@@ -53,13 +50,10 @@ connections:
   github: GitHub (OAuth)
   resend: Resend (email)
   cloudflare-global: Cloudflare (global)
-  frappe-crm: Frappe CRM (ff-ops-prod)
   linkedin-manual: LinkedIn (manual approval)
   personal-site: Personal website
 
 tool_connections:
-  get_crm_health_snapshot: frappe-crm
-  list_recent_crm_leads: frappe-crm
   get_linkedin_brand_brief: linkedin-manual
   score_linkedin_draft: linkedin-manual
   create_linkedin_draft: linkedin-manual

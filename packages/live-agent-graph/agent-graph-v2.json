@@ -188,9 +188,7 @@
         ],
         "emits": [
           "response",
-          "tool_call",
-          "tool:get_crm_health_snapshot",
-          "tool:list_recent_crm_leads"
+          "tool_call"
         ]
       },
       "role": "builder"
@@ -541,36 +539,6 @@
         "L3": false
       },
       "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "agent_message"
-        ],
-        "emits": [
-          "tool_call"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "bundle:ops:ops_telemetry",
-      "name": "ops_telemetry",
-      "kind": "bundle",
-      "shared": false,
-      "bundle_key": "ops_telemetry",
-      "for_agent": "ops",
-      "description": "Read-only CRM/business telemetry: health snapshot + recent leads.",
-      "tools_count": 2,
-      "inactive_tools": [],
-      "type": "bundle",
-      "artifact": "packages/live-agent-graph/registry/agents/agents.yaml (tool_bundles:)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
       "reachable": false,
       "contract": {
         "accepts": [
@@ -1005,31 +973,6 @@
     {
       "id": "cred:cloudflare-global",
       "name": "Cloudflare (global)",
-      "kind": "database",
-      "shared": true,
-      "type": "database",
-      "artifact": "authsome vault",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": true,
-        "L3": false
-      },
-      "state": "built",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "query"
-        ],
-        "emits": [
-          "data"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "cred:frappe-crm",
-      "name": "Frappe CRM (ff-ops-prod)",
       "kind": "database",
       "shared": true,
       "type": "database",
@@ -1494,32 +1437,6 @@
       "role": "plain"
     },
     {
-      "id": "tool:get_crm_health_snapshot",
-      "name": "get_crm_health_snapshot",
-      "kind": "tool",
-      "shared": true,
-      "family": "crm",
-      "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def get_crm_health_snapshot)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
       "id": "tool:get_git_state",
       "name": "get_git_state",
       "kind": "tool",
@@ -1761,32 +1678,6 @@
       "family": "growth",
       "type": "tool",
       "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def list_linkedin_drafts)",
-      "gates": {
-        "L0": false,
-        "L1": false,
-        "L2": false,
-        "L3": false
-      },
-      "state": "blank",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "tool_call"
-        ],
-        "emits": [
-          "tool_result"
-        ]
-      },
-      "role": "plain"
-    },
-    {
-      "id": "tool:list_recent_crm_leads",
-      "name": "list_recent_crm_leads",
-      "kind": "tool",
-      "shared": true,
-      "family": "crm",
-      "type": "tool",
-      "artifact": "packages/adk-components/src/forsch/adk_components/tools/*.py (def list_recent_crm_leads)",
       "gates": {
         "L0": false,
         "L1": false,
@@ -2541,11 +2432,6 @@
       "kind": "listens"
     },
     {
-      "source": "agent:ops",
-      "target": "bundle:ops:ops_telemetry",
-      "kind": "uses-bundle"
-    },
-    {
       "source": "agent:screening-ops",
       "target": "bundle:screening-ops:screening_media_pipeline",
       "kind": "uses-bundle"
@@ -2588,11 +2474,6 @@
     {
       "source": "authsome",
       "target": "cred:cloudflare-global",
-      "kind": "brokers"
-    },
-    {
-      "source": "authsome",
-      "target": "cred:frappe-crm",
       "kind": "brokers"
     },
     {
@@ -2709,16 +2590,6 @@
     {
       "source": "bundle:huberto:sr1_concierge",
       "target": "tool:whats_on_sr1",
-      "kind": "contains"
-    },
-    {
-      "source": "bundle:ops:ops_telemetry",
-      "target": "tool:get_crm_health_snapshot",
-      "kind": "contains"
-    },
-    {
-      "source": "bundle:ops:ops_telemetry",
-      "target": "tool:list_recent_crm_leads",
       "kind": "contains"
     },
     {
@@ -2932,11 +2803,6 @@
       "kind": "requires"
     },
     {
-      "source": "tool:get_crm_health_snapshot",
-      "target": "cred:frappe-crm",
-      "kind": "authenticates-via"
-    },
-    {
       "source": "tool:get_linkedin_brand_brief",
       "target": "cred:linkedin-manual",
       "kind": "authenticates-via"
@@ -2959,11 +2825,6 @@
     {
       "source": "tool:list_linkedin_drafts",
       "target": "cred:linkedin-manual",
-      "kind": "authenticates-via"
-    },
-    {
-      "source": "tool:list_recent_crm_leads",
-      "target": "cred:frappe-crm",
       "kind": "authenticates-via"
     },
     {

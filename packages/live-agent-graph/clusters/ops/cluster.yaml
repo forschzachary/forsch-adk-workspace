@@ -19,5 +19,5 @@ members:
 # Cluster-level config (overrides or additions beyond registry defaults)
 config:
   default_model: gpt-5.5
-  tool_families: [terminal, crm, household]
+  tool_families: [terminal, household]
   exclude_tools: []

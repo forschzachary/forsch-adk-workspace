@@ -121,7 +121,11 @@ def _verify_access_jwt(token: str) -> str | None:
     except Exception:
         return None
 
-CRM_ORIGIN = os.environ.get("CRM_ORIGIN", "https://graph.forschfrontiers.com")
+# The CORS origin for read endpoints. Named CRM_ORIGIN in the Frappe era; the
+# legacy name is still honored as a fallback so a box that sets it keeps working.
+GRAPH_ORIGIN = os.environ.get("GRAPH_ORIGIN") or os.environ.get(
+    "CRM_ORIGIN", "https://graph.forschfrontiers.com"
+)
 
 # Persistent home (HERMES_HOME); on the box this is /opt/data (== host /root/.hermes).
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/opt/data"))
@@ -148,8 +152,7 @@ _session_lock = threading.Lock()
 SESSION_MAX_AGE = 3600.0  # evict sessions older than 1 hour
 
 # ── Factory overview: source files referenced in the inventory payload ──
-# Used by both _build_factory_overview() and the CRM-manifest path so a new
-# file gets declared in one place.
+# Used by _build_factory_overview() so a new file gets declared in one place.
 FACTORY_OVERVIEW_SOURCES = [
     "registry/agents/agents.yaml",
     "shared/components.yaml",
@@ -1476,7 +1479,7 @@ print(json.dumps({{'ok': True, 'agent': {{
 def _save_agent_config(params: dict) -> dict:
     """Save agent config to agents.yaml + regenerate both files via editor.update_agent().
 
-    If the agent doesn't exist yet, auto-spawns it first (so the CRM UI's first
+    If the agent doesn't exist yet, auto-spawns it first (so the builder UI's first
     "Save" is also the create step — no separate spawn endpoint needed).
     """
     agent_id = params.get("agent_id", [""])[0]
@@ -2081,7 +2084,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not agent_id or not field:
                 self._json_response(400, {"error": "missing agent_id or field"})
                 return
-            # Map frontend field names to CRM field names
+            # Map frontend field names to allowed agent fields
             field_map = {
                 "model": "model", "title": "title", "role": "role",
                 "status": "status", "safety_level": "safety_level",
@@ -2239,7 +2242,7 @@ class Handler(SimpleHTTPRequestHandler):
         # CORS: read-only endpoints get pinned origin; mutating endpoints get none
         path = self.path.rstrip("/") or "/"
         if not self._is_mutating(path):
-            self.send_header("Access-Control-Allow-Origin", CRM_ORIGIN)
+            self.send_header("Access-Control-Allow-Origin", GRAPH_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -2256,7 +2259,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         # CORS: read-only endpoints get pinned origin; mutating endpoints get none
         if not self._is_mutating(self.path.rstrip("/") or "/"):
-            self.send_header("Access-Control-Allow-Origin", CRM_ORIGIN)
+            self.send_header("Access-Control-Allow-Origin", GRAPH_ORIGIN)
         self.end_headers()
         self.wfile.write(body)
 
