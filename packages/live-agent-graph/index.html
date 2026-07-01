@@ -1275,6 +1275,7 @@ function selectCluster(name) {
   writeHashState();
   loadClusterChat(name);
   updateViewCrumb();
+  refreshClusterRuntime(name);
 }
 
 function loadGraph(clusterName) {
@@ -4778,24 +4779,59 @@ function updateClusterModeButtons() {
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
 }
+// Reflect the cluster's REAL runtime state (is its service running?) and enable the controls only
+// for clusters that actually have a controllable service. Called on every cluster switch.
+async function refreshClusterRuntime(cluster) {
+  const restartBtn = document.getElementById('cluster-restart-btn');
+  const seg = document.querySelector('.cluster-mode-segment');
+  try {
+    const r = await fetch(apiUrl('/cluster-status?cluster=' + encodeURIComponent(cluster)));
+    const data = await r.json();
+    const controllable = !!(data && data.service);
+    document.querySelectorAll('.cluster-mode-btn').forEach(b => { b.disabled = !controllable; });
+    if (restartBtn) restartBtn.disabled = !controllable;
+    if (seg) seg.title = controllable ? ('runtime: ' + data.service) : 'no runtime service for this cluster';
+    if (controllable) {
+      clusterMode = data.running ? 'active' : 'off';
+      clusterModeByName.set(cluster, clusterMode);
+      updateClusterModeButtons();
+    }
+  } catch (e) { /* leave the buttons as-is if the status probe fails */ }
+}
+// Flip the current cluster's runtime service on/off/restart via the backend (root systemctl).
+async function controlCluster(action) {
+  if (!currentCluster) { info.textContent = 'No cluster selected'; return; }
+  info.textContent = action + '…';
+  try {
+    const r = await fetch(apiUrl('/cluster-control'), {
+      method: 'POST', headers: mutationHeaders(),
+      body: 'cluster=' + encodeURIComponent(currentCluster) + '&action=' + encodeURIComponent(action),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) { info.textContent = action + ' failed: ' + (data.error || r.status); return; }
+    clusterMode = data.running ? 'active' : 'off';
+    clusterModeByName.set(currentCluster, clusterMode);
+    updateClusterModeButtons();
+    info.textContent = currentCluster + ': ' + data.service + ' ' + (data.running ? 'running' : 'stopped') + ' (' + action + ')';
+    window.dispatchEvent(new CustomEvent('cluster-mode-change', { detail: { cluster: currentCluster, mode: clusterMode } }));
+  } catch (e) { info.textContent = action + ' error: ' + e.message; }
+}
 document.querySelectorAll('.cluster-mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    clusterMode = btn.dataset.mode || 'active';
-    if (currentCluster) clusterModeByName.set(currentCluster, clusterMode);
-    updateClusterModeButtons();
-    window.dispatchEvent(new CustomEvent('cluster-mode-change', {
-      detail: { cluster: currentCluster, mode: clusterMode }
-    }));
+    const mode = btn.dataset.mode || 'active';
+    if (mode === 'staging') {
+      // No staging runtime yet — keep it a local visual state (outbound event for a future consumer).
+      clusterMode = mode;
+      if (currentCluster) clusterModeByName.set(currentCluster, mode);
+      updateClusterModeButtons();
+      window.dispatchEvent(new CustomEvent('cluster-mode-change', { detail: { cluster: currentCluster, mode } }));
+      return;
+    }
+    if (mode === 'off' && !confirm('Take ' + currentCluster + ' offline? Its bots stop responding until you turn it back on.')) return;
+    controlCluster(mode === 'active' ? 'start' : 'stop');
   });
 });
-document.getElementById('cluster-restart-btn').addEventListener('click', () => {
-  window.dispatchEvent(new CustomEvent('cluster-restart-requested', {
-    detail: { cluster: currentCluster, mode: clusterMode }
-  }));
-  info.textContent = currentCluster
-    ? `Restart requested for ${currentCluster} (wire endpoint later)`
-    : 'Restart requested (no cluster selected)';
-});
+document.getElementById('cluster-restart-btn').addEventListener('click', () => controlCluster('restart'));
 document.getElementById('back-project-btn').addEventListener('click', exitAgentFocus);
 
 document.getElementById('inspect-close').addEventListener('click', () => {

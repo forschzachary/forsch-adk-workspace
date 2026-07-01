@@ -424,6 +424,44 @@ def list_clusters() -> list:
     return result
 
 
+# ── Cluster runtime control (the Active / Off / Restart buttons) ───────────────────────────
+# A cluster may map to a controllable box systemd service; the cockpit (running as root) flips it
+# on/off/restart. ALLOWLIST ONLY — the service name is NEVER taken from request input and only these
+# three actions are permitted, so this can't be coerced into an arbitrary `systemctl` call.
+CLUSTER_SERVICES = {
+    "screeningroom": "screeningroom-bots.service",
+}
+_CONTROL_ACTIONS = {"start", "stop", "restart"}
+
+
+def _cluster_service(cluster: str | None) -> str | None:
+    return CLUSTER_SERVICES.get((cluster or "").strip().lower())
+
+
+def cluster_runtime_status(cluster: str | None) -> dict:
+    """Whether a cluster's runtime service is active. service=None => the cluster has no runtime."""
+    svc = _cluster_service(cluster)
+    if not svc:
+        return {"cluster": cluster, "service": None, "running": None}
+    r = subprocess.run(["systemctl", "is-active", svc], capture_output=True, text=True, timeout=10)
+    return {"cluster": cluster, "service": svc, "running": r.stdout.strip() == "active"}
+
+
+def cluster_control(cluster: str | None, action: str | None) -> dict:
+    """start / stop / restart a cluster's runtime service (allowlisted). Returns {ok, running, ...}."""
+    svc = _cluster_service(cluster)
+    if not svc:
+        return {"ok": False, "error": f"cluster {cluster!r} has no controllable runtime service"}
+    if action not in _CONTROL_ACTIONS:
+        return {"ok": False, "error": f"action must be one of {sorted(_CONTROL_ACTIONS)}"}
+    r = subprocess.run(["systemctl", action, svc], capture_output=True, text=True, timeout=45)
+    if r.returncode != 0:
+        return {"ok": False, "error": f"systemctl {action} {svc}: {(r.stderr or r.stdout or 'failed').strip()[:200]}"}
+    st = subprocess.run(["systemctl", "is-active", svc], capture_output=True, text=True, timeout=10)
+    return {"ok": True, "cluster": cluster, "service": svc, "action": action,
+            "running": st.stdout.strip() == "active"}
+
+
 def yaml_safe_load(text: str) -> dict:
     """Parse a YAML string. Thin wrapper over yaml.safe_load for backwards compat."""
     return yaml.safe_load(text) or {}
@@ -1851,7 +1889,8 @@ class Handler(SimpleHTTPRequestHandler):
         """Return True for endpoints that mutate state."""
         return path in ("/spawn", "/wire", "/save-agent", "/promote",
                         "/new-cluster", "/add-agent", "/chat",
-                        "/agent-config", "/agent-generate", "/agent-eval-run")
+                        "/agent-config", "/agent-generate", "/agent-eval-run",
+                        "/cluster-control")
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -1874,6 +1913,9 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, get_pulse())
         elif path in ("/clusters", "/clusters/"):
             self._json_response(200, list_clusters())
+        elif path == "/cluster-status":
+            qs = parse_qs(parsed.query)
+            self._json_response(200, cluster_runtime_status(qs.get("cluster", [None])[0]))
         elif path == "/chat-token":
             if self._check_auth():
                 self._json_response(200, {"token": _chat_token(), "base": CHAT_BASE_URL})
@@ -1978,6 +2020,13 @@ class Handler(SimpleHTTPRequestHandler):
                     result["ok"] = False
                     result["error"] = cluster_result.get("error", "agent created but could not be added to cluster")
 
+            self._json_response(200 if result.get("ok") else 400, result)
+
+        elif parsed.path == "/cluster-control":
+            if not self._check_auth():
+                self._json_response(401, {"error": "unauthorized"})
+                return
+            result = cluster_control(params.get("cluster", [None])[0], params.get("action", [None])[0])
             self._json_response(200 if result.get("ok") else 400, result)
 
         elif parsed.path == "/wire":
