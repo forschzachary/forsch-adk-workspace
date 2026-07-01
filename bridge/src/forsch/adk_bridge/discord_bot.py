@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 
 import discord
@@ -48,6 +49,7 @@ class BotSpec:
     mention_only: bool = False                  # in a guild channel, only answer when @-mentioned (DMs unaffected)
     loader: str = "🐾 *scratching the post…*"    # shown while the agent thinks, then edited to the reply
     context_provider: object = None             # optional callable: discord_user_id(str) -> a context line to inject
+    mirror: bool = False                        # mirror this bot's convos + errors to the ops observability channel
 
 
 class ADKDiscordBot(discord.Client):
@@ -91,12 +93,16 @@ class ADKDiscordBot(discord.Client):
             _LOG.warning("%s cannot DM %s (Forbidden) — comms route waiting",
                          self.spec.name, getattr(message.author, "id", "?"))
             self._note_blocked_dm(str(message.author.id))
+            # We still RECEIVED their message — mirror it so Zach sees it even when we can't reply.
+            await self._mirror(message, None)
             return
         try:
             reply = await self._run(message)
             await self._deliver(message, loader, reply or "…")
-        except Exception:
+            await self._mirror(message, reply)
+        except Exception as exc:
             _LOG.exception("%s run failed", self.spec.name)
+            await self._surface_error(message, exc)
             if loader is not None:
                 try:
                     await loader.edit(content="(a hairball — something went wrong)")
@@ -136,6 +142,50 @@ class ADKDiscordBot(discord.Client):
                 fm.mark_dm_delivered(discord_id)
         except Exception:
             pass
+
+    # ── conversation mirror + error surfacing (best-effort; never breaks the friend's turn) ──
+    def _mirror_poster(self):
+        """The client that posts the mirror — the ops bot, which lives in the observability guild
+        Huberto isn't in. None if mirroring is off, this bot doesn't mirror, or the poster isn't up."""
+        if not self.spec.mirror:
+            return None
+        try:
+            from forsch.adk_bridge import convo_mirror
+            if not convo_mirror.enabled():
+                return None
+            return get_bot(convo_mirror.poster_bot_name())
+        except Exception:
+            return None
+
+    def _friend_label(self, message: discord.Message) -> tuple[str, str]:
+        fid = str(getattr(message.author, "id", "?"))
+        fname = getattr(message.author, "display_name", None) or getattr(message.author, "name", None) or fid
+        return fid, fname
+
+    async def _mirror(self, message: discord.Message, reply: str | None) -> None:
+        poster = self._mirror_poster()
+        if poster is None:
+            return
+        try:
+            from forsch.adk_bridge import convo_mirror
+            fid, fname = self._friend_label(message)
+            await convo_mirror.mirror_exchange(poster, fid, fname, message.content, reply)
+        except Exception:
+            _LOG.exception("%s convo mirror failed", self.spec.name)
+
+    async def _surface_error(self, message: discord.Message, exc: Exception) -> None:
+        poster = self._mirror_poster()
+        if poster is None:
+            return
+        try:
+            import traceback
+            from forsch.adk_bridge import convo_mirror
+            fid, fname = self._friend_label(message)
+            summary = f"{type(exc).__name__}: {exc}"[:300]
+            detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            await convo_mirror.surface_error(poster, fid, fname, summary, detail)
+        except Exception:
+            _LOG.exception("%s error surfacing failed", self.spec.name)
 
     async def _run(self, message: discord.Message) -> str:
         user_id = f"discord:{message.author.id}"

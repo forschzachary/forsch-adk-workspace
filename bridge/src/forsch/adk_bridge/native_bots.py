@@ -45,6 +45,7 @@ class NativeBot:
     optional: bool = False
     a2a_specialist: Optional[str] = None     # the a2a_delegation SPECIALISTS key (this bot is delegated-TO)
     delegates: bool = False                  # this bot consults the A2A specialists (huberto does)
+    mirror: bool = False                     # mirror this bot's convos + errors to the ops observability channel
 
 
 NATIVE_BOTS: list[NativeBot] = [
@@ -55,7 +56,7 @@ NATIVE_BOTS: list[NativeBot] = [
         bundle_desc="huberto's friend-facing toolkit: what's-on, library, requests, onboarding, access, knowledge.",
         token_env="HUBERTO_DISCORD_BOT_TOKEN",
         expected_id_env="HUBERTO_EXPECTED_BOT_ID", expected_id_default="1499544375204773969",
-        dm=True, channel_name="DM", context_provider=friend_context, delegates=True,
+        dm=True, channel_name="DM", context_provider=friend_context, delegates=True, mirror=True,
     ),
     NativeBot(
         agent_id="screening-ops", name="screening_ops", bot_name="screening_ops",

@@ -73,12 +73,20 @@ def provision_access(discord_id: str, name: str) -> dict:
         log_audit("provision_rate_limited", str(discord_id), {"name": name.strip().lower(), "retry_after": rl["retry_after"]})
         return {"ok": False, "rate_limited": True, "error": rl["reason"]}
     username = name.strip().lower()
-    if fm.has_account(name):
-        # Don't create a second account — steer to reset_access for a fresh password.
+    # Idempotency guard: never create a second account. Check BOTH the local record AND the live
+    # Jellyfin server — a friend who connected outside the bot (an account made by hand) has a live
+    # account but no local record, so a local-only check would wrongly create a duplicate. If the
+    # account exists live but we never recorded it, heal that drift by linking it to this discord id.
+    local = fm.has_account(name)
+    live = is_account_created(name)
+    if local or live:
+        if live and not local:
+            fm.record_account(str(discord_id), name, username)
         return {
             "ok": False,
             "already_exists": True,
             "username": username,
+            "linked": bool(live and not local),  # true when we just healed drift (account existed, no record)
             "error": f"'{username}' already has an account — use reset_access('{name}') for a fresh password instead of provisioning again.",
         }
     password = _gen_password()

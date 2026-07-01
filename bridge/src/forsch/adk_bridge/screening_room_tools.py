@@ -62,18 +62,81 @@ def request_movie(tmdb_id: str, requested_for: str = "forschfamily", requester_d
     return out
 
 
-def check_my_request(title: str) -> str:
-    """Check the REAL status of a friend's request — 'where's my movie?' / 'did it work?'. First
-    sees if it's already in the library (then it's ready to watch); otherwise finds the actual
-    root cause (downloading, indexer cooldown, grabbed-but-failed, stuck in the client) plus the
-    overall pipeline health, so you can give a friend honest facts and a rough when. Pass the title
-    (or tmdbId). Returns a status you can relay in your own voice — never mention how it's checked."""
+def _request_rows() -> list[dict]:
+    """Open + recent requests as dicts (empty list on any failure). Guards against non-dict elements
+    so a malformed --json payload degrades to the name-search fallback rather than throwing."""
+    raw = _run(["requests", "list", "--json", "--take", "100"])
+    try:
+        rows = json.loads(raw)
+    except Exception:
+        return []
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def _resolve_request(title: str, discord_id: str = "") -> tuple[str, str, str]:
+    """Resolve a friend's title to (tmdbId, media_type, media_status) via the AUTHORITATIVE request,
+    so both 'where's my movie?' and 'is it here yet?' answer about the film the friend actually
+    requested — not a same-named different one. (A bare name search takes the first TMDB hit and
+    collides on titles like 'Nosferatu', 1922 vs 2024.) Prefers the friend's OWN watched request (the
+    exact tmdbId recorded when Huberto made it — friend-scoped, so two friends waiting on different
+    same-titled films can't cross), then a global request-list title match. Returns ('', '', '') when
+    nothing matches or the match spans more than one film, so the caller falls back to the old name
+    search rather than guessing."""
+    key = (title or "").strip().lower()
+    if not key:
+        return "", "", ""
+    rows = _request_rows()
+    by_tmdb = {str(r.get("tmdbId")): r for r in rows if str(r.get("tmdbId") or "").strip()}
+
+    def unpack(r: dict) -> tuple[str, str, str]:
+        return str(r.get("tmdbId") or ""), str(r.get("type") or ""), str(r.get("media") or "").lower()
+
+    # 1) Friend-scoped + authoritative: the exact tmdb Huberto recorded when he made the request.
+    if discord_id:
+        try:
+            from forsch.adk_bridge.friend_memory import get_watched_requests
+            watched = [w for w in get_watched_requests(str(discord_id), include_notified=True)
+                       if str(w.get("tmdb_id") or "").strip()]
+            m = ([w for w in watched if str(w.get("title") or "").strip().lower() == key]
+                 or [w for w in watched if key in str(w.get("title") or "").strip().lower()])
+            tids = {str(w["tmdb_id"]) for w in m}
+            if len(tids) == 1:
+                tid = tids.pop()
+                return unpack(by_tmdb[tid]) if tid in by_tmdb else (tid, "", "")
+        except Exception:
+            pass
+
+    # 2) Global request list: exact title, else unambiguous partial. Bail if it spans >1 film.
+    with_id = list(by_tmdb.values())
+    exact = [r for r in with_id if str(r.get("title") or "").strip().lower() == key]
+    partial = [r for r in with_id if key in str(r.get("title") or "").strip().lower()]
+    hits = exact or partial
+    if not hits or len({str(r.get("tmdbId")) for r in hits}) > 1:
+        return "", "", ""
+    return unpack(hits[0])
+
+
+def check_my_request(title: str, discord_id: str = "") -> str:
+    """Check the REAL status of a friend's request — 'where's my movie?' / 'did it work?'. Resolves
+    the title to the exact film the friend requested (pass their discord_id so it's THEIR request,
+    not a same-named one), then tells them if it's already in the library (ready to watch) or the
+    real reason it isn't here yet (downloading, indexer cooldown, grabbed-but-failed, stuck) plus
+    overall pipeline health — honest facts and a rough when. Pass a title or a tmdbId. Returns a
+    status you can relay in your own voice — never mention how it's checked."""
+    if str(title).strip().isdigit():  # already a tmdbId — diagnose it directly
+        return f"{diagnose_title(str(title).strip())}\n\nPipeline status:\n{pipeline_health()}"
+    # Resolve against the friend's ACTUAL request first (exact tmdbId), so BOTH the "it's here" answer
+    # and the diagnosis are about the right film — a bare name search collides on titles like
+    # 'Nosferatu'. Only when nothing matches do we fall back to the old best-effort name search.
+    tmdb, mtype, media = _resolve_request(title, discord_id)
+    if tmdb:
+        if media == "available":
+            return f"'{title}' is in the library and ready to watch."
+        return f"{diagnose_title(tmdb, mtype)}\n\nPipeline status:\n{pipeline_health()}"
     lib = search_library(title)
     if "available" in lib.lower():
-        return lib  # already here — short-circuit
-    stack = pipeline_health()  # is the stack broken? (cooldowns, providers)
-    diag = diagnose_title(title)  # per-title root cause
-    return f"{diag}\n\nPipeline status:\n{stack}"
+        return lib  # best-effort: nothing matched a request, fall back to the library search
+    return f"{diagnose_title(title)}\n\nPipeline status:\n{pipeline_health()}"
 
 
 def schedule_on_sr1(title_or_tmdb_id: str, at_time: str, dry_run: bool = True) -> str:
