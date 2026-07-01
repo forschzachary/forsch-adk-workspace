@@ -38,7 +38,10 @@ def _sr(args: list[str], timeout: float = 120) -> str:
         return "(the screening room took too long to answer)"
     except Exception as exc:
         return f"(couldn't reach the screening room: {type(exc).__name__})"
-    return (proc.stdout or "").strip() or (proc.stderr or "").strip() or "(no output)"
+    out = (proc.stdout or "").strip()
+    if proc.returncode != 0 and not out:
+        return f"(sr failed, exit {proc.returncode}): {(proc.stderr or '').strip() or 'no output'}"
+    return out or (proc.stderr or "").strip() or "(no output)"
 
 
 def account_audit() -> str:

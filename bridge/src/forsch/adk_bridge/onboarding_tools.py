@@ -11,6 +11,7 @@ import json
 import os
 import secrets
 import subprocess
+import threading
 from pathlib import Path
 
 from forsch.adk_bridge import friend_memory as fm
@@ -18,6 +19,11 @@ from forsch.adk_bridge.audit_log import log_audit
 from forsch.adk_bridge.rate_limit import check_rate_limit
 
 SR = os.environ.get("SR_CLI", str(Path.home() / "Dev" / "screening-room" / "scripts" / "sr"))
+
+# Serializes the provision check-and-create so two concurrent provisions of the same username can't
+# both pass the idempotency guard and create a duplicate (which would let a second discord id claim
+# the account and defeat the reset-ownership guardrail).
+_PROVISION_LOCK = threading.Lock()
 
 
 def _sr(args: list[str], timeout: float = 120) -> tuple[bool, str]:
@@ -77,24 +83,25 @@ def provision_access(discord_id: str, name: str) -> dict:
     # Jellyfin server — a friend who connected outside the bot (an account made by hand) has a live
     # account but no local record, so a local-only check would wrongly create a duplicate. If the
     # account exists live but we never recorded it, heal that drift by linking it to this discord id.
-    local = fm.has_account(name)
-    live = is_account_created(name)
-    if local or live:
-        if live and not local:
-            fm.record_account(str(discord_id), name, username)
-        return {
-            "ok": False,
-            "already_exists": True,
-            "username": username,
-            "linked": bool(live and not local),  # true when we just healed drift (account existed, no record)
-            "error": f"'{username}' already has an account — use reset_access('{name}') for a fresh password instead of provisioning again.",
-        }
-    password = _gen_password()
-    ok, out = _sr(["users", "create", username, "--password", password])
-    if not ok:
-        return {"ok": False, "error": f"account creation failed: {out[:180]}"}
-    fm.record_account(str(discord_id), name, username)
-    fm.consume_invite(name)
+    with _PROVISION_LOCK:
+        local = fm.has_account(name)
+        live = is_account_created(name)
+        if local or live:
+            if live and not local:
+                fm.record_account(str(discord_id), name, username)
+            return {
+                "ok": False,
+                "already_exists": True,
+                "username": username,
+                "linked": bool(live and not local),  # true when we just healed drift (account existed, no record)
+                "error": f"'{username}' already has an account — use reset_access('{name}') for a fresh password instead of provisioning again.",
+            }
+        password = _gen_password()
+        ok, out = _sr(["users", "create", username, "--password", password])
+        if not ok:
+            return {"ok": False, "error": f"account creation failed: {out[:180]}"}
+        fm.record_account(str(discord_id), name, username)
+        fm.consume_invite(name)
 
     # Account exists now — record it in the audit log (NEVER the password) before we verify.
     log_audit("provision_access", str(discord_id), {"name": name.strip().lower(), "username": username})

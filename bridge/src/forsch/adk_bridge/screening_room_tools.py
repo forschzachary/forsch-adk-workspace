@@ -32,6 +32,8 @@ def _run(args: list[str], timeout: float = 90) -> str:
         return f"(couldn't reach the screening room: {type(exc).__name__})"
     out = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
+    if proc.returncode != 0 and not out:
+        return f"(sr failed, exit {proc.returncode}): {err or 'no output'}"
     return out or err or "(no output)"
 
 
