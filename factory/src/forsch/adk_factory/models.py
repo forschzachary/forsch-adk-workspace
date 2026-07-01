@@ -7,9 +7,10 @@ deterministic input to the renderer — no runtime imports, no LLM.
 
 from __future__ import annotations
 
+import re
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ToolBundle(BaseModel):
@@ -55,6 +56,24 @@ class AgentSpec(BaseModel):
     # ``agent.py`` never sees this field.
     bundles: list[Union[str, dict]] = Field(default_factory=list)
     smoke_prompts: list[str] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def _safe_id(cls, v: str) -> str:
+        # id flows into file paths (agents/<id>/...). Reject anything that could escape the tree.
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+", v or ""):
+            raise ValueError(f"invalid agent id {v!r}: must match [a-zA-Z0-9_-]+")
+        return v
+
+    @field_validator("web_entrypoint")
+    @classmethod
+    def _safe_web_entrypoint(cls, v):
+        # web_entrypoint is joined onto the workspace root — must be a safe relative path.
+        if v is None:
+            return v
+        if v.startswith("/") or "\\" in v or ".." in v.split("/") or not re.fullmatch(r"[A-Za-z0-9_./-]+", v):
+            raise ValueError(f"invalid web_entrypoint {v!r}: must be a safe relative path (no '..', not absolute)")
+        return v
 
 
 class Manifest(BaseModel):

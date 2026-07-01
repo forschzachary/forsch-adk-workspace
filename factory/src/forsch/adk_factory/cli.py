@@ -96,8 +96,12 @@ def write_files(
                 backups[target] = target.read_text()
             target.parent.mkdir(parents=True, exist_ok=True)
             tmp = target.with_name(target.name + ".tmp")
-            tmp.write_text(f["content"])
-            tmp.replace(target)  # atomic on same filesystem
+            try:
+                tmp.write_text(f["content"])
+                tmp.replace(target)  # atomic on same filesystem
+            except Exception:
+                tmp.unlink(missing_ok=True)  # don't leave a stray .tmp on a failed write/replace
+                raise
             written.append(target)
         for target in written:
             ok = (
@@ -153,10 +157,12 @@ def apply(manifest_path, agent_id: str, workspace_root, *, force: bool = False, 
 
 def _default_workspace() -> Path:
     root = os.environ.get("FORSCH_ADK_WORKSPACE")
-    if root:
-        return Path(root)
-    from forsch.adk_components.workspace_resolver import workspace_root
-    return workspace_root() / "adk"
+    if not root:
+        raise SystemExit(
+            "FORSCH_ADK_WORKSPACE is not set — the factory refuses to guess a workspace path "
+            "(the old /opt/data fallback was a dead-fleet landmine). Set it to the workspace root."
+        )
+    return Path(root)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
