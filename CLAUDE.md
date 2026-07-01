@@ -22,7 +22,7 @@ A **factory** that turns one manifest into running multi-agent software:
 
 - **`agent_specs/agents.yaml` is the SINGLE SOURCE OF TRUTH** — a `defaults:` block + one entry per agent under `agents:`. The live roster lives there; **do not hardcode an agent list anywhere** (it drifts).
 - The **Factory** (`forsch.adk_factory`) deterministically generates each agent's package from `agents.yaml`: `agents/<id>/src/forsch/agent_<id>/agent.py` + `web_agents/<id>/root_agent.yaml`. Generated files are **regenerated, never hand-edited**.
-- The **Builder cockpit** (`forsch.adk_builder`, a node-canvas, systemd `adk-cockpit` on `:8780`) edits `agents.yaml` + regenerates via buttons.
+- **`forsch.adk_builder`** (`builder/`) is a small library — `editor.update_agent` + `promote.promote_agent` — used by `serve.py` and the `forsch` CLI. The interactive Builder cockpit UI (canvas, PTY terminal, `adk-cockpit` service, `:8443` funnel) was **removed 2026-07-01** (agent-built side-project; exposed a root shell on the public funnel).
 - The **live-agent-graph** (`:8888`) is the control surface — a force-graph projection of clusters → interface/router/agent/tool/datasource nodes. It is where Zach *sees* the system; the no-fluff rule (below) keeps the repo and the graph in bijection.
 - The **adk-bridge** (docker container `adk-bridge`, `:8800`) runs agents as a Chainlit chat surface. **adk-api** (`:8001`) is the ADK runtime.
 
@@ -50,7 +50,7 @@ Plus the **house docs** in `docs/` (`ARCHITECTURE.md`, `AGENT_FACTORY_SPEC.md`, 
 ## 3. How to build a repeatable agent
 
 1. **Edit the spine:** add/modify the agent's entry in `agent_specs/agents.yaml`. An agent's **final instruction = its group preamble + its own `instruction:` job** (see §6 / `preambles/README.md`).
-2. **Regenerate:** `factory/.venv/bin/python -m forsch.adk_factory.cli apply --agent <id>` — writes `agents/<id>/` + `web_agents/<id>/`. (The factory has its own venv; it is *not* a uv workspace member.) Or use the cockpit's regenerate button. **Never hand-edit generated files.**
+2. **Regenerate:** `factory/.venv/bin/python -m forsch.adk_factory.cli apply --agent <id>` — writes `agents/<id>/` + `web_agents/<id>/`. (The factory has its own venv; it is *not* a uv workspace member.) **Never hand-edit generated files.**
 3. **Reuse, don't reinvent:** shared tools live in `packages/adk-components` (`forsch.adk_components.tools.*`); the **patterns library** (`…/patterns/inventory.yaml`) is your first stop — match intent to a pattern before writing new code.
 4. **Make it runnable in chat:** add `agents/<id>/src` to `bridge/compose.yaml` PYTHONPATH, then `cd bridge && docker compose up -d`. Code-only change to an already-wired agent → `docker restart adk-bridge`. New pip dep → `docker compose build`.
 5. **Land it through the gate** (§4) — never commit on the box.
@@ -74,7 +74,7 @@ Plus the **house docs** in `docs/` (`ARCHITECTURE.md`, `AGENT_FACTORY_SPEC.md`, 
 | `packages/adk-components/` | shared tools (`forsch.adk_components.tools.*`) + patterns + datasources; tests in `packages/adk-components/tests/` |
 | `packages/live-agent-graph/` | the control surface (`:8888`, `serve.py`) |
 | `factory/` | the generator (`forsch.adk_factory`) |
-| `builder/` | the cockpit canvas (`forsch.adk_builder`) |
+| `builder/` | manifest-edit + promote library (`forsch.adk_builder.editor`/`.promote`) |
 | `bridge/` | the Chainlit chat host (docker) |
 | `agents/<id>/`, `web_agents/<id>/` | **generated** — don't hand-edit, regenerate |
 | `preambles/<group>.md` | group preambles prepended to built agents (§6) |
@@ -90,7 +90,7 @@ Plus the **house docs** in `docs/` (`ARCHITECTURE.md`, `AGENT_FACTORY_SPEC.md`, 
 ## 7. GOTCHAS (these have actually bitten us — heed them)
 
 - **`bridge.env` changes need `docker compose up -d` (RECREATE), not `docker restart`** — env loads at container create.
-- **`FORSCH_ADK_WORKSPACE` must be set** (compose → `/workspace`; cockpit unit → `/root/.hermes/workspace/adk`). Tools fail-loud if it's missing. **NEVER hardcode `/opt/data/*`** — that's the dead fleet path; it's the bug that started all this. (Note: `workspace_resolver.workspace_root()` uses `FORSCH_WORKSPACE` and returns the *parent*; the repo root is `FORSCH_ADK_WORKSPACE`.)
+- **`FORSCH_ADK_WORKSPACE` must be set** (compose → `/workspace`; box services → `/root/.hermes/workspace/adk`). Tools fail-loud if it's missing. **NEVER hardcode `/opt/data/*`** — that's the dead fleet path; it's the bug that started all this. (Note: `workspace_resolver.workspace_root()` uses `FORSCH_WORKSPACE` and returns the *parent*; the repo root is `FORSCH_ADK_WORKSPACE`.)
 - The **`hermes` container** bind-mounts this tree at `/opt/data/workspace/adk` with a different python, so `packages/adk-components` resolves only from the **host** path. Run tests on the host.
 - **ADK SSE** emits `partial=True` deltas then a final `partial=False` event repeating the full text — when streaming, yield only the deltas.
 - A benign **OpenTelemetry** "context created in a different Context" error fires on standalone `run_async` teardown and on WS close — verify via the live `/chat`, not a standalone harness.

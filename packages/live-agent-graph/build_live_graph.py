@@ -653,7 +653,6 @@ for tool_leaf, conn in TOOL_CONN.items():
 
 # Bridge UI (shared across all clusters)
 node("ui:bridge", "Chainlit Bridge", "ui", shared=True)
-node("ui:cockpit", "Builder Cockpit", "ui", shared=True)
 
 # ── Cluster members: agents + their deps ──
 
