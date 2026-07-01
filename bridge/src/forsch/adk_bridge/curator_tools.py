@@ -11,8 +11,10 @@ asked.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 __all__ = [
@@ -151,12 +153,26 @@ def events_cancel(event_id: str) -> str:
 
 
 # ── collaboration: loop Huberto in ──────────────────────────────────────────
+def _suggestions_path() -> Path:
+    ws = Path(os.environ.get("FORSCH_ADK_WORKSPACE", str(Path.home() / "Dev" / "forsch-adk-workspace")))
+    directory = ws / "data" / "curator"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / "suggestions.jsonl"
+
+
 def suggest_to_main(idea: str) -> str:
     """Suggest a programming idea to Huberto (the friend-facing cat) — a pick to feature, a themed
     block, a watch party. The curator is autonomous but collaborative: it floats ideas rather than
-    acting on friends' behalf unilaterally. v1 just records the suggestion (a real cross-bot queue is
-    a follow-up); returns a confirmation you can relay."""
+    acting on friends' behalf unilaterally. The suggestion is appended to a local queue
+    (data/curator/suggestions.jsonl) that Huberto/ops can drain; returns a confirmation to relay."""
     note = (idea or "").strip()
     if not note:
         return "(nothing to suggest — give me an idea first)"
-    return f"noted for huberto: {note}"
+    try:
+        rec = {"idea": note, "at": datetime.now(timezone.utc).isoformat(), "status": "pending"}
+        with open(_suggestions_path(), "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception as exc:
+        # Be honest about a failed write rather than claiming it was queued.
+        return f"(could not queue suggestion for huberto: {exc})"
+    return f"noted for huberto (queued): {note}"
