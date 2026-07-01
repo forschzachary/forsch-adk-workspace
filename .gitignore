@@ -41,6 +41,9 @@ goals/
 # Huberto per-friend memory (local)
 data/friends/
 
+# Convo-mirror per-friend thread map (local; discord ids + thread ids)
+data/mirror/
+
 # Deploy secrets — only the *.example templates are tracked (never the filled files)
 deploy/screeningroom.env
 deploy/secrets/

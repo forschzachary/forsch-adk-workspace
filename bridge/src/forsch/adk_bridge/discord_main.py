@@ -69,6 +69,8 @@ def build_specs():
             )
         kwargs = dict(name=bot.bot_name, token=token, expected_bot_id=expected_id,
                       agent=bot.make_agent(), dm=bot.dm)
+        if bot.mirror:
+            kwargs["mirror"] = True
         if bot.mention_only:
             kwargs["mention_only"] = True
         if bot.context_provider is not None:
