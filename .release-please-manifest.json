@@ -1,5 +1,5 @@
 {
-  "packages/adk-components": "0.1.0",
+  "packages/adk-components": "0.2.0",
   "packages/live-agent-graph": "0.1.0",
   "agents/assistant": "0.1.0",
   "agents/brand": "0.1.0",
