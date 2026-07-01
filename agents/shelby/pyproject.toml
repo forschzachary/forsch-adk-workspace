@@ -1,6 +1,6 @@
 [project]
 name = "forsch-agent-shelby"
-version = "0.1.0"  # x-release-please-version
+version = "0.2.0"  # x-release-please-version
 description = "Shelby agent - personal grocery, reminders, and receipt-email assistant"
 requires-python = ">=3.10"
 dependencies = [
