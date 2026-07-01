@@ -16,7 +16,15 @@ def actuate(ws: Path, actuator: str, args: dict) -> str:
     fn = _REGISTRY.get(actuator)
     if fn is None:
         return f"(no actuator for '{actuator}' — advisory/manual; not executed)"
-    return fn(ws, args or {})
+    args = args or {}
+    # Validate required args up front so a malformed plan yields an actionable
+    # message the Judge/re-planner can act on, not a bare KeyError('agent_id').
+    missing = [k for k in _REQUIRED_ARGS.get(actuator, ()) if not args.get(k)]
+    if missing:
+        raise ValueError(
+            f"actuator '{actuator}' missing required arg(s): {', '.join(missing)}"
+        )
+    return fn(ws, args)
 
 
 def _build_agent(ws: Path, args: dict) -> str:
@@ -85,6 +93,16 @@ _REGISTRY = {
     "run_eval": _run_eval,
     # 'consult' + 'manual' intentionally absent -> advisory / park-and-report.
     # 'deploy' + 'delete' intentionally DO NOT EXIST -> /goal cannot cross the gate.
+}
+
+# Args each verb dereferences unconditionally. Checked in actuate() so a plan
+# missing them fails with a clear message instead of a cryptic KeyError.
+_REQUIRED_ARGS = {
+    "build_agent": ("agent_id",),
+    "add_tool": ("agent_id", "tool_name"),
+    "promote_edits": ("agent_id",),
+    "check_agent": ("agent_id",),
+    "run_eval": ("agent_id",),
 }
 
 SAFE_ACTUATORS = tuple(_REGISTRY)
