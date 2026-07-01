@@ -1,6 +1,6 @@
 [project]
 name = "forsch-agent-website"
-version = "0.1.0"
+version = "0.2.0"
 description = "Website agent - personal website launch lead"
 requires-python = ">=3.10"
 dependencies = [
