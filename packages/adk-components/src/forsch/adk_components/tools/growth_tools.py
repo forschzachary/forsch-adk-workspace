@@ -513,10 +513,13 @@ def list_linkedin_drafts(status: str = "", limit: int = 10) -> dict[str, Any]:
     records = _store("linkedin_drafts.jsonl").read()
     if status:
         records = [r for r in records if r.get("status") == status]
+    # Clamp to [0, 50]. n==0 must return [] — records[-0:] would slice to ALL, and
+    # the old max(1, ...) floored limit=0 up to 1 (returned the last draft).
+    n = min(_coerce_int(limit), 50)
     return {
         "ok": True,
         "count": len(records),
-        "drafts": records[-max(1, min(limit, 50)):],
+        "drafts": records[-n:] if n else [],
         "publication_boundary": "manual_only",
     }
 

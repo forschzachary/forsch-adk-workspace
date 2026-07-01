@@ -10,6 +10,7 @@ from forsch.adk_components.tools import (
     get_linkedin_brand_brief,
     get_linkedin_metric_dashboard,
     list_linkedin_autonomous_actions,
+    list_linkedin_drafts,
     record_linkedin_metric_snapshot,
     run_linkedin_observability_cycle,
     score_linkedin_draft,
@@ -161,6 +162,24 @@ def test_observability_cycle_creates_local_only_actions(tmp_path, monkeypatch):
     queued = list_linkedin_autonomous_actions()
     assert queued["ok"] is True
     assert queued["count"] == len(cycle["record"]["actions"])
+
+
+def test_list_linkedin_drafts_limit_zero_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setenv("FORSCH_PATTERNS_DATA_DIR", str(tmp_path))
+    for i in range(3):
+        create_linkedin_draft(
+            content_type="post",
+            topic=f"topic {i}",
+            draft_text=f"Support insight number {i} about escalation context and next moves.",
+        )
+    # limit=0 must return no drafts (regression: max(1, ...) used to floor it to 1,
+    # and records[-0:] would otherwise slice to ALL). count still reflects the total.
+    zero = list_linkedin_drafts(limit=0)
+    assert zero["count"] == 3
+    assert zero["drafts"] == []
+    # normal + over-cap limits behave as expected
+    assert len(list_linkedin_drafts(limit=2)["drafts"]) == 2
+    assert len(list_linkedin_drafts(limit=100)["drafts"]) == 3
 
 
 def test_growth_eval_runner_executes_tool_assertions(tmp_path):

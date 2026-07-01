@@ -267,3 +267,16 @@ def test_goal_engine_loop_with_stubs(tmp_path):
     assert plan.steps[1].status == "blocked"
     assert plan.status == "blocked"
     assert ledger.load(tmp_path, plan.id).steps[0].status == "passed"
+
+
+def test_actuate_missing_required_arg_raises_actionable_error():
+    import pytest
+    from pathlib import Path
+    from forsch.cli.goal_engine.actuators import actuate
+
+    with pytest.raises(ValueError) as exc:
+        actuate(Path("/nonexistent"), "build_agent", {})
+    assert "build_agent" in str(exc.value)
+    assert "agent_id" in str(exc.value)
+    # unknown/advisory actuators never raise — they return a note
+    assert "no actuator" in actuate(Path("/x"), "consult", {})
