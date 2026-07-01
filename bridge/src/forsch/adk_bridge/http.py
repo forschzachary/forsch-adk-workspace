@@ -56,13 +56,17 @@ class _TokenBridge:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] not in ("http", "websocket") or not _CHAT_TOKEN:
+        # Only http/websocket carry auth; let lifespan etc. through untouched.
+        if scope["type"] not in ("http", "websocket"):
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
         headers = dict(scope.get("headers") or [])
+        # Fail CLOSED: with no configured token, never authenticate — every match below
+        # is guarded by `_CHAT_TOKEN and`, so an unset token falls through to the /chat/
+        # 401 gate instead of the old passthrough that opened the surface to everyone.
         # Already authenticated header present? pass through.
-        if hmac.compare_digest(headers.get(b"x-chat-token", b"").decode(), _CHAT_TOKEN):
+        if _CHAT_TOKEN and hmac.compare_digest(headers.get(b"x-chat-token", b"").decode(), _CHAT_TOKEN):
             return await self.app(scope, receive, send)
 
         # Pull the token from query string or cookie.
@@ -80,7 +84,7 @@ class _TokenBridge:
                     token = c.split("=", 1)[1]
                     break
 
-        if token is not None and hmac.compare_digest(token, _CHAT_TOKEN):
+        if _CHAT_TOKEN and token is not None and hmac.compare_digest(token, _CHAT_TOKEN):
             # Inject the header Chainlit's auth callback reads.
             new_headers = [
                 (k, v) for (k, v) in scope.get("headers", []) if k != b"x-chat-token"

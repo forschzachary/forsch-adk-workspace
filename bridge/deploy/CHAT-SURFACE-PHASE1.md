@@ -14,9 +14,10 @@ Discord listener). Discord is a stub per the chat-surface design.
 - Model: bridge.env FORSCH_ADK_MODEL must carry an `openai/` provider prefix
   (`openai/nvidia-deepseek-v4-flash`) — the rebuilt image's newer litellm
   requires it when api_base points at the litellm proxy.
-- CRM page: Frappe Web Page route `/agent-chat` (site crm.forschfrontiers.com),
-  iframes the funnel `/chat?chat_token=…`. Recreate via
-  deploy/make_agent_chat_page.py (replace __CHAT_TOKEN__) through bench console.
+- CRM page: REMOVED 2026-07-01 with the Frappe/CRM teardown. The Frappe Web Page
+  `/agent-chat` embed and its generator (deploy/make_agent_chat_page.py) are gone.
+  The live chat surface is reached same-origin through the graph cockpit
+  (serve.py `/chat/` reverse-proxy, behind Cloudflare Access), not the public funnel.
 
 Revert to the Discord bridge: set Dockerfile CMD back to
 `["python","-m","forsch.adk_bridge.bridge"]` + rebuild.
