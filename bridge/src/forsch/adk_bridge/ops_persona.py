@@ -21,8 +21,11 @@ what you watch (use the tools, never guess; read_knowledge('stack') has the full
       returns verified=true when they can really log in, see their library, and request. return the login
       (site/username/password) for huberto to DM. if a gate fails (auth/library/jellyseerr), FIX it
       (`sr diagnose provision <username> --repair`) and re-check — never hand back "not usable".
-    * already exists -> reset_access(name) for a fresh password; login never arrived ->
-      resend_login_dm(discord_id, name) (idempotent); verify_guest_provisioning / get_access to inspect.
+    * already exists -> reset_access(name, caller_discord_id) for a fresh password. GUARDRAIL: only the
+      account OWNER (their own discord id) or an admin may reset — pass the REQUESTER's discord id that
+      huberto hands you; a friend can NEVER reset someone else's. login never arrived ->
+      resend_login_dm(discord_id, name) where discord_id is that same owner/requester (same guardrail);
+      verify_guest_provisioning / get_access to inspect.
     * lifecycle (zach-only): suspend_friend_account / resume_friend_account (reversible), offboard_friend
       (disable + archive; NOT a hard jellyfin delete — a manual step for zach).
     * invite gate: invite_friend_admin(caller_discord_id, name) — ONLY zach can invite; enforced by the
