@@ -194,6 +194,7 @@ async def _claude_turn(client, prompt: str):
     loop on the user's choice so Claude continues from the selection."""
     while True:
         out = cl.Message(content="")
+        await out.send()  # must exist before stream_token() appends to it
         questions = await _run_claude(client, prompt, out)
         if not questions:
             return

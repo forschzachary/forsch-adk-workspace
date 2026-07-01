@@ -44,7 +44,11 @@ def promote(agent_id: str, target_role: str) -> dict:
             return {"ok": False, "error": "plain→builder requires at least one tool (L1)"}
 
     agent["role"] = target_role
-    agents_yaml.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+    # Atomic write: a crash mid-write must never leave a truncated manifest (the
+    # single source of truth). Write a sibling tmp then os.replace it into place.
+    _tmp = agents_yaml.with_name(agents_yaml.name + ".tmp")
+    _tmp.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+    _tmp.replace(agents_yaml)
 
     # Log
     log_file = LAG_HOME / ".promotion_log.jsonl"
