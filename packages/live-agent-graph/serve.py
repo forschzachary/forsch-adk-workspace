@@ -1397,6 +1397,8 @@ def chat_with_mimo(message: str, session_id: str | None = None,
 
 def _derive_agent_status(agent_id: str) -> str:
     """Derive agent status from file existence + importability (via adk-bridge container)."""
+    if not _VALID_AGENT_ID.fullmatch(agent_id or ""):
+        return "blank"  # reject injection: agent_id flows into a `docker exec python3 -c` below
     pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
     if not pkg.exists():
         return "blank"
@@ -1420,6 +1422,8 @@ def _get_agent_config(agent_id: str) -> dict:
     Uses the factory venv's Python (which has pyyaml) via subprocess to avoid
     depending on system-level pyyaml.
     """
+    if not _VALID_AGENT_ID.fullmatch(agent_id or ""):
+        return {"ok": False, "error": "invalid agent_id"}
     manifest_path = WS / "agent_specs" / "agents.yaml"
     if not manifest_path.exists():
         return {"ok": False, "error": "agents.yaml not found"}
@@ -1597,8 +1601,8 @@ def _list_agent_models() -> dict:
 
 def _generate_agent(agent_id: str) -> dict:
     """Run Factory apply + verify for an agent. Returns status=built only on verified import."""
-    if not agent_id:
-        return {"ok": False, "error": "missing agent_id"}
+    if not _VALID_AGENT_ID.fullmatch(agent_id or ""):
+        return {"ok": False, "error": "invalid agent_id"}
     py = str(FACTORY_PYTHON) if FACTORY_PYTHON.exists() else sys.executable
     manifest = str(WS / "agent_specs" / "agents.yaml")
     env = os.environ.copy()
@@ -1663,8 +1667,8 @@ def _generate_agent(agent_id: str) -> dict:
 
 def _verify_agent(agent_id: str) -> dict:
     """Check agent verification status: file existence + import check."""
-    if not agent_id:
-        return {"ok": False, "error": "missing agent_id"}
+    if not _VALID_AGENT_ID.fullmatch(agent_id or ""):
+        return {"ok": False, "error": "invalid agent_id"}
     pkg = WS / "agents" / agent_id / "src" / f"forsch/agent_{agent_id}" / "agent.py"
     web_yaml = WS / "web_agents" / agent_id / "root_agent.yaml"
     package_exists = pkg.exists()
