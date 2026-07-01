@@ -1,6 +1,6 @@
 [project]
 name = "forsch-adk-components"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared tools, models, and testing harness for Forsch ADK agents"
 requires-python = ">=3.10"
 dependencies = [
