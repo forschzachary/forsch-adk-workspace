@@ -2358,31 +2358,6 @@
         ]
       },
       "role": "plain"
-    },
-    {
-      "id": "ui:cockpit",
-      "name": "Builder Cockpit",
-      "kind": "ui",
-      "shared": true,
-      "type": "ui",
-      "artifact": "builder/pyproject.toml",
-      "gates": {
-        "L0": true,
-        "L1": true,
-        "L2": false,
-        "L3": false
-      },
-      "state": "building",
-      "reachable": false,
-      "contract": {
-        "accepts": [
-          "user_input"
-        ],
-        "emits": [
-          "display"
-        ]
-      },
-      "role": "plain"
     }
   ],
   "links": [

@@ -62,8 +62,6 @@ tunnels:
       - hostname: chat.forschfrontiers.com
         target: 127.0.0.1:8800
         note: "Legacy separate route for the Gradio bridge. Superseded by the /chat/ proxy on the main hostname. Can be removed from the Cloudflare dashboard."
-      - hostname: cockpit.forschfrontiers.com
-        target: 127.0.0.1:8780
       - hostname: files.forschfrontiers.com
         target: 100.120.21.13:8334
       - hostname: litellm.forschfrontiers.com
