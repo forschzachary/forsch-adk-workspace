@@ -75,8 +75,18 @@ def test_mark_notified_hides_from_open(fm):
 def test_rearm_reopens_a_watch(fm):
     fm.add_watched_request("42", "603", "The Matrix")
     fm.mark_watched_request_notified("42", "The Matrix", "603")
-    fm.rearm_watched_request("42", "The Matrix", "603")
+    out = fm.rearm_watched_request("42", "The Matrix", "603")
+    # ok reflects the on-disk state (read back), so a real re-arm reports True.
+    assert out["ok"] is True
     assert len(fm.get_watched_requests("42")) == 1
+
+
+def test_rearm_missing_watch_reports_not_ok(fm):
+    # No such watch (or no record): callers must be able to detect the miss so a
+    # blocked DM isn't silently left suppressed.
+    assert fm.rearm_watched_request("42", "Nonexistent", "0")["ok"] is False
+    fm.add_watched_request("42", "603", "The Matrix")
+    assert fm.rearm_watched_request("42", "Different Movie", "999")["ok"] is False
 
 
 def test_clear_watched_request(fm):

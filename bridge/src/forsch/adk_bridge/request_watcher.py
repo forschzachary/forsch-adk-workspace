@@ -78,8 +78,14 @@ async def _check_watches(bot) -> int:
                 _LOG.info("watcher: notified %s that %r is ready", discord_id, title)
             else:
                 # route still closed — undo so we try again next pass instead of silently swallowing
-                fm.rearm_watched_request(discord_id, title, tmdb_id)
-                _LOG.info("watcher: DM to %s blocked, re-armed watch %r", discord_id, title)
+                rearmed = fm.rearm_watched_request(discord_id, title, tmdb_id)
+                if rearmed.get("ok"):
+                    _LOG.info("watcher: DM to %s blocked, re-armed watch %r", discord_id, title)
+                else:
+                    # notified=True is still on disk — this friend will NEVER get the
+                    # "ready" DM until an operator intervenes. Make it loud.
+                    _LOG.error("watcher: DM to %s blocked AND re-arm failed for %r — "
+                               "notification may be permanently suppressed", discord_id, title)
     return sent
 
 
