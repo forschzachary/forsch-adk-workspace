@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import chainlit as cl
@@ -77,9 +78,13 @@ async def resume(thread):
 
 @cl.header_auth_callback
 def auth(headers) -> cl.User | None:
-    if _TOKEN and headers.get("x-chat-token") == _TOKEN:
+    # Fail CLOSED: with no configured CHAT_TOKEN, nobody authenticates. This surface
+    # can run the full-bypass Claude profile, so an empty token must NOT grant a default
+    # user (the old `else cl.User("zach")` authenticated every anonymous request).
+    # Constant-time compare to avoid the timing side-channel the bridge already avoids.
+    if _TOKEN and hmac.compare_digest(headers.get("x-chat-token", "") or "", _TOKEN):
         return cl.User(identifier="zach")
-    return None if _TOKEN else cl.User(identifier="zach")
+    return None
 
 
 @cl.set_chat_profiles
