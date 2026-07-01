@@ -77,7 +77,7 @@ def resolve_bundle(ref, bundle_defs):
 SPIKE_DIR = Path(__file__).resolve().parent
 ADK_WS = workspace_root() / "adk"  # real ADK workspace for filesystem gate checks
 
-# ── Validation schemas (disk-first, CRM-second — gatekeeper before builder) ──
+# ── Validation schemas (disk-first — gatekeeper before builder) ──
 
 VALID_STATUSES = ("blank", "planning", "building", "active", "stable", "archived")
 DEFAULT_MAX_DELEGATION_DEPTH = 3  # depth 0..3 (human → agent → agent → agent → escalate)
@@ -446,7 +446,6 @@ else:
         "github": "GitHub (OAuth)",
         "resend": "Resend (email)",
         "cloudflare-global": "Cloudflare (global)",
-        "frappe-crm": "Frappe CRM (ff-ops-prod)",
     }
     TOOL_CONN = {
     }

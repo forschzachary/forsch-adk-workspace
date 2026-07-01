@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Round-trip liveness check for the ops slice.
+"""Round-trip liveness check for the stability slice.
 
-Pushes a synthetic message through the ops agent, verifies it calls a CRM tool
+Pushes a synthetic message through the stability agent, verifies it calls a tool
 and receives a response. A node only flips to 'live' when this succeeds.
+(Previously targeted the ops agent + a CRM tool; ops is persona-only after the
+CRM prune, so this now exercises stability, which still has real tools.)
 
 Runs inside the adk-bridge container (docker exec) because google-adk is only
 installed there.
@@ -21,7 +23,7 @@ SPIKE_DIR = Path(__file__).resolve().parent
 
 ROUNDTRIP_SCRIPT = """
 import asyncio, time, json
-from forsch.agent_ops.agent import root_agent
+from forsch.agent_stability.agent import root_agent
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner, RunConfig
 from google.adk.artifacts import InMemoryArtifactService
@@ -42,7 +44,7 @@ async def check():
         app_name='roundtrip_check', user_id='roundtrip', session_id='rt-1'
     )
     content = types.Content(parts=[types.Part.from_text(
-        text='Run get_crm_health_snapshot and tell me the result. Be brief.'
+        text='Run get_git_state and tell me the result. Be brief.'
     )], role='user')
     mode = RunConfig.model_fields['streaming_mode'].annotation
     cfg = RunConfig(streaming_mode=mode.SSE)
@@ -58,9 +60,8 @@ async def check():
         if event.content and event.content.parts:
             for p in event.content.parts:
                 if hasattr(p, 'function_call') and p.function_call:
-                    name = getattr(p.function_call, 'name', '')
-                    if any(w in name.lower() for w in ['crm', 'health', 'snapshot', 'lead', 'frappe', 'get_']):
-                        tool_called = True
+                    # Any tool call proves the round-trip tool path works.
+                    tool_called = True
                 if hasattr(p, 'function_response') and p.function_response:
                     tool_response = True
         if event.is_final_response():
@@ -72,8 +73,8 @@ async def check():
 
     elapsed = int((time.monotonic() - start) * 1000)
     # Success = tool was called AND a response was received.
-    # The response may contain errors (authsome not found, etc.) — that's a
-    # CRM infra issue, not a graph issue. The round-trip path works.
+    # The response may contain a tool-level error (unreachable service, etc.) —
+    # that's an infra issue, not a graph issue. The round-trip path still works.
     success = tool_called and tool_response
     print(json.dumps({
         'success': success,

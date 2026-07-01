@@ -6,8 +6,8 @@ intersect with the target's accepts. Returns the intersection (what flows)
 or the gap (what's missing).
 
 Usage:
-  python3 contract_check.py agent:ops tool:get_crm_health_snapshot
-  python3 contract_check.py --json agent-graph-v2.json agent:ops tool:list_recent_crm_leads
+  python3 contract_check.py agent:stability tool:get_git_state
+  python3 contract_check.py --json agent-graph-v2.json agent:stability tool:check_service_health
 """
 
 import json
@@ -65,7 +65,7 @@ def main():
 
     if len(args) < 2:
         print("Usage: python3 contract_check.py [--json GRAPH] <source_id> <target_id>", file=sys.stderr)
-        print("Example: python3 contract_check.py agent:ops tool:get_crm_health_snapshot", file=sys.stderr)
+        print("Example: python3 contract_check.py agent:stability tool:get_git_state", file=sys.stderr)
         sys.exit(1)
 
     source_id, target_id = args[0], args[1]

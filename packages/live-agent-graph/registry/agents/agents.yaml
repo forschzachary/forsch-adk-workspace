@@ -55,11 +55,6 @@ tool_bundles:
     - list_grocery_email_senders
     - is_grocery_email_sender_allowed
     - log_grocery_email_receipt
-  ops_telemetry:
-    description: 'Read-only CRM/business telemetry: health snapshot + recent leads.'
-    tools:
-    - get_crm_health_snapshot
-    - list_recent_crm_leads
 agents:
   stability:
     bundles:
@@ -94,8 +89,7 @@ agents:
     - linkedin_core
     model: gpt-5.5
   ops:
-    bundles:
-    - ops_telemetry
+    tools: []
     model: gpt-5.5
     role: builder
   shelby:
