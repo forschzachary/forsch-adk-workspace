@@ -13,7 +13,13 @@ def _workspace_root() -> Path | None:
     return Path(root).expanduser().resolve() if root else None
 
 def execute_bash_command(command: str) -> dict:
-    """Execute a shell command on the host securely and return the output."""
+    """Execute an arbitrary shell command on the host and return the output.
+
+    This runs via ``shell=True`` on purpose (pipes, globs, redirects are the point)
+    and is intentionally unconfined, so it is only safe on a TRUSTED, local agent
+    (stability). Output is capped at 8k/stream and the command is killed after 60s.
+    Do NOT bind this tool to any agent exposed to untrusted input.
+    """
     try:
         proc = subprocess.run(
             command,
@@ -32,9 +38,35 @@ def execute_bash_command(command: str) -> dict:
         return {"command": command, "error": str(exc)}
 
 def read_host_file(path: str) -> dict:
-    """Read a configuration or log file from the host filesystem."""
+    """Read a configuration or log file from the host filesystem, with confinement.
+
+    Reads are restricted to FORSCH_ADK_WORKSPACE (mirrors write_host_file) so a
+    prompt-injected agent can't exfiltrate host secrets (~/.ssh, /etc/shadow,
+    .env, cli.json). To read a host file outside the workspace, set
+    FORSCH_ADK_ALLOW_HOST_READS=1.
+    """
     try:
-        with open(os.path.expanduser(path), "r", encoding="utf-8") as f:
+        target = Path(os.path.expanduser(path)).resolve()
+        ws = _workspace_root()
+        confined = os.environ.get("FORSCH_ADK_ALLOW_HOST_READS") != "1"
+        if confined and ws is None:
+            # Fail CLOSED: an unset workspace must NOT silently disable the seatbelt.
+            return {
+                "path": path,
+                "error": (
+                    "refused: FORSCH_ADK_WORKSPACE is not set, so the read cannot be "
+                    "confined; set it, or set FORSCH_ADK_ALLOW_HOST_READS=1 to override"
+                ),
+            }
+        if confined and not target.is_relative_to(ws):
+            return {
+                "path": path,
+                "error": (
+                    f"refused: {target} is outside the workspace ({ws}); "
+                    "set FORSCH_ADK_ALLOW_HOST_READS=1 to override"
+                ),
+            }
+        with open(target, "r", encoding="utf-8") as f:
             content = f.read()
         return {"path": path, "content": content[:15000], "truncated": len(content) > 15000}
     except Exception as exc:
