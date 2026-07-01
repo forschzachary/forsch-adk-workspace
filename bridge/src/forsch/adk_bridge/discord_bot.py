@@ -238,7 +238,9 @@ def _intents() -> discord.Intents:
 
 async def run_bots(specs: list[BotSpec], session_service) -> None:
     """Verify each identity (fail-closed), then run all bot clients concurrently."""
-    starts = []
+    # Phase 1 — verify EVERY identity before we construct, register, or start any
+    # client. Interleaving the two (the old code) meant a failure on a later spec
+    # left earlier bots in the registry with un-awaited start() coroutines.
     for spec in specs:
         result = verify_identity(spec.token, spec.expected_bot_id)
         if not result.ok:
@@ -246,7 +248,19 @@ async def run_bots(specs: list[BotSpec], session_service) -> None:
                 f"identity guard failed for {spec.name}: {result.reason} (actual={result.actual_id})"
             )
         _LOG.info("%s identity ok — bot id %s", spec.name, result.actual_id)
+
+    # Phase 2 — construct, register, and start every verified client together.
+    tasks = []
+    for spec in specs:
         client = ADKDiscordBot(spec, session_service, intents=_intents())
         _bots_by_name[spec.name] = client  # registry, so the watcher can reach a live client
-        starts.append(client.start(spec.token))
-    await asyncio.gather(*starts)
+        tasks.append(asyncio.ensure_future(client.start(spec.token)))
+    try:
+        await asyncio.gather(*tasks)
+    except BaseException:
+        # One client's start() failed (or we're shutting down): cancel the siblings
+        # so we don't leave half-connected bots orphaned in the event loop, then propagate.
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise

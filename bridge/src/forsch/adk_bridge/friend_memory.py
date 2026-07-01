@@ -432,7 +432,12 @@ def mark_watched_request_notified(discord_id: str, title: str, tmdb_id: str = ""
 
 
 def rearm_watched_request(discord_id: str, title: str, tmdb_id: str = "") -> dict:
-    """Un-flag a watch's `notified` (e.g. the 'ready' DM failed to send, so retry next pass)."""
+    """Un-flag a watch's `notified` (e.g. the 'ready' DM failed to send, so retry next pass).
+
+    A failed re-arm permanently suppresses the "it's ready" DM, so `ok` reflects the
+    on-disk state (read back after saving), not just the in-memory edit — callers rely
+    on it to know whether the retry is actually armed.
+    """
     rec = _load(str(discord_id))
     if not rec:
         return {"ok": False}
@@ -443,9 +448,17 @@ def rearm_watched_request(discord_id: str, title: str, tmdb_id: str = "") -> dic
             w["notified"] = False
             w.pop("notified_at", None)
             hit = True
-    if hit:
-        _save(rec)
-    return {"ok": hit}
+    if not hit:
+        return {"ok": False}
+    _save(rec)
+    # Confirm the un-flag survived to disk (a concurrent write or a failed save would
+    # otherwise leave notified=True and the DM would never retry).
+    reloaded = _load(str(discord_id)) or {}
+    persisted = not any(
+        _watch_key(w.get("title", ""), w.get("tmdb_id", "")) == key and w.get("notified")
+        for w in reloaded.get("watched_requests", [])
+    )
+    return {"ok": persisted}
 
 
 def clear_watched_request(discord_id: str, title: str, tmdb_id: str = "") -> dict:
