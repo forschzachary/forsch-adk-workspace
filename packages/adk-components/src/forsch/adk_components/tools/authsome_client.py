@@ -24,7 +24,7 @@ if params:
     url = url + separator + urllib.parse.urlencode(params)
 
 headers = {}
-token = os.environ.get("FRAPPE_CRM_TOKEN")
+token = os.environ.get("AUTHSOME_TOKEN")
 if token:
     headers["Authorization"] = f"token {token}"
 

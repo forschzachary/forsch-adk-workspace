@@ -20,7 +20,6 @@ _FAMILY = {
     "email_groceries": ("Groceries · email", "green"),
     "stability_tools": ("Stability · host", "amber"),
     "ops_tools": ("Ops", "amber"),
-    "crm_tools": ("CRM", "blue"),
     "wow_tools": ("WoW guild", "violet"),
 }
 _READ_PREFIXES = ("get_", "list_", "search_", "check_", "validate_", "is_")

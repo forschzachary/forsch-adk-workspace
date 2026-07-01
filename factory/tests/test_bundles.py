@@ -182,7 +182,7 @@ EXPECTED_TOOLS = {
         P + "create_website_launch_task", P + "get_linkedin_brand_brief",
         P + "get_linkedin_metric_dashboard", P + "list_linkedin_autonomous_actions",
     ],
-    "ops": [P + "get_crm_health_snapshot", P + "list_recent_crm_leads"],
+    "ops": [],
     "shelby": [P + "log_groceries", P + "get_grocery_log", P + "add_reminder"],
     "wow-guild": [
         P + "search_items", P + "get_item_details", P + "search_quests",

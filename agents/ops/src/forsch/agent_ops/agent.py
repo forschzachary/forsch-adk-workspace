@@ -6,10 +6,6 @@ import os
 
 from google.adk import Agent
 from google.adk.models.lite_llm import LiteLlm
-from forsch.adk_components.tools import (
-    get_crm_health_snapshot,
-    list_recent_crm_leads,
-)
 
 _LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 _LITELLM_API_KEY = (
@@ -31,10 +27,8 @@ root_agent = Agent(
     name='ops_agent',
     model=ops_model,
     description='Infrastructure and operations lead for Forsch.',
-    instruction='You are the ops team lead for Forsch. Focus on infrastructure health,\ndeployment state, incident triage, and read-only business telemetry.\nUse CRM tools for factual checks before making claims about leads or\nnewsletter subscriptions. Keep recommendations concise and operational.',
+    instruction='You are the ops team lead for Forsch. Focus on infrastructure health,\ndeployment state, and incident triage. Keep recommendations concise and operational.',
     tools=[
-        get_crm_health_snapshot,
-        list_recent_crm_leads,
     ],
 )
 

@@ -449,8 +449,6 @@ else:
         "frappe-crm": "Frappe CRM (ff-ops-prod)",
     }
     TOOL_CONN = {
-        "get_crm_health_snapshot": "frappe-crm",
-        "list_recent_crm_leads": "frappe-crm",
     }
 
 # ── Filesystem paths for gate checks (always point at real ADK workspace) ──
