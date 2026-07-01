@@ -8,5 +8,5 @@
   "agents/ops": "0.1.0",
   "agents/shelby": "0.1.0",
   "agents/social": "0.1.0",
-  "agents/stability": "0.1.0"
+  "agents/stability": "0.1.1"
 }

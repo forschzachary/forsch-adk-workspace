@@ -1,6 +1,6 @@
 [project]
 name = "forsch-agent-stability"
-version = "0.1.0"
+version = "0.1.1"
 description = "Stability agent - read-only workspace and runtime auditor"
 requires-python = ">=3.10"
 dependencies = [
