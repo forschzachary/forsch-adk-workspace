@@ -4,7 +4,7 @@
   "agents/assistant": "0.1.0",
   "agents/brand": "0.1.0",
   "agents/website": "0.1.0",
-  "agents/build": "0.1.0",
+  "agents/build": "0.1.1",
   "agents/ops": "0.1.0",
   "agents/shelby": "0.1.0",
   "agents/social": "0.1.0",
