@@ -138,11 +138,28 @@ def get_access(name: str) -> dict:
     }
 
 
+def _can_manage_account(caller_discord_id: str, name: str) -> bool:
+    """Guardrail: a caller may reset/recover an account ONLY if they OWN it (their friend record is
+    linked to this jellyfin username) or they're an admin (SR_ADMIN_DISCORD_IDS). Fail-closed — an
+    empty/unknown caller or a username mismatch returns False, so no friend can reset another's account."""
+    caller = str(caller_discord_id or "").strip()
+    if not caller:
+        return False
+    if caller in fm._admins():
+        return True
+    rec = fm._load(caller) or {}
+    return (rec.get("jellyfin_username") or "").strip().lower() == name.strip().lower()
+
+
 def reset_access(name: str, caller_discord_id: str = "") -> dict:
     """Reset a friend's Jellyfin password and return the new login to DM them privately. Pass the
     caller's discord id (the admin/friend asking) so the reset is rate-limited + audited per user;
-    it's keyed on that id, falling back to the friend's username when absent."""
+    it's keyed on that id, falling back to the friend's username when absent. GUARDRAIL: only the
+    account's OWNER (matched by discord id) or an admin may reset it — never someone else's."""
     username = name.strip().lower()
+    if not _can_manage_account(caller_discord_id, username):
+        log_audit("reset_denied", str(caller_discord_id or ""), {"name": username, "reason": "not owner or admin"})
+        return {"ok": False, "error": f"only {username} (or an admin) can reset that account — you can't reset someone else's."}
     rl_key = str(caller_discord_id) or username
     rl = check_rate_limit(rl_key, "reset_access")
     if not rl["ok"]:
@@ -191,6 +208,9 @@ def resend_login_dm(discord_id: str, name: str) -> dict:
     exists yet, it says so (provision first). The password rides only in this return value, for the
     DM — never logged."""
     username = name.strip().lower()
+    if not _can_manage_account(discord_id, username):
+        log_audit("resend_denied", str(discord_id or ""), {"name": username, "reason": "not owner or admin"})
+        return {"ok": False, "error": f"only {username} (or an admin) can recover that login."}
     if not is_account_created(name):
         return {
             "ok": False,
